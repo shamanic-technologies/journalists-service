@@ -5,7 +5,7 @@ import { cleanTestData, insertTestJournalist, closeDb } from "../helpers/test-db
 
 const app = createTestApp();
 
-describe("Hunted Data Endpoints", () => {
+describe("Enriched Data Endpoints", () => {
   beforeEach(async () => {
     await cleanTestData();
   });
@@ -15,16 +15,16 @@ describe("Hunted Data Endpoints", () => {
     await closeDb();
   });
 
-  describe("POST /hunted-individuals", () => {
-    it("records a hunted individual", async () => {
+  describe("POST /enriched-individuals", () => {
+    it("records an enriched individual", async () => {
       const res = await request(app)
-        .post("/hunted-individuals")
+        .post("/enriched-individuals")
         .set(AUTH_HEADERS)
         .send({
           firstName: "John",
           lastName: "Smith",
           domain: "example.com",
-          huntedAt: new Date().toISOString(),
+          enrichedAt: new Date().toISOString(),
           position: "Editor",
           company: "Example Corp",
         });
@@ -34,21 +34,21 @@ describe("Hunted Data Endpoints", () => {
     });
 
     it("handles duplicate gracefully", async () => {
-      const huntedAt = new Date().toISOString();
+      const enrichedAt = new Date().toISOString();
       const body = {
         firstName: "John",
         lastName: "Smith",
         domain: "example.com",
-        huntedAt,
+        enrichedAt,
       };
 
       await request(app)
-        .post("/hunted-individuals")
+        .post("/enriched-individuals")
         .set(AUTH_HEADERS)
         .send(body);
 
       const res = await request(app)
-        .post("/hunted-individuals")
+        .post("/enriched-individuals")
         .set(AUTH_HEADERS)
         .send(body);
 
@@ -56,11 +56,11 @@ describe("Hunted Data Endpoints", () => {
     });
   });
 
-  describe("POST /hunted-individuals/bulk", () => {
+  describe("POST /enriched-individuals/bulk", () => {
     it("bulk inserts individuals", async () => {
       const now = new Date().toISOString();
       const res = await request(app)
-        .post("/hunted-individuals/bulk")
+        .post("/enriched-individuals/bulk")
         .set(AUTH_HEADERS)
         .send({
           items: [
@@ -68,13 +68,13 @@ describe("Hunted Data Endpoints", () => {
               firstName: "A",
               lastName: "B",
               domain: "a.com",
-              huntedAt: now,
+              enrichedAt: now,
             },
             {
               firstName: "C",
               lastName: "D",
               domain: "c.com",
-              huntedAt: now,
+              enrichedAt: now,
             },
           ],
         });
@@ -86,7 +86,7 @@ describe("Hunted Data Endpoints", () => {
 
     it("returns 400 for empty items", async () => {
       const res = await request(app)
-        .post("/hunted-individuals/bulk")
+        .post("/enriched-individuals/bulk")
         .set(AUTH_HEADERS)
         .send({ items: [] });
 
@@ -94,14 +94,14 @@ describe("Hunted Data Endpoints", () => {
     });
   });
 
-  describe("POST /hunted-emails", () => {
-    it("records a hunted email", async () => {
+  describe("POST /enriched-emails", () => {
+    it("records an enriched email", async () => {
       const res = await request(app)
-        .post("/hunted-emails")
+        .post("/enriched-emails")
         .set(AUTH_HEADERS)
         .send({
           email: "john@example.com",
-          huntedAt: new Date().toISOString(),
+          enrichedAt: new Date().toISOString(),
           status: "valid",
           score: 90,
         });
@@ -111,16 +111,16 @@ describe("Hunted Data Endpoints", () => {
     });
   });
 
-  describe("POST /hunted-emails/bulk", () => {
+  describe("POST /enriched-emails/bulk", () => {
     it("bulk inserts emails", async () => {
       const now = new Date().toISOString();
       const res = await request(app)
-        .post("/hunted-emails/bulk")
+        .post("/enriched-emails/bulk")
         .set(AUTH_HEADERS)
         .send({
           items: [
-            { email: "a@a.com", huntedAt: now, status: "valid" },
-            { email: "b@b.com", huntedAt: now, status: "unknown" },
+            { email: "a@a.com", enrichedAt: now, status: "valid" },
+            { email: "b@b.com", enrichedAt: now, status: "unknown" },
           ],
         });
 

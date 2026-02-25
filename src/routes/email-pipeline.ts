@@ -33,8 +33,8 @@ router.get("/journalists/emails/valid", async (req, res) => {
   res.json({ emails: rows });
 });
 
-// GET /journalists/emails/hunted-events
-router.get("/journalists/emails/hunted-events", async (req, res) => {
+// GET /journalists/emails/enrichment-events
+router.get("/journalists/emails/enrichment-events", async (req, res) => {
   const { outlet_id, journalist_id } = req.query as {
     outlet_id?: string;
     journalist_id?: string;
@@ -56,16 +56,16 @@ router.get("/journalists/emails/hunted-events", async (req, res) => {
     conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const rows = await sql.unsafe(
-    `SELECT outlet_id, journalist_id, email, hunted_at, status, score, accept_all FROM v_outlet_journalist_hunted_emails_events ${where}`,
+    `SELECT outlet_id, journalist_id, email, enriched_at, status, score, accept_all FROM v_outlet_journalist_enriched_emails_events ${where}`,
     params
   );
 
   res.json({ events: rows });
 });
 
-// GET /journalists/emails/hunted-individual-events
+// GET /journalists/emails/enriched-individual-events
 router.get(
-  "/journalists/emails/hunted-individual-events",
+  "/journalists/emails/enriched-individual-events",
   async (req, res) => {
     const { outlet_id, journalist_id } = req.query as {
       outlet_id?: string;
@@ -88,7 +88,7 @@ router.get(
       conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const rows = await sql.unsafe(
-      `SELECT outlet_id, journalist_id, first_name, last_name, domain, hunted_at, position, verification_status, score FROM v_outlet_journalist_hunted_events ${where}`,
+      `SELECT outlet_id, journalist_id, first_name, last_name, domain, enriched_at, position, verification_status, score FROM v_outlet_journalist_enriched_events ${where}`,
       params
     );
 
@@ -132,17 +132,17 @@ router.get("/journalists/need-email-update", async (req, res) => {
   const offset = parseInt(req.query.offset as string) || 0;
 
   const rows = await sql.unsafe(
-    `SELECT outlet_id, journalist_id, journalist_name, first_name, last_name, last_searched_at, last_hunted_at FROM v_outlet_journalists_need_email_update_status LIMIT $1 OFFSET $2`,
+    `SELECT outlet_id, journalist_id, journalist_name, first_name, last_name, last_searched_at, last_enriched_at FROM v_outlet_journalists_need_email_update_status LIMIT $1 OFFSET $2`,
     [limit, offset]
   );
 
   res.json({ journalists: rows });
 });
 
-// GET /journalists/need-hunter
-router.get("/journalists/need-hunter", async (_req, res) => {
+// GET /journalists/need-enrichment
+router.get("/journalists/need-enrichment", async (_req, res) => {
   const rows = await sql.unsafe(
-    `SELECT outlet_id, journalist_id, journalist_name, first_name, last_name FROM v_outlet_journalists_need_hunter_status`
+    `SELECT outlet_id, journalist_id, journalist_name, first_name, last_name FROM v_outlet_journalists_need_enrichment_status`
   );
 
   res.json({ journalists: rows });
@@ -157,12 +157,12 @@ router.get("/journalists/need-agent-search", async (_req, res) => {
   res.json({ journalists: rows });
 });
 
-// GET /journalists/emails/need-hunter-verification
+// GET /journalists/emails/need-verification
 router.get(
-  "/journalists/emails/need-hunter-verification",
+  "/journalists/emails/need-verification",
   async (_req, res) => {
     const rows = await sql.unsafe(
-      `SELECT outlet_id, journalist_id, email FROM v_outlet_journalists_emails_need_hunter_verification_status`
+      `SELECT outlet_id, journalist_id, email FROM v_outlet_journalists_emails_need_verification_status`
     );
 
     res.json({ emails: rows });

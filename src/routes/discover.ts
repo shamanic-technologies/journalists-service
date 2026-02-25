@@ -3,8 +3,8 @@ import { db } from "../db/index.js";
 import {
   pressJournalists,
   outletJournalists,
-  huntedIndividuals,
-  huntedEmails,
+  enrichedIndividuals,
+  enrichedEmails,
 } from "../db/schema.js";
 import { eq, inArray, and } from "drizzle-orm";
 import {
@@ -161,7 +161,7 @@ router.post("/journalists/discover-emails", async (req, res) => {
     }
   }
 
-  // Store results in hunted_individuals + hunted_emails
+  // Store results in enriched_individuals + enriched_emails
   const now = new Date();
   let discovered = 0;
 
@@ -170,14 +170,14 @@ router.post("/journalists/discover-emails", async (req, res) => {
       (j) => j.journalistId === result.journalistId
     )!;
 
-    // Always store hunted_individuals record (even if no email found)
+    // Always store enriched_individuals record (even if no email found)
     await db
-      .insert(huntedIndividuals)
+      .insert(enrichedIndividuals)
       .values({
         firstName: journalist.firstName!,
         lastName: journalist.lastName!,
         domain: organizationDomain,
-        huntedAt: now,
+        enrichedAt: now,
         position: result.person?.title || null,
         linkedinUrl: result.person?.linkedinUrl || null,
         company: result.person?.organizationName || null,
@@ -193,10 +193,10 @@ router.post("/journalists/discover-emails", async (req, res) => {
       discovered++;
 
       await db
-        .insert(huntedEmails)
+        .insert(enrichedEmails)
         .values({
           email: result.person.email,
-          huntedAt: now,
+          enrichedAt: now,
           status: mapEmailStatus(result.person.emailStatus),
           sources: [{ type: "apollo", enrichmentId: result.enrichmentId }],
         })

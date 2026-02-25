@@ -4,7 +4,7 @@ import healthRoutes from "../../src/routes/health.js";
 import journalistsRoutes from "../../src/routes/journalists.js";
 import outletJournalistsRoutes from "../../src/routes/outlet-journalists.js";
 import campaignOutletJournalistsRoutes from "../../src/routes/campaign-outlet-journalists.js";
-import huntedRoutes from "../../src/routes/hunted.js";
+import enrichedRoutes from "../../src/routes/enriched.js";
 import emailPipelineRoutes from "../../src/routes/email-pipeline.js";
 import engagementRoutes from "../../src/routes/engagement.js";
 import internalRoutes from "../../src/routes/internal.js";
@@ -23,7 +23,7 @@ export function createTestApp() {
   app.use(journalistsRoutes);
   app.use(outletJournalistsRoutes);
   app.use(campaignOutletJournalistsRoutes);
-  app.use(huntedRoutes);
+  app.use(enrichedRoutes);
   app.use(internalRoutes);
   app.use((_req: express.Request, res: express.Response) => {
     res.status(404).json({ error: "Not found" });

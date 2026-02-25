@@ -3,15 +3,15 @@ import {
   pressJournalists,
   outletJournalists,
   campaignOutletJournalists,
-  huntedIndividuals,
-  huntedEmails,
+  enrichedIndividuals,
+  enrichedEmails,
   searchedEmails,
 } from "../../src/db/schema.js";
 
 export async function cleanTestData() {
   await db.delete(searchedEmails);
-  await db.delete(huntedEmails);
-  await db.delete(huntedIndividuals);
+  await db.delete(enrichedEmails);
+  await db.delete(enrichedIndividuals);
   await db.delete(campaignOutletJournalists);
   await db.delete(outletJournalists);
   await db.delete(pressJournalists);
