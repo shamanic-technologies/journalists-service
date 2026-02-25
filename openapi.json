@@ -1,0 +1,2224 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Journalists Service",
+    "description": "Manages journalist profiles, outlet affiliations, email discovery pipeline, and engagement tracking.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3020"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key"
+      }
+    },
+    "schemas": {
+      "Journalist": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "individual",
+              "organization"
+            ]
+          },
+          "journalistName": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "entityType",
+          "journalistName",
+          "firstName",
+          "lastName",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "CreateJournalistRequest": {
+        "type": "object",
+        "properties": {
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "individual",
+              "organization"
+            ]
+          },
+          "journalistName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityType",
+          "journalistName"
+        ]
+      },
+      "UpdateJournalistRequest": {
+        "type": "object",
+        "properties": {
+          "journalistName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "OutletJournalist": {
+        "type": "object",
+        "properties": {
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "outletId",
+          "journalistId"
+        ]
+      },
+      "CreateOutletJournalistRequest": {
+        "type": "object",
+        "properties": {
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "outletId",
+          "journalistId"
+        ]
+      },
+      "OutletJournalistWithDetails": {
+        "type": "object",
+        "properties": {
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistName": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          },
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "individual",
+              "organization"
+            ]
+          }
+        },
+        "required": [
+          "outletId",
+          "journalistId"
+        ]
+      },
+      "CampaignOutletJournalist": {
+        "type": "object",
+        "properties": {
+          "campaignId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "whyRelevant": {
+            "type": "string"
+          },
+          "whyNotRelevant": {
+            "type": "string"
+          },
+          "relevanceScore": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "campaignId",
+          "outletId",
+          "journalistId",
+          "whyRelevant",
+          "whyNotRelevant",
+          "relevanceScore",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateCampaignOutletJournalistRequest": {
+        "type": "object",
+        "properties": {
+          "campaignId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "whyRelevant": {
+            "type": "string",
+            "minLength": 1
+          },
+          "whyNotRelevant": {
+            "type": "string",
+            "minLength": 1
+          },
+          "relevanceScore": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "campaignId",
+          "outletId",
+          "journalistId",
+          "whyRelevant",
+          "whyNotRelevant",
+          "relevanceScore"
+        ]
+      },
+      "UpdateCampaignOutletJournalistRequest": {
+        "type": "object",
+        "properties": {
+          "whyRelevant": {
+            "type": "string",
+            "minLength": 1
+          },
+          "whyNotRelevant": {
+            "type": "string",
+            "minLength": 1
+          },
+          "relevanceScore": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      },
+      "CreateHuntedIndividualRequest": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "domain": {
+            "type": "string",
+            "minLength": 1
+          },
+          "huntedAt": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          },
+          "twitter": {
+            "type": "string"
+          },
+          "linkedinUrl": {
+            "type": "string"
+          },
+          "phoneNumber": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "sources": {
+            "nullable": true
+          },
+          "verificationDate": {
+            "type": "string"
+          },
+          "verificationStatus": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "accept_all",
+              "unknown",
+              "invalid"
+            ]
+          },
+          "score": {
+            "type": "integer"
+          },
+          "acceptAll": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "firstName",
+          "lastName",
+          "domain",
+          "huntedAt"
+        ]
+      },
+      "BulkHuntedIndividualsRequest": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateHuntedIndividualRequest"
+            },
+            "minItems": 1,
+            "maxItems": 1000
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "CreateHuntedEmailRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "huntedAt": {
+            "type": "string"
+          },
+          "score": {
+            "type": "integer",
+            "default": 0
+          },
+          "acceptAll": {
+            "type": "boolean",
+            "default": false
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "invalid",
+              "risky",
+              "unknown"
+            ]
+          },
+          "regexp": {
+            "type": "boolean",
+            "default": false
+          },
+          "gibberish": {
+            "type": "boolean",
+            "default": false
+          },
+          "disposable": {
+            "type": "boolean",
+            "default": false
+          },
+          "webmail": {
+            "type": "boolean",
+            "default": false
+          },
+          "mxRecords": {
+            "type": "boolean",
+            "default": false
+          },
+          "smtpServer": {
+            "type": "boolean",
+            "default": false
+          },
+          "smtpCheck": {
+            "type": "boolean",
+            "default": false
+          },
+          "block": {
+            "type": "boolean",
+            "default": false
+          },
+          "sources": {
+            "nullable": true
+          }
+        },
+        "required": [
+          "email",
+          "huntedAt",
+          "status"
+        ]
+      },
+      "BulkHuntedEmailsRequest": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateHuntedEmailRequest"
+            },
+            "minItems": 1,
+            "maxItems": 1000
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "CreateSearchedEmailRequest": {
+        "type": "object",
+        "properties": {
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "searchedAt": {
+            "type": "string"
+          },
+          "journalistEmail": {
+            "type": "string",
+            "format": "email"
+          },
+          "sourceStatus": {
+            "type": "string",
+            "enum": [
+              "Found online",
+              "Guessed from similar",
+              "Pure guess"
+            ]
+          },
+          "sourceQuote": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "outletId",
+          "journalistId",
+          "searchedAt",
+          "journalistEmail"
+        ]
+      },
+      "ValidJournalistEmail": {
+        "type": "object",
+        "properties": {
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "isValid": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "journalistId",
+          "outletId",
+          "email",
+          "isValid",
+          "type",
+          "source",
+          "confidence"
+        ]
+      },
+      "HuntedEmailEvent": {
+        "type": "object",
+        "properties": {
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "huntedAt": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number",
+            "nullable": true
+          },
+          "acceptAll": {
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        "required": [
+          "outletId",
+          "journalistId",
+          "email",
+          "huntedAt",
+          "status",
+          "score",
+          "acceptAll"
+        ]
+      },
+      "HuntedIndividualEvent": {
+        "type": "object",
+        "properties": {
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "huntedAt": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string",
+            "nullable": true
+          },
+          "verificationStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "score": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "outletId",
+          "journalistId",
+          "firstName",
+          "lastName",
+          "domain",
+          "huntedAt",
+          "position",
+          "verificationStatus",
+          "score"
+        ]
+      },
+      "SearchedEmailEvent": {
+        "type": "object",
+        "properties": {
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistEmail": {
+            "type": "string"
+          },
+          "searchedAt": {
+            "type": "string"
+          },
+          "sourceStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceQuote": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "outletId",
+          "journalistId",
+          "journalistEmail",
+          "searchedAt",
+          "sourceStatus",
+          "sourceQuote"
+        ]
+      },
+      "NeedEmailUpdate": {
+        "type": "object",
+        "properties": {
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistName": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastSearchedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastHuntedAt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "outletId",
+          "journalistId",
+          "journalistName",
+          "firstName",
+          "lastName",
+          "lastSearchedAt",
+          "lastHuntedAt"
+        ]
+      },
+      "NeedHunter": {
+        "type": "object",
+        "properties": {
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistName": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "outletId",
+          "journalistId",
+          "journalistName",
+          "firstName",
+          "lastName"
+        ]
+      },
+      "NeedAgentSearch": {
+        "type": "object",
+        "properties": {
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistName": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "outletId",
+          "journalistId",
+          "journalistName",
+          "firstName",
+          "lastName"
+        ]
+      },
+      "NeedHunterVerification": {
+        "type": "object",
+        "properties": {
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "outletId",
+          "journalistId",
+          "email"
+        ]
+      },
+      "JournalistEngagement": {
+        "type": "object",
+        "properties": {
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistName": {
+            "type": "string"
+          },
+          "pitchBounces": {
+            "type": "number"
+          },
+          "deliveries": {
+            "type": "number"
+          },
+          "lastEngagementAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalPitches": {
+            "type": "number"
+          },
+          "totalOpens": {
+            "type": "number"
+          },
+          "totalReplies": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "journalistId",
+          "journalistName",
+          "pitchBounces",
+          "deliveries",
+          "lastEngagementAt",
+          "totalPitches",
+          "totalOpens",
+          "totalReplies"
+        ]
+      },
+      "JournalistStatus": {
+        "type": "object",
+        "properties": {
+          "campaignId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "relevanceScore": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "campaignId",
+          "outletId",
+          "journalistId",
+          "journalistName",
+          "status",
+          "relevanceScore"
+        ]
+      },
+      "JournalistWithEmails": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistName": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          },
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "individual",
+              "organization"
+            ]
+          },
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string"
+                },
+                "isValid": {
+                  "type": "boolean"
+                },
+                "confidence": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "email",
+                "isValid",
+                "confidence"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "journalistName",
+          "firstName",
+          "lastName",
+          "entityType",
+          "emails"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    },
+                    "service": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "timestamp",
+                    "service"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists": {
+      "post": {
+        "summary": "Create a journalist",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateJournalistRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "journalist": {
+                      "$ref": "#/components/schemas/Journalist"
+                    }
+                  },
+                  "required": [
+                    "journalist"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicate journalist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List journalists with optional filters",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "individual",
+                "organization"
+              ]
+            },
+            "required": false,
+            "name": "entity_type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "outlet_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "campaign_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of journalists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "journalists": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Journalist"
+                      }
+                    }
+                  },
+                  "required": [
+                    "journalists"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists/{id}": {
+      "get": {
+        "summary": "Get journalist by ID",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journalist details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "journalist": {
+                      "$ref": "#/components/schemas/Journalist"
+                    }
+                  },
+                  "required": [
+                    "journalist"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update journalist",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateJournalistRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "journalist": {
+                      "$ref": "#/components/schemas/Journalist"
+                    }
+                  },
+                  "required": [
+                    "journalist"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/outlet-journalists": {
+      "post": {
+        "summary": "Link journalist to outlet",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOutletJournalistRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Linked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "outletJournalist": {
+                      "$ref": "#/components/schemas/OutletJournalist"
+                    }
+                  },
+                  "required": [
+                    "outletJournalist"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List outlet-journalist links",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "outlet_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "journalist_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of links",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "outletJournalists": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/OutletJournalistWithDetails"
+                      }
+                    }
+                  },
+                  "required": [
+                    "outletJournalists"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/outlet-journalists/{outletId}/{journalistId}": {
+      "delete": {
+        "summary": "Remove outlet-journalist link",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "outletId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "journalistId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "deleted"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaign-outlet-journalists": {
+      "post": {
+        "summary": "Link journalist to campaign+outlet with relevance",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCampaignOutletJournalistRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "campaignOutletJournalist": {
+                      "$ref": "#/components/schemas/CampaignOutletJournalist"
+                    }
+                  },
+                  "required": [
+                    "campaignOutletJournalist"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List campaign-outlet-journalist links",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "campaign_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "outlet_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "campaignOutletJournalists": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CampaignOutletJournalist"
+                      }
+                    }
+                  },
+                  "required": [
+                    "campaignOutletJournalists"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaign-outlet-journalists/{campaignId}/{outletId}/{journalistId}": {
+      "patch": {
+        "summary": "Update campaign-outlet-journalist relevance",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "campaignId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "outletId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "journalistId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCampaignOutletJournalistRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "campaignOutletJournalist": {
+                      "$ref": "#/components/schemas/CampaignOutletJournalist"
+                    }
+                  },
+                  "required": [
+                    "campaignOutletJournalist"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hunted-individuals": {
+      "post": {
+        "summary": "Record a hunted individual",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateHuntedIndividualRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "created": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "created"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hunted-individuals/bulk": {
+      "post": {
+        "summary": "Bulk insert hunted individuals",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkHuntedIndividualsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Bulk inserted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "inserted": {
+                      "type": "number"
+                    },
+                    "total": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "inserted",
+                    "total"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hunted-emails": {
+      "post": {
+        "summary": "Record a hunted email",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateHuntedEmailRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "created": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "created"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hunted-emails/bulk": {
+      "post": {
+        "summary": "Bulk insert hunted emails",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkHuntedEmailsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Bulk inserted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "inserted": {
+                      "type": "number"
+                    },
+                    "total": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "inserted",
+                    "total"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/searched-emails": {
+      "post": {
+        "summary": "Record an agent search email result",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSearchedEmailRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "created": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "created"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists/emails/valid": {
+      "get": {
+        "summary": "Valid journalist emails",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "outlet_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "journalist_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Valid emails",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "emails": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ValidJournalistEmail"
+                      }
+                    }
+                  },
+                  "required": [
+                    "emails"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists/emails/hunted-events": {
+      "get": {
+        "summary": "Hunted email events",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "outlet_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "journalist_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/HuntedEmailEvent"
+                      }
+                    }
+                  },
+                  "required": [
+                    "events"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists/emails/hunted-individual-events": {
+      "get": {
+        "summary": "Hunted individual events",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "outlet_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "journalist_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/HuntedIndividualEvent"
+                      }
+                    }
+                  },
+                  "required": [
+                    "events"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists/emails/searched-events": {
+      "get": {
+        "summary": "Searched email events",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "outlet_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "journalist_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SearchedEmailEvent"
+                      }
+                    }
+                  },
+                  "required": [
+                    "events"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists/need-email-update": {
+      "get": {
+        "summary": "Journalists needing email update",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journalists needing update",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "journalists": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NeedEmailUpdate"
+                      }
+                    }
+                  },
+                  "required": [
+                    "journalists"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists/need-hunter": {
+      "get": {
+        "summary": "Journalists needing Hunter search",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journalists needing Hunter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "journalists": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NeedHunter"
+                      }
+                    }
+                  },
+                  "required": [
+                    "journalists"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists/need-agent-search": {
+      "get": {
+        "summary": "Journalists needing agent search",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journalists needing agent search",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "journalists": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NeedAgentSearch"
+                      }
+                    }
+                  },
+                  "required": [
+                    "journalists"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists/emails/need-hunter-verification": {
+      "get": {
+        "summary": "Emails needing Hunter verification",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Emails needing verification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "emails": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NeedHunterVerification"
+                      }
+                    }
+                  },
+                  "required": [
+                    "emails"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists/engagement/{journalistId}": {
+      "get": {
+        "summary": "Journalist engagement metrics",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "journalistId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Engagement data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "engagement": {
+                      "$ref": "#/components/schemas/JournalistEngagement"
+                    }
+                  },
+                  "required": [
+                    "engagement"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists/status": {
+      "get": {
+        "summary": "Journalist status by campaign",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "campaign_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Statuses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statuses": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/JournalistStatus"
+                      }
+                    }
+                  },
+                  "required": [
+                    "statuses"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/journalists/by-outlet-with-emails/{outletId}": {
+      "get": {
+        "summary": "Journalists with valid emails for an outlet",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "outletId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journalists with emails",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "journalists": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/JournalistWithEmails"
+                      }
+                    }
+                  },
+                  "required": [
+                    "journalists"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/journalists/by-ids": {
+      "get": {
+        "summary": "Batch lookup journalists by IDs",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ids",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journalists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "journalists": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Journalist"
+                      }
+                    }
+                  },
+                  "required": [
+                    "journalists"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
