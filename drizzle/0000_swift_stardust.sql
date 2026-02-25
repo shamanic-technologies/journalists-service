@@ -14,9 +14,9 @@ CREATE TABLE IF NOT EXISTS "campaign_outlet_journalists" (
 	CONSTRAINT "campaign_outlet_journalists_campaign_id_outlet_id_journalist_id_pk" PRIMARY KEY("campaign_id","outlet_id","journalist_id")
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "enriched_emails" (
+CREATE TABLE IF NOT EXISTS "hunted_emails" (
 	"email" text NOT NULL,
-	"enriched_at" timestamp with time zone NOT NULL,
+	"hunted_at" timestamp with time zone NOT NULL,
 	"score" integer DEFAULT 0 NOT NULL,
 	"accept_all" boolean DEFAULT false NOT NULL,
 	"status" "email_status" NOT NULL,
@@ -31,14 +31,14 @@ CREATE TABLE IF NOT EXISTS "enriched_emails" (
 	"sources" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "enriched_emails_email_enriched_at_pk" PRIMARY KEY("email","enriched_at")
+	CONSTRAINT "hunted_emails_email_hunted_at_pk" PRIMARY KEY("email","hunted_at")
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "enriched_individuals" (
+CREATE TABLE IF NOT EXISTS "hunted_individuals" (
 	"first_name" text NOT NULL,
 	"last_name" text NOT NULL,
 	"domain" text NOT NULL,
-	"enriched_at" timestamp with time zone NOT NULL,
+	"hunted_at" timestamp with time zone NOT NULL,
 	"position" text,
 	"twitter" text,
 	"linkedin_url" text,
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS "enriched_individuals" (
 	"accept_all" boolean,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "enriched_individuals_first_name_last_name_domain_enriched_at_pk" PRIMARY KEY("first_name","last_name","domain","enriched_at")
+	CONSTRAINT "hunted_individuals_first_name_last_name_domain_hunted_at_pk" PRIMARY KEY("first_name","last_name","domain","hunted_at")
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "outlet_journalists" (
@@ -102,8 +102,8 @@ END $$;
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_coj_campaign" ON "campaign_outlet_journalists" USING btree ("campaign_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_coj_outlet" ON "campaign_outlet_journalists" USING btree ("outlet_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "idx_ee_email" ON "enriched_emails" USING btree ("email");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "idx_ei_domain" ON "enriched_individuals" USING btree ("domain");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_he_email" ON "hunted_emails" USING btree ("email");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_hi_domain" ON "hunted_individuals" USING btree ("domain");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_oj_journalist" ON "outlet_journalists" USING btree ("journalist_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_oj_outlet" ON "outlet_journalists" USING btree ("outlet_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_journalists_name_type" ON "press_journalists" USING btree ("journalist_name","entity_type");--> statement-breakpoint
