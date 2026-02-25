@@ -1,43 +1,43 @@
 import { Router } from "express";
 import { db } from "../db/index.js";
 import {
-  huntedIndividuals,
-  huntedEmails,
+  enrichedIndividuals,
+  enrichedEmails,
   searchedEmails,
 } from "../db/schema.js";
 import {
-  CreateHuntedIndividualSchema,
-  BulkHuntedIndividualsSchema,
-  CreateHuntedEmailSchema,
-  BulkHuntedEmailsSchema,
+  CreateEnrichedIndividualSchema,
+  BulkEnrichedIndividualsSchema,
+  CreateEnrichedEmailSchema,
+  BulkEnrichedEmailsSchema,
   CreateSearchedEmailSchema,
 } from "../schemas.js";
 
 const router = Router();
 
-// POST /hunted-individuals
-router.post("/hunted-individuals", async (req, res) => {
-  const parsed = CreateHuntedIndividualSchema.safeParse(req.body);
+// POST /enriched-individuals
+router.post("/enriched-individuals", async (req, res) => {
+  const parsed = CreateEnrichedIndividualSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
-  const { huntedAt, ...rest } = parsed.data;
+  const { enrichedAt, ...rest } = parsed.data;
   await db
-    .insert(huntedIndividuals)
+    .insert(enrichedIndividuals)
     .values({
       ...rest,
-      huntedAt: new Date(huntedAt),
+      enrichedAt: new Date(enrichedAt),
     })
     .onConflictDoNothing();
 
   res.status(201).json({ created: true });
 });
 
-// POST /hunted-individuals/bulk
-router.post("/hunted-individuals/bulk", async (req, res) => {
-  const parsed = BulkHuntedIndividualsSchema.safeParse(req.body);
+// POST /enriched-individuals/bulk
+router.post("/enriched-individuals/bulk", async (req, res) => {
+  const parsed = BulkEnrichedIndividualsSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -45,12 +45,12 @@ router.post("/hunted-individuals/bulk", async (req, res) => {
 
   const values = parsed.data.items.map((item) => ({
     ...item,
-    huntedAt: new Date(item.huntedAt),
+    enrichedAt: new Date(item.enrichedAt),
     verificationDate: item.verificationDate || undefined,
   }));
 
   const result = await db
-    .insert(huntedIndividuals)
+    .insert(enrichedIndividuals)
     .values(values)
     .onConflictDoNothing()
     .returning();
@@ -61,29 +61,29 @@ router.post("/hunted-individuals/bulk", async (req, res) => {
   });
 });
 
-// POST /hunted-emails
-router.post("/hunted-emails", async (req, res) => {
-  const parsed = CreateHuntedEmailSchema.safeParse(req.body);
+// POST /enriched-emails
+router.post("/enriched-emails", async (req, res) => {
+  const parsed = CreateEnrichedEmailSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
-  const { huntedAt, ...rest } = parsed.data;
+  const { enrichedAt, ...rest } = parsed.data;
   await db
-    .insert(huntedEmails)
+    .insert(enrichedEmails)
     .values({
       ...rest,
-      huntedAt: new Date(huntedAt),
+      enrichedAt: new Date(enrichedAt),
     })
     .onConflictDoNothing();
 
   res.status(201).json({ created: true });
 });
 
-// POST /hunted-emails/bulk
-router.post("/hunted-emails/bulk", async (req, res) => {
-  const parsed = BulkHuntedEmailsSchema.safeParse(req.body);
+// POST /enriched-emails/bulk
+router.post("/enriched-emails/bulk", async (req, res) => {
+  const parsed = BulkEnrichedEmailsSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -91,11 +91,11 @@ router.post("/hunted-emails/bulk", async (req, res) => {
 
   const values = parsed.data.items.map((item) => ({
     ...item,
-    huntedAt: new Date(item.huntedAt),
+    enrichedAt: new Date(item.enrichedAt),
   }));
 
   const result = await db
-    .insert(huntedEmails)
+    .insert(enrichedEmails)
     .values(values)
     .onConflictDoNothing()
     .returning();

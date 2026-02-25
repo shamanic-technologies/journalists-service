@@ -7,7 +7,7 @@ import {
   closeDb,
 } from "../helpers/test-db.js";
 import { db } from "../../src/db/index.js";
-import { pressJournalists, outletJournalists, huntedIndividuals, huntedEmails } from "../../src/db/schema.js";
+import { pressJournalists, outletJournalists, enrichedIndividuals, enrichedEmails } from "../../src/db/schema.js";
 import { and, eq } from "drizzle-orm";
 
 // Mock the Apollo client
@@ -164,14 +164,14 @@ describe("POST /journalists/discover-emails", () => {
       "org_test123"
     );
 
-    // Verify data was stored in hunted_individuals
+    // Verify data was stored in enriched_individuals
     const individuals = await db
       .select()
-      .from(huntedIndividuals)
+      .from(enrichedIndividuals)
       .where(
         and(
-          eq(huntedIndividuals.firstName, "John"),
-          eq(huntedIndividuals.lastName, "Doe")
+          eq(enrichedIndividuals.firstName, "John"),
+          eq(enrichedIndividuals.lastName, "Doe")
         )
       );
     expect(individuals).toHaveLength(1);
@@ -179,12 +179,12 @@ describe("POST /journalists/discover-emails", () => {
     expect(individuals[0].linkedinUrl).toBe("https://linkedin.com/in/johndoe");
     expect(individuals[0].verificationStatus).toBe("valid");
 
-    // Verify data was stored in hunted_emails
+    // Verify data was stored in enriched_emails
     const emails = await db
       .select()
-      .from(huntedEmails)
+      .from(enrichedEmails)
       .where(
-        eq(huntedEmails.email, "john.doe@example.com")
+        eq(enrichedEmails.email, "john.doe@example.com")
       );
     expect(emails).toHaveLength(1);
     expect(emails[0].status).toBe("valid");

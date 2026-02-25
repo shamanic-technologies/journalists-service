@@ -111,13 +111,13 @@ export const campaignOutletJournalists = pgTable(
   ]
 );
 
-export const huntedIndividuals = pgTable(
-  "hunted_individuals",
+export const enrichedIndividuals = pgTable(
+  "enriched_individuals",
   {
     firstName: text("first_name").notNull(),
     lastName: text("last_name").notNull(),
     domain: text("domain").notNull(),
-    huntedAt: timestamp("hunted_at", { withTimezone: true }).notNull(),
+    enrichedAt: timestamp("enriched_at", { withTimezone: true }).notNull(),
     position: text("position"),
     twitter: text("twitter"),
     linkedinUrl: text("linkedin_url"),
@@ -137,17 +137,17 @@ export const huntedIndividuals = pgTable(
   },
   (table) => [
     primaryKey({
-      columns: [table.firstName, table.lastName, table.domain, table.huntedAt],
+      columns: [table.firstName, table.lastName, table.domain, table.enrichedAt],
     }),
-    index("idx_hi_domain").on(table.domain),
+    index("idx_ei_domain").on(table.domain),
   ]
 );
 
-export const huntedEmails = pgTable(
-  "hunted_emails",
+export const enrichedEmails = pgTable(
+  "enriched_emails",
   {
     email: text("email").notNull(),
-    huntedAt: timestamp("hunted_at", { withTimezone: true }).notNull(),
+    enrichedAt: timestamp("enriched_at", { withTimezone: true }).notNull(),
     score: integer("score").notNull().default(0),
     acceptAll: boolean("accept_all").notNull().default(false),
     status: emailStatusEnum("status").notNull(),
@@ -168,8 +168,8 @@ export const huntedEmails = pgTable(
       .defaultNow(),
   },
   (table) => [
-    primaryKey({ columns: [table.email, table.huntedAt] }),
-    index("idx_he_email").on(table.email),
+    primaryKey({ columns: [table.email, table.enrichedAt] }),
+    index("idx_ee_email").on(table.email),
   ]
 );
 
@@ -210,9 +210,9 @@ export type CampaignOutletJournalist =
   typeof campaignOutletJournalists.$inferSelect;
 export type NewCampaignOutletJournalist =
   typeof campaignOutletJournalists.$inferInsert;
-export type HuntedIndividual = typeof huntedIndividuals.$inferSelect;
-export type NewHuntedIndividual = typeof huntedIndividuals.$inferInsert;
-export type HuntedEmail = typeof huntedEmails.$inferSelect;
-export type NewHuntedEmail = typeof huntedEmails.$inferInsert;
+export type EnrichedIndividual = typeof enrichedIndividuals.$inferSelect;
+export type NewEnrichedIndividual = typeof enrichedIndividuals.$inferInsert;
+export type EnrichedEmail = typeof enrichedEmails.$inferSelect;
+export type NewEnrichedEmail = typeof enrichedEmails.$inferInsert;
 export type SearchedEmail = typeof searchedEmails.$inferSelect;
 export type NewSearchedEmail = typeof searchedEmails.$inferInsert;

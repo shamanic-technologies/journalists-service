@@ -63,12 +63,12 @@ describe("Email Pipeline Endpoints", () => {
     });
   });
 
-  describe("GET /journalists/need-hunter", () => {
-    it("returns journalists without hunter results", async () => {
+  describe("GET /journalists/need-enrichment", () => {
+    it("returns journalists without enrichment results", async () => {
       const journalist = await insertTestJournalist({
-        journalistName: "NeedHunter",
+        journalistName: "NeedEnrichment",
         firstName: "Need",
-        lastName: "Hunter",
+        lastName: "Enrichment",
       });
 
       await db.insert(outletJournalists).values({
@@ -77,7 +77,7 @@ describe("Email Pipeline Endpoints", () => {
       });
 
       const res = await request(app)
-        .get("/journalists/need-hunter")
+        .get("/journalists/need-enrichment")
         .set(AUTH_HEADERS);
 
       expect(res.status).toBe(200);
@@ -124,7 +124,7 @@ describe("Email Pipeline Endpoints", () => {
     });
   });
 
-  describe("GET /journalists/emails/need-hunter-verification", () => {
+  describe("GET /journalists/emails/need-verification", () => {
     it("returns emails without verification", async () => {
       const journalist = await insertTestJournalist({
         journalistName: "VerifyTest",
@@ -138,7 +138,7 @@ describe("Email Pipeline Endpoints", () => {
       });
 
       const res = await request(app)
-        .get("/journalists/emails/need-hunter-verification")
+        .get("/journalists/emails/need-verification")
         .set(AUTH_HEADERS);
 
       expect(res.status).toBe(200);

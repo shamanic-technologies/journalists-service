@@ -1,5 +1,5 @@
 {
-  "id": "0ff79d2d-ac23-485a-afde-c377b953e492",
+  "id": "e928ce82-f5af-4dd9-afc8-ded07e56787d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -121,8 +121,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.hunted_emails": {
-      "name": "hunted_emails",
+    "public.enriched_emails": {
+      "name": "enriched_emails",
       "schema": "",
       "columns": {
         "email": {
@@ -131,8 +131,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "hunted_at": {
-          "name": "hunted_at",
+        "enriched_at": {
+          "name": "enriched_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
@@ -237,8 +237,8 @@
         }
       },
       "indexes": {
-        "idx_he_email": {
-          "name": "idx_he_email",
+        "idx_ee_email": {
+          "name": "idx_ee_email",
           "columns": [
             {
               "expression": "email",
@@ -255,11 +255,11 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "hunted_emails_email_hunted_at_pk": {
-          "name": "hunted_emails_email_hunted_at_pk",
+        "enriched_emails_email_enriched_at_pk": {
+          "name": "enriched_emails_email_enriched_at_pk",
           "columns": [
             "email",
-            "hunted_at"
+            "enriched_at"
           ]
         }
       },
@@ -268,8 +268,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.hunted_individuals": {
-      "name": "hunted_individuals",
+    "public.enriched_individuals": {
+      "name": "enriched_individuals",
       "schema": "",
       "columns": {
         "first_name": {
@@ -290,8 +290,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "hunted_at": {
-          "name": "hunted_at",
+        "enriched_at": {
+          "name": "enriched_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
@@ -373,8 +373,8 @@
         }
       },
       "indexes": {
-        "idx_hi_domain": {
-          "name": "idx_hi_domain",
+        "idx_ei_domain": {
+          "name": "idx_ei_domain",
           "columns": [
             {
               "expression": "domain",
@@ -391,13 +391,13 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "hunted_individuals_first_name_last_name_domain_hunted_at_pk": {
-          "name": "hunted_individuals_first_name_last_name_domain_hunted_at_pk",
+        "enriched_individuals_first_name_last_name_domain_enriched_at_pk": {
+          "name": "enriched_individuals_first_name_last_name_domain_enriched_at_pk",
           "columns": [
             "first_name",
             "last_name",
             "domain",
-            "hunted_at"
+            "enriched_at"
           ]
         }
       },

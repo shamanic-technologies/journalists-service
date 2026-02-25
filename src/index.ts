@@ -10,7 +10,7 @@ import healthRoutes from "./routes/health.js";
 import journalistsRoutes from "./routes/journalists.js";
 import outletJournalistsRoutes from "./routes/outlet-journalists.js";
 import campaignOutletJournalistsRoutes from "./routes/campaign-outlet-journalists.js";
-import huntedRoutes from "./routes/hunted.js";
+import enrichedRoutes from "./routes/enriched.js";
 import emailPipelineRoutes from "./routes/email-pipeline.js";
 import engagementRoutes from "./routes/engagement.js";
 import internalRoutes from "./routes/internal.js";
@@ -50,7 +50,7 @@ app.use(discoverRoutes);
 app.use(journalistsRoutes);
 app.use(outletJournalistsRoutes);
 app.use(campaignOutletJournalistsRoutes);
-app.use(huntedRoutes);
+app.use(enrichedRoutes);
 app.use(internalRoutes);
 
 // 404

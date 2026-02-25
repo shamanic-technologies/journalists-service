@@ -282,7 +282,7 @@
           }
         }
       },
-      "CreateHuntedIndividualRequest": {
+      "CreateEnrichedIndividualRequest": {
         "type": "object",
         "properties": {
           "firstName": {
@@ -297,7 +297,7 @@
             "type": "string",
             "minLength": 1
           },
-          "huntedAt": {
+          "enrichedAt": {
             "type": "string"
           },
           "position": {
@@ -341,16 +341,16 @@
           "firstName",
           "lastName",
           "domain",
-          "huntedAt"
+          "enrichedAt"
         ]
       },
-      "BulkHuntedIndividualsRequest": {
+      "BulkEnrichedIndividualsRequest": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/CreateHuntedIndividualRequest"
+              "$ref": "#/components/schemas/CreateEnrichedIndividualRequest"
             },
             "minItems": 1,
             "maxItems": 1000
@@ -360,14 +360,14 @@
           "items"
         ]
       },
-      "CreateHuntedEmailRequest": {
+      "CreateEnrichedEmailRequest": {
         "type": "object",
         "properties": {
           "email": {
             "type": "string",
             "format": "email"
           },
-          "huntedAt": {
+          "enrichedAt": {
             "type": "string"
           },
           "score": {
@@ -425,17 +425,17 @@
         },
         "required": [
           "email",
-          "huntedAt",
+          "enrichedAt",
           "status"
         ]
       },
-      "BulkHuntedEmailsRequest": {
+      "BulkEnrichedEmailsRequest": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/CreateHuntedEmailRequest"
+              "$ref": "#/components/schemas/CreateEnrichedEmailRequest"
             },
             "minItems": 1,
             "maxItems": 1000
@@ -519,7 +519,7 @@
           "confidence"
         ]
       },
-      "HuntedEmailEvent": {
+      "EnrichedEmailEvent": {
         "type": "object",
         "properties": {
           "outletId": {
@@ -533,7 +533,7 @@
           "email": {
             "type": "string"
           },
-          "huntedAt": {
+          "enrichedAt": {
             "type": "string"
           },
           "status": {
@@ -552,13 +552,13 @@
           "outletId",
           "journalistId",
           "email",
-          "huntedAt",
+          "enrichedAt",
           "status",
           "score",
           "acceptAll"
         ]
       },
-      "HuntedIndividualEvent": {
+      "EnrichedIndividualEvent": {
         "type": "object",
         "properties": {
           "outletId": {
@@ -578,7 +578,7 @@
           "domain": {
             "type": "string"
           },
-          "huntedAt": {
+          "enrichedAt": {
             "type": "string"
           },
           "position": {
@@ -600,7 +600,7 @@
           "firstName",
           "lastName",
           "domain",
-          "huntedAt",
+          "enrichedAt",
           "position",
           "verificationStatus",
           "score"
@@ -667,7 +667,7 @@
             "type": "string",
             "nullable": true
           },
-          "lastHuntedAt": {
+          "lastEnrichedAt": {
             "type": "string",
             "nullable": true
           }
@@ -679,10 +679,10 @@
           "firstName",
           "lastName",
           "lastSearchedAt",
-          "lastHuntedAt"
+          "lastEnrichedAt"
         ]
       },
-      "NeedHunter": {
+      "NeedEnrichment": {
         "type": "object",
         "properties": {
           "outletId": {
@@ -744,7 +744,7 @@
           "lastName"
         ]
       },
-      "NeedHunterVerification": {
+      "NeedVerification": {
         "type": "object",
         "properties": {
           "outletId": {
@@ -1588,9 +1588,9 @@
         }
       }
     },
-    "/hunted-individuals": {
+    "/enriched-individuals": {
       "post": {
-        "summary": "Record a hunted individual",
+        "summary": "Record an enriched individual",
         "security": [
           {
             "ApiKeyAuth": []
@@ -1600,7 +1600,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateHuntedIndividualRequest"
+                "$ref": "#/components/schemas/CreateEnrichedIndividualRequest"
               }
             }
           }
@@ -1627,9 +1627,9 @@
         }
       }
     },
-    "/hunted-individuals/bulk": {
+    "/enriched-individuals/bulk": {
       "post": {
-        "summary": "Bulk insert hunted individuals",
+        "summary": "Bulk insert enriched individuals",
         "security": [
           {
             "ApiKeyAuth": []
@@ -1639,7 +1639,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BulkHuntedIndividualsRequest"
+                "$ref": "#/components/schemas/BulkEnrichedIndividualsRequest"
               }
             }
           }
@@ -1670,9 +1670,9 @@
         }
       }
     },
-    "/hunted-emails": {
+    "/enriched-emails": {
       "post": {
-        "summary": "Record a hunted email",
+        "summary": "Record an enriched email",
         "security": [
           {
             "ApiKeyAuth": []
@@ -1682,7 +1682,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateHuntedEmailRequest"
+                "$ref": "#/components/schemas/CreateEnrichedEmailRequest"
               }
             }
           }
@@ -1709,9 +1709,9 @@
         }
       }
     },
-    "/hunted-emails/bulk": {
+    "/enriched-emails/bulk": {
       "post": {
-        "summary": "Bulk insert hunted emails",
+        "summary": "Bulk insert enriched emails",
         "security": [
           {
             "ApiKeyAuth": []
@@ -1721,7 +1721,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BulkHuntedEmailsRequest"
+                "$ref": "#/components/schemas/BulkEnrichedEmailsRequest"
               }
             }
           }
@@ -1844,9 +1844,9 @@
         }
       }
     },
-    "/journalists/emails/hunted-events": {
+    "/journalists/emails/enrichment-events": {
       "get": {
-        "summary": "Hunted email events",
+        "summary": "Enriched email events",
         "security": [
           {
             "ApiKeyAuth": []
@@ -1883,7 +1883,7 @@
                     "events": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/HuntedEmailEvent"
+                        "$ref": "#/components/schemas/EnrichedEmailEvent"
                       }
                     }
                   },
@@ -1897,9 +1897,9 @@
         }
       }
     },
-    "/journalists/emails/hunted-individual-events": {
+    "/journalists/emails/enriched-individual-events": {
       "get": {
-        "summary": "Hunted individual events",
+        "summary": "Enriched individual events",
         "security": [
           {
             "ApiKeyAuth": []
@@ -1936,7 +1936,7 @@
                     "events": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/HuntedIndividualEvent"
+                        "$ref": "#/components/schemas/EnrichedIndividualEvent"
                       }
                     }
                   },
@@ -2054,9 +2054,9 @@
         }
       }
     },
-    "/journalists/need-hunter": {
+    "/journalists/need-enrichment": {
       "get": {
-        "summary": "Journalists needing Hunter search",
+        "summary": "Journalists needing enrichment",
         "security": [
           {
             "ApiKeyAuth": []
@@ -2064,7 +2064,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Journalists needing Hunter",
+            "description": "Journalists needing enrichment",
             "content": {
               "application/json": {
                 "schema": {
@@ -2073,7 +2073,7 @@
                     "journalists": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/NeedHunter"
+                        "$ref": "#/components/schemas/NeedEnrichment"
                       }
                     }
                   },
@@ -2120,9 +2120,9 @@
         }
       }
     },
-    "/journalists/emails/need-hunter-verification": {
+    "/journalists/emails/need-verification": {
       "get": {
-        "summary": "Emails needing Hunter verification",
+        "summary": "Emails needing verification",
         "security": [
           {
             "ApiKeyAuth": []
@@ -2139,7 +2139,7 @@
                     "emails": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/NeedHunterVerification"
+                        "$ref": "#/components/schemas/NeedVerification"
                       }
                     }
                   },
