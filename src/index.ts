@@ -14,6 +14,7 @@ import huntedRoutes from "./routes/hunted.js";
 import emailPipelineRoutes from "./routes/email-pipeline.js";
 import engagementRoutes from "./routes/engagement.js";
 import internalRoutes from "./routes/internal.js";
+import discoverRoutes from "./routes/discover.js";
 import { requireApiKey } from "./middleware/auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -45,6 +46,7 @@ app.use(requireApiKey);
 // Mount specific path routes before parametric /:id routes
 app.use(emailPipelineRoutes);
 app.use(engagementRoutes);
+app.use(discoverRoutes);
 app.use(journalistsRoutes);
 app.use(outletJournalistsRoutes);
 app.use(campaignOutletJournalistsRoutes);

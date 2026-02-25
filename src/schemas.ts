@@ -310,6 +310,40 @@ export const JournalistStatusSchema = z
   })
   .openapi("JournalistStatus");
 
+// ==================== Discover Emails Schemas ====================
+
+export const DiscoverEmailsSchema = z
+  .object({
+    outletId: z.string().uuid(),
+    organizationDomain: z.string().min(1),
+    journalistIds: z.array(z.string().uuid()).optional(),
+    runId: z.string().uuid(),
+    appId: z.string().uuid(),
+    brandId: z.string().uuid(),
+    campaignId: z.string().uuid(),
+    clerkOrgId: z.string().min(1),
+  })
+  .openapi("DiscoverEmailsRequest");
+
+export const DiscoverEmailsResultSchema = z
+  .object({
+    journalistId: z.string().uuid(),
+    email: z.string().nullable(),
+    emailStatus: z.string().nullable(),
+    cached: z.boolean(),
+    enrichmentId: z.string(),
+  })
+  .openapi("DiscoverEmailsResult");
+
+export const DiscoverEmailsResponseSchema = z
+  .object({
+    discovered: z.number(),
+    total: z.number(),
+    skipped: z.number(),
+    results: z.array(DiscoverEmailsResultSchema),
+  })
+  .openapi("DiscoverEmailsResponse");
+
 // ==================== Internal Schemas ====================
 
 export const JournalistWithEmailsSchema = z
@@ -956,6 +990,35 @@ registry.registerPath({
             emails: z.array(NeedHunterVerificationSchema),
           }),
         },
+      },
+    },
+  },
+});
+
+// Discover Emails (Apollo)
+registry.registerPath({
+  method: "post",
+  path: "/journalists/discover-emails",
+  summary: "Discover journalist emails via Apollo person match",
+  security: [{ [apiKeyAuth.name]: [] }],
+  request: {
+    body: {
+      content: {
+        "application/json": { schema: DiscoverEmailsSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Discovery results",
+      content: {
+        "application/json": { schema: DiscoverEmailsResponseSchema },
+      },
+    },
+    400: {
+      description: "Validation error",
+      content: {
+        "application/json": { schema: ErrorResponseSchema },
       },
     },
   },

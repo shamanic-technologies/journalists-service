@@ -8,6 +8,7 @@ import huntedRoutes from "../../src/routes/hunted.js";
 import emailPipelineRoutes from "../../src/routes/email-pipeline.js";
 import engagementRoutes from "../../src/routes/engagement.js";
 import internalRoutes from "../../src/routes/internal.js";
+import discoverRoutes from "../../src/routes/discover.js";
 import { requireApiKey } from "../../src/middleware/auth.js";
 
 export function createTestApp() {
@@ -18,6 +19,7 @@ export function createTestApp() {
   app.use(requireApiKey);
   app.use(emailPipelineRoutes);
   app.use(engagementRoutes);
+  app.use(discoverRoutes);
   app.use(journalistsRoutes);
   app.use(outletJournalistsRoutes);
   app.use(campaignOutletJournalistsRoutes);
