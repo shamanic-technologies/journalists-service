@@ -765,6 +765,111 @@
           "email"
         ]
       },
+      "DiscoverEmailsResult": {
+        "type": "object",
+        "properties": {
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "emailStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "cached": {
+            "type": "boolean"
+          },
+          "enrichmentId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "journalistId",
+          "email",
+          "emailStatus",
+          "cached",
+          "enrichmentId"
+        ]
+      },
+      "DiscoverEmailsResponse": {
+        "type": "object",
+        "properties": {
+          "discovered": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          },
+          "skipped": {
+            "type": "number"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiscoverEmailsResult"
+            }
+          }
+        },
+        "required": [
+          "discovered",
+          "total",
+          "skipped",
+          "results"
+        ]
+      },
+      "DiscoverEmailsRequest": {
+        "type": "object",
+        "properties": {
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationDomain": {
+            "type": "string",
+            "minLength": 1
+          },
+          "journalistIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "appId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "brandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "campaignId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clerkOrgId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "outletId",
+          "organizationDomain",
+          "runId",
+          "appId",
+          "brandId",
+          "campaignId",
+          "clerkOrgId"
+        ]
+      },
       "JournalistEngagement": {
         "type": "object",
         "properties": {
@@ -2041,6 +2146,47 @@
                   "required": [
                     "emails"
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists/discover-emails": {
+      "post": {
+        "summary": "Discover journalist emails via Apollo person match",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverEmailsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Discovery results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverEmailsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
