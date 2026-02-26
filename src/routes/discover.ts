@@ -62,7 +62,7 @@ router.post("/journalists/discover-emails", async (req, res) => {
     appId,
     brandId,
     campaignId,
-    clerkOrgId,
+    orgId,
   } = parsed.data;
 
   // Fetch journalists to discover emails for
@@ -145,7 +145,7 @@ router.post("/journalists/discover-emails", async (req, res) => {
         brandId,
         campaignId,
       },
-      clerkOrgId
+      orgId
     );
 
     // Map results back to journalist IDs

@@ -321,7 +321,7 @@ export const DiscoverEmailsSchema = z
     appId: z.string().uuid(),
     brandId: z.string().uuid(),
     campaignId: z.string().uuid(),
-    clerkOrgId: z.string().min(1),
+    orgId: z.string().min(1),
   })
   .openapi("DiscoverEmailsRequest");
 
