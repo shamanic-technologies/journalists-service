@@ -855,7 +855,7 @@
             "type": "string",
             "format": "uuid"
           },
-          "clerkOrgId": {
+          "orgId": {
             "type": "string",
             "minLength": 1
           }
@@ -867,7 +867,7 @@
           "appId",
           "brandId",
           "campaignId",
-          "clerkOrgId"
+          "orgId"
         ]
       },
       "JournalistEngagement": {

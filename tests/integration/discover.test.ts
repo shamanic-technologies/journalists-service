@@ -57,7 +57,7 @@ describe("POST /journalists/discover-emails", () => {
         appId: APP_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
-        clerkOrgId: "org_test123",
+        orgId: "org_test123",
       });
 
     expect(res.status).toBe(401);
@@ -76,7 +76,7 @@ describe("POST /journalists/discover-emails", () => {
         appId: APP_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
-        clerkOrgId: "org_test123",
+        orgId: "org_test123",
       });
 
     expect(res.status).toBe(200);
@@ -130,7 +130,7 @@ describe("POST /journalists/discover-emails", () => {
         appId: APP_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
-        clerkOrgId: "org_test123",
+        orgId: "org_test123",
       });
 
     expect(res.status).toBe(200);
@@ -242,7 +242,7 @@ describe("POST /journalists/discover-emails", () => {
         appId: APP_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
-        clerkOrgId: "org_test123",
+        orgId: "org_test123",
       });
 
     expect(res.status).toBe(200);
@@ -302,7 +302,7 @@ describe("POST /journalists/discover-emails", () => {
         appId: APP_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
-        clerkOrgId: "org_test123",
+        orgId: "org_test123",
       });
 
     expect(res.status).toBe(200);
@@ -349,7 +349,7 @@ describe("POST /journalists/discover-emails", () => {
         appId: APP_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
-        clerkOrgId: "org_test123",
+        orgId: "org_test123",
       });
 
     expect(res.status).toBe(200);
@@ -424,7 +424,7 @@ describe("POST /journalists/discover-emails", () => {
         appId: APP_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
-        clerkOrgId: "org_test123",
+        orgId: "org_test123",
       });
 
     expect(res.status).toBe(200);
