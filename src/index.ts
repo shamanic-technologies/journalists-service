@@ -15,7 +15,7 @@ import emailPipelineRoutes from "./routes/email-pipeline.js";
 import engagementRoutes from "./routes/engagement.js";
 import internalRoutes from "./routes/internal.js";
 import discoverRoutes from "./routes/discover.js";
-import { requireApiKey } from "./middleware/auth.js";
+import { requireApiKey, requireIdentityHeaders } from "./middleware/auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -43,6 +43,7 @@ app.use(healthRoutes);
 
 // Protected routes
 app.use(requireApiKey);
+app.use(requireIdentityHeaders);
 // Mount specific path routes before parametric /:id routes
 app.use(emailPipelineRoutes);
 app.use(engagementRoutes);

@@ -15,15 +15,22 @@ vi.mock("../../src/lib/apollo-client.js", () => ({
   apolloMatchBulk: vi.fn(),
 }));
 
+// Mock the runs client
+vi.mock("../../src/lib/runs-client.js", () => ({
+  createChildRun: vi.fn(),
+}));
+
 import { apolloMatchBulk } from "../../src/lib/apollo-client.js";
+import { createChildRun } from "../../src/lib/runs-client.js";
 
 const mockedApolloMatchBulk = vi.mocked(apolloMatchBulk);
+const mockedCreateChildRun = vi.mocked(createChildRun);
 
 const app = createTestApp();
 
 const OUTLET_ID = "11111111-1111-1111-1111-111111111111";
-const RUN_ID = "22222222-2222-2222-2222-222222222222";
-const APP_ID = "33333333-3333-3333-3333-333333333333";
+const PARENT_RUN_ID = "22222222-2222-2222-2222-222222222222";
+const CHILD_RUN_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const BRAND_ID = "44444444-4444-4444-4444-444444444444";
 const CAMPAIGN_ID = "55555555-5555-5555-5555-555555555555";
 
@@ -31,6 +38,14 @@ describe("POST /journalists/discover-emails", () => {
   beforeEach(async () => {
     await cleanTestData();
     vi.clearAllMocks();
+    mockedCreateChildRun.mockResolvedValue({
+      run: {
+        id: CHILD_RUN_ID,
+        parentRunId: PARENT_RUN_ID,
+        service: "journalists-service",
+        operation: "discover-emails",
+      },
+    });
   });
 
   afterAll(async () => {
@@ -53,14 +68,44 @@ describe("POST /journalists/discover-emails", () => {
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
-        runId: RUN_ID,
-        appId: APP_ID,
+        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
-        orgId: "org_test123",
       });
 
     expect(res.status).toBe(401);
+  });
+
+  it("returns 400 without x-org-id header", async () => {
+    const res = await request(app)
+      .post("/journalists/discover-emails")
+      .set({ "x-api-key": "test-api-key", "x-user-id": "test-user-id" })
+      .send({
+        outletId: OUTLET_ID,
+        organizationDomain: "example.com",
+        parentRunId: PARENT_RUN_ID,
+        brandId: BRAND_ID,
+        campaignId: CAMPAIGN_ID,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("x-org-id header is required");
+  });
+
+  it("returns 400 without x-user-id header", async () => {
+    const res = await request(app)
+      .post("/journalists/discover-emails")
+      .set({ "x-api-key": "test-api-key", "x-org-id": "test-org-id" })
+      .send({
+        outletId: OUTLET_ID,
+        organizationDomain: "example.com",
+        parentRunId: PARENT_RUN_ID,
+        brandId: BRAND_ID,
+        campaignId: CAMPAIGN_ID,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("x-user-id header is required");
   });
 
   it("returns empty results when no journalists found for outlet", async () => {
@@ -72,11 +117,9 @@ describe("POST /journalists/discover-emails", () => {
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
-        runId: RUN_ID,
-        appId: APP_ID,
+        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
-        orgId: "org_test123",
       });
 
     expect(res.status).toBe(200);
@@ -87,7 +130,7 @@ describe("POST /journalists/discover-emails", () => {
     expect(mockedApolloMatchBulk).not.toHaveBeenCalled();
   });
 
-  it("calls Apollo and stores results for journalists with names", async () => {
+  it("creates a child run and calls Apollo with child run ID", async () => {
     const journalist = await insertTestJournalist({
       journalistName: "DiscoverTest",
       firstName: "John",
@@ -126,11 +169,9 @@ describe("POST /journalists/discover-emails", () => {
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
-        runId: RUN_ID,
-        appId: APP_ID,
+        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
-        orgId: "org_test123",
       });
 
     expect(res.status).toBe(200);
@@ -146,7 +187,18 @@ describe("POST /journalists/discover-emails", () => {
       enrichmentId: "enrich-abc",
     });
 
-    // Verify Apollo was called correctly
+    // Verify child run was created
+    expect(mockedCreateChildRun).toHaveBeenCalledWith(
+      {
+        parentRunId: PARENT_RUN_ID,
+        service: "journalists-service",
+        operation: "discover-emails",
+      },
+      "test-org-id",
+      "test-user-id"
+    );
+
+    // Verify Apollo was called with child run ID (not parent)
     expect(mockedApolloMatchBulk).toHaveBeenCalledWith(
       {
         items: [
@@ -156,12 +208,12 @@ describe("POST /journalists/discover-emails", () => {
             organizationDomain: "example.com",
           },
         ],
-        runId: RUN_ID,
-        appId: APP_ID,
+        runId: CHILD_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
       },
-      "org_test123"
+      "test-org-id",
+      "test-user-id"
     );
 
     // Verify data was stored in enriched_individuals
@@ -238,11 +290,9 @@ describe("POST /journalists/discover-emails", () => {
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
-        runId: RUN_ID,
-        appId: APP_ID,
+        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
-        orgId: "org_test123",
       });
 
     expect(res.status).toBe(200);
@@ -298,11 +348,9 @@ describe("POST /journalists/discover-emails", () => {
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
         journalistIds: [j1.id],
-        runId: RUN_ID,
-        appId: APP_ID,
+        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
-        orgId: "org_test123",
       });
 
     expect(res.status).toBe(200);
@@ -345,11 +393,9 @@ describe("POST /journalists/discover-emails", () => {
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
-        runId: RUN_ID,
-        appId: APP_ID,
+        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
-        orgId: "org_test123",
       });
 
     expect(res.status).toBe(200);
@@ -420,11 +466,9 @@ describe("POST /journalists/discover-emails", () => {
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
-        runId: RUN_ID,
-        appId: APP_ID,
+        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
-        orgId: "org_test123",
       });
 
     expect(res.status).toBe(200);
@@ -435,5 +479,35 @@ describe("POST /journalists/discover-emails", () => {
     expect(mockedApolloMatchBulk).toHaveBeenCalledTimes(2);
     expect(mockedApolloMatchBulk.mock.calls[0][0].items).toHaveLength(10);
     expect(mockedApolloMatchBulk.mock.calls[1][0].items).toHaveLength(2);
+  });
+
+  it("returns 500 if runs-service call fails", async () => {
+    const journalist = await insertTestJournalist({
+      journalistName: "RunsFail",
+      firstName: "Test",
+      lastName: "Person",
+    });
+
+    await db.insert(outletJournalists).values({
+      outletId: OUTLET_ID,
+      journalistId: journalist.id,
+    });
+
+    mockedCreateChildRun.mockRejectedValue(
+      new Error("Runs-service POST /v1/runs failed (503): Service unavailable")
+    );
+
+    const res = await request(app)
+      .post("/journalists/discover-emails")
+      .set(AUTH_HEADERS)
+      .send({
+        outletId: OUTLET_ID,
+        organizationDomain: "example.com",
+        parentRunId: PARENT_RUN_ID,
+        brandId: BRAND_ID,
+        campaignId: CAMPAIGN_ID,
+      });
+
+    expect(res.status).toBe(500);
   });
 });

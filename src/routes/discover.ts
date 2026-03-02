@@ -12,6 +12,7 @@ import {
   type ApolloPerson,
   type ApolloMatchResult,
 } from "../lib/apollo-client.js";
+import { createChildRun } from "../lib/runs-client.js";
 import { DiscoverEmailsSchema } from "../schemas.js";
 
 const router = Router();
@@ -58,12 +59,25 @@ router.post("/journalists/discover-emails", async (req, res) => {
     outletId,
     organizationDomain,
     journalistIds,
-    runId,
-    appId,
+    parentRunId,
     brandId,
     campaignId,
-    orgId,
   } = parsed.data;
+
+  const orgId = res.locals.orgId as string;
+  const userId = res.locals.userId as string;
+
+  // Create a child run in runs-service
+  const { run: childRun } = await createChildRun(
+    {
+      parentRunId,
+      service: "journalists-service",
+      operation: "discover-emails",
+    },
+    orgId,
+    userId
+  );
+  const childRunId = childRun.id;
 
   // Fetch journalists to discover emails for
   let journalists: Array<{
@@ -140,12 +154,12 @@ router.post("/journalists/discover-emails", async (req, res) => {
           lastName: j.lastName!,
           organizationDomain,
         })),
-        runId,
-        appId,
+        runId: childRunId,
         brandId,
         campaignId,
       },
-      orgId
+      orgId,
+      userId
     );
 
     // Map results back to journalist IDs
