@@ -317,11 +317,9 @@ export const DiscoverEmailsSchema = z
     outletId: z.string().uuid(),
     organizationDomain: z.string().min(1),
     journalistIds: z.array(z.string().uuid()).optional(),
-    runId: z.string().uuid(),
-    appId: z.string().uuid(),
+    parentRunId: z.string().uuid(),
     brandId: z.string().uuid(),
     campaignId: z.string().uuid(),
-    orgId: z.string().min(1),
   })
   .openapi("DiscoverEmailsRequest");
 

@@ -839,11 +839,7 @@
               "format": "uuid"
             }
           },
-          "runId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "appId": {
+          "parentRunId": {
             "type": "string",
             "format": "uuid"
           },
@@ -854,20 +850,14 @@
           "campaignId": {
             "type": "string",
             "format": "uuid"
-          },
-          "orgId": {
-            "type": "string",
-            "minLength": 1
           }
         },
         "required": [
           "outletId",
           "organizationDomain",
-          "runId",
-          "appId",
+          "parentRunId",
           "brandId",
-          "campaignId",
-          "orgId"
+          "campaignId"
         ]
       },
       "JournalistEngagement": {

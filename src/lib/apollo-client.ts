@@ -6,7 +6,6 @@ export interface ApolloMatchRequest {
   lastName: string;
   organizationDomain: string;
   runId: string;
-  appId: string;
   brandId: string;
   campaignId: string;
 }
@@ -18,7 +17,6 @@ export interface ApolloBulkMatchRequest {
     organizationDomain: string;
   }>;
   runId: string;
-  appId: string;
   brandId: string;
   campaignId: string;
 }
@@ -58,7 +56,8 @@ function getConfig() {
 
 export async function apolloMatchBulk(
   request: ApolloBulkMatchRequest,
-  orgId: string
+  orgId: string,
+  userId: string
 ): Promise<ApolloBulkMatchResponse> {
   const { url, apiKey } = getConfig();
 
@@ -68,6 +67,7 @@ export async function apolloMatchBulk(
       "Content-Type": "application/json",
       "x-api-key": apiKey,
       "x-org-id": orgId,
+      "x-user-id": userId,
     },
     body: JSON.stringify(request),
   });

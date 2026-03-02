@@ -9,7 +9,7 @@ import emailPipelineRoutes from "../../src/routes/email-pipeline.js";
 import engagementRoutes from "../../src/routes/engagement.js";
 import internalRoutes from "../../src/routes/internal.js";
 import discoverRoutes from "../../src/routes/discover.js";
-import { requireApiKey } from "../../src/middleware/auth.js";
+import { requireApiKey, requireIdentityHeaders } from "../../src/middleware/auth.js";
 
 export function createTestApp() {
   const app = express();
@@ -17,6 +17,7 @@ export function createTestApp() {
   app.use(express.json({ limit: "10mb" }));
   app.use(healthRoutes);
   app.use(requireApiKey);
+  app.use(requireIdentityHeaders);
   app.use(emailPipelineRoutes);
   app.use(engagementRoutes);
   app.use(discoverRoutes);
@@ -33,4 +34,6 @@ export function createTestApp() {
 
 export const AUTH_HEADERS = {
   "x-api-key": "test-api-key",
+  "x-org-id": "test-org-id",
+  "x-user-id": "test-user-id",
 };
