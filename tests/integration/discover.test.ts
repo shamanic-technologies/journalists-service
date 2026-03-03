@@ -68,7 +68,6 @@ describe("POST /journalists/discover-emails", () => {
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
-        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
       });
@@ -83,7 +82,6 @@ describe("POST /journalists/discover-emails", () => {
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
-        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
       });
@@ -99,13 +97,27 @@ describe("POST /journalists/discover-emails", () => {
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
-        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
       });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("x-user-id header is required");
+  });
+
+  it("returns 400 without x-run-id header", async () => {
+    const res = await request(app)
+      .post("/journalists/discover-emails")
+      .set({ "x-api-key": "test-api-key", "x-org-id": "test-org-id", "x-user-id": "test-user-id" })
+      .send({
+        outletId: OUTLET_ID,
+        organizationDomain: "example.com",
+        brandId: BRAND_ID,
+        campaignId: CAMPAIGN_ID,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("x-run-id header is required");
   });
 
   it("returns empty results when no journalists found for outlet", async () => {
@@ -117,7 +129,6 @@ describe("POST /journalists/discover-emails", () => {
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
-        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
       });
@@ -169,7 +180,6 @@ describe("POST /journalists/discover-emails", () => {
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
-        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
       });
@@ -187,10 +197,10 @@ describe("POST /journalists/discover-emails", () => {
       enrichmentId: "enrich-abc",
     });
 
-    // Verify child run was created
+    // Verify child run was created with x-run-id header as parentRunId
     expect(mockedCreateChildRun).toHaveBeenCalledWith(
       {
-        parentRunId: PARENT_RUN_ID,
+        parentRunId: "test-run-id",
         service: "journalists-service",
         operation: "discover-emails",
       },
@@ -213,7 +223,8 @@ describe("POST /journalists/discover-emails", () => {
         campaignId: CAMPAIGN_ID,
       },
       "test-org-id",
-      "test-user-id"
+      "test-user-id",
+      CHILD_RUN_ID
     );
 
     // Verify data was stored in enriched_individuals
@@ -290,7 +301,6 @@ describe("POST /journalists/discover-emails", () => {
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
-        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
       });
@@ -348,7 +358,6 @@ describe("POST /journalists/discover-emails", () => {
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
         journalistIds: [j1.id],
-        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
       });
@@ -393,7 +402,6 @@ describe("POST /journalists/discover-emails", () => {
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
-        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
       });
@@ -466,7 +474,6 @@ describe("POST /journalists/discover-emails", () => {
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
-        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
       });
@@ -503,7 +510,6 @@ describe("POST /journalists/discover-emails", () => {
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
-        parentRunId: PARENT_RUN_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
       });
