@@ -20,6 +20,7 @@ export function requireIdentityHeaders(
 ): void {
   const orgId = req.headers["x-org-id"] as string | undefined;
   const userId = req.headers["x-user-id"] as string | undefined;
+  const runId = req.headers["x-run-id"] as string | undefined;
 
   if (!orgId) {
     res.status(400).json({ error: "x-org-id header is required" });
@@ -29,8 +30,13 @@ export function requireIdentityHeaders(
     res.status(400).json({ error: "x-user-id header is required" });
     return;
   }
+  if (!runId) {
+    res.status(400).json({ error: "x-run-id header is required" });
+    return;
+  }
 
   res.locals.orgId = orgId;
   res.locals.userId = userId;
+  res.locals.runId = runId;
   next();
 }

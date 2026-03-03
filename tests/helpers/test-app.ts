@@ -36,4 +36,5 @@ export const AUTH_HEADERS = {
   "x-api-key": "test-api-key",
   "x-org-id": "test-org-id",
   "x-user-id": "test-user-id",
+  "x-run-id": "test-run-id",
 };

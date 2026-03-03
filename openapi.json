@@ -839,10 +839,6 @@
               "format": "uuid"
             }
           },
-          "parentRunId": {
-            "type": "string",
-            "format": "uuid"
-          },
           "brandId": {
             "type": "string",
             "format": "uuid"
@@ -855,7 +851,6 @@
         "required": [
           "outletId",
           "organizationDomain",
-          "parentRunId",
           "brandId",
           "campaignId"
         ]

@@ -59,18 +59,18 @@ router.post("/journalists/discover-emails", async (req, res) => {
     outletId,
     organizationDomain,
     journalistIds,
-    parentRunId,
     brandId,
     campaignId,
   } = parsed.data;
 
   const orgId = res.locals.orgId as string;
   const userId = res.locals.userId as string;
+  const runId = res.locals.runId as string;
 
-  // Create a child run in runs-service
+  // Create a child run in runs-service (parentRunId = caller's runId from header)
   const { run: childRun } = await createChildRun(
     {
-      parentRunId,
+      parentRunId: runId,
       service: "journalists-service",
       operation: "discover-emails",
     },
@@ -159,7 +159,8 @@ router.post("/journalists/discover-emails", async (req, res) => {
         campaignId,
       },
       orgId,
-      userId
+      userId,
+      childRunId
     );
 
     // Map results back to journalist IDs

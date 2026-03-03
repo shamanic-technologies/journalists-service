@@ -57,7 +57,8 @@ function getConfig() {
 export async function apolloMatchBulk(
   request: ApolloBulkMatchRequest,
   orgId: string,
-  userId: string
+  userId: string,
+  runId: string
 ): Promise<ApolloBulkMatchResponse> {
   const { url, apiKey } = getConfig();
 
@@ -68,6 +69,7 @@ export async function apolloMatchBulk(
       "x-api-key": apiKey,
       "x-org-id": orgId,
       "x-user-id": userId,
+      "x-run-id": runId,
     },
     body: JSON.stringify(request),
   });

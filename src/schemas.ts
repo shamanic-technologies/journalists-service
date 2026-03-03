@@ -317,7 +317,6 @@ export const DiscoverEmailsSchema = z
     outletId: z.string().uuid(),
     organizationDomain: z.string().min(1),
     journalistIds: z.array(z.string().uuid()).optional(),
-    parentRunId: z.string().uuid(),
     brandId: z.string().uuid(),
     campaignId: z.string().uuid(),
   })
