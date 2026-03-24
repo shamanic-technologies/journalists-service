@@ -40,7 +40,49 @@ describe("Campaign Outlet Journalists", () => {
         outletId: OUTLET_ID,
         journalistId: journalist.id,
         whyRelevant: "Covers tech",
+        featureSlug: "test-feature",
       });
+    });
+
+    it("stores feature_slug from x-feature-slug header", async () => {
+      const journalist = await insertTestJournalist();
+
+      const res = await request(app)
+        .post("/campaign-outlet-journalists")
+        .set({ ...AUTH_HEADERS, "x-feature-slug": "my-feature" })
+        .send({
+          campaignId: CAMPAIGN_ID,
+          outletId: OUTLET_ID,
+          journalistId: journalist.id,
+          whyRelevant: "Covers tech",
+          whyNotRelevant: "N/A",
+          relevanceScore: 70,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.campaignOutletJournalist.featureSlug).toBe("my-feature");
+    });
+
+    it("stores null feature_slug when header is absent", async () => {
+      const journalist = await insertTestJournalist();
+
+      const headersWithoutFeature = { ...AUTH_HEADERS };
+      delete (headersWithoutFeature as Record<string, string>)["x-feature-slug"];
+
+      const res = await request(app)
+        .post("/campaign-outlet-journalists")
+        .set(headersWithoutFeature)
+        .send({
+          campaignId: CAMPAIGN_ID,
+          outletId: OUTLET_ID,
+          journalistId: journalist.id,
+          whyRelevant: "Covers tech",
+          whyNotRelevant: "N/A",
+          relevanceScore: 70,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.campaignOutletJournalist.featureSlug).toBeNull();
     });
 
     it("returns 400 for missing fields", async () => {

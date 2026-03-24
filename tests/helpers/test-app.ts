@@ -37,4 +37,5 @@ export const AUTH_HEADERS = {
   "x-org-id": "test-org-id",
   "x-user-id": "test-user-id",
   "x-run-id": "test-run-id",
+  "x-feature-slug": "test-feature",
 };

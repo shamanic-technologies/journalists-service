@@ -15,6 +15,13 @@
       "when": 1772014131831,
       "tag": "0001_rename_hunted_to_enriched",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774318795220,
+      "tag": "0002_chunky_tinkerer",
+      "breakpoints": true
     }
   ]
 }
