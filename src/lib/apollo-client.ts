@@ -58,19 +58,25 @@ export async function apolloMatchBulk(
   request: ApolloBulkMatchRequest,
   orgId: string,
   userId: string,
-  runId: string
+  runId: string,
+  featureSlug: string | null = null
 ): Promise<ApolloBulkMatchResponse> {
   const { url, apiKey } = getConfig();
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-api-key": apiKey,
+    "x-org-id": orgId,
+    "x-user-id": userId,
+    "x-run-id": runId,
+  };
+  if (featureSlug) {
+    headers["x-feature-slug"] = featureSlug;
+  }
+
   const response = await fetch(`${url}/match/bulk`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "x-org-id": orgId,
-      "x-user-id": userId,
-      "x-run-id": runId,
-    },
+    headers,
     body: JSON.stringify(request),
   });
 

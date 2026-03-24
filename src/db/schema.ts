@@ -89,6 +89,7 @@ export const campaignOutletJournalists = pgTable(
     journalistId: uuid("journalist_id")
       .notNull()
       .references(() => pressJournalists.id, { onDelete: "cascade" }),
+    featureSlug: text("feature_slug"),
     whyRelevant: text("why_relevant").notNull(),
     whyNotRelevant: text("why_not_relevant").notNull(),
     relevanceScore: numeric("relevance_score", {

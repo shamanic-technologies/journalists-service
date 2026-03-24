@@ -19,18 +19,24 @@ export interface CreateRunResponse {
 export async function createChildRun(
   request: { parentRunId: string; service: string; operation: string },
   orgId: string,
-  userId: string
+  userId: string,
+  featureSlug: string | null = null
 ): Promise<CreateRunResponse> {
   const { url, apiKey } = getRunsConfig();
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-api-key": apiKey,
+    "x-org-id": orgId,
+    "x-user-id": userId,
+  };
+  if (featureSlug) {
+    headers["x-feature-slug"] = featureSlug;
+  }
+
   const response = await fetch(`${url}/v1/runs`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "x-org-id": orgId,
-      "x-user-id": userId,
-    },
+    headers,
     body: JSON.stringify(request),
   });
 

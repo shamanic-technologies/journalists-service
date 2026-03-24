@@ -1,0 +1,1 @@
+ALTER TABLE "campaign_outlet_journalists" ADD COLUMN "feature_slug" text;

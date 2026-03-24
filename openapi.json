@@ -199,6 +199,10 @@
             "type": "string",
             "format": "uuid"
           },
+          "featureSlug": {
+            "type": "string",
+            "nullable": true
+          },
           "whyRelevant": {
             "type": "string"
           },
@@ -219,6 +223,7 @@
           "campaignId",
           "outletId",
           "journalistId",
+          "featureSlug",
           "whyRelevant",
           "whyNotRelevant",
           "relevanceScore",
@@ -240,6 +245,9 @@
           "journalistId": {
             "type": "string",
             "format": "uuid"
+          },
+          "featureSlug": {
+            "type": "string"
           },
           "whyRelevant": {
             "type": "string",

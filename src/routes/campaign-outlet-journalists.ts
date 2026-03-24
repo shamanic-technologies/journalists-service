@@ -17,13 +17,15 @@ router.post("/campaign-outlet-journalists", async (req, res) => {
     return;
   }
 
-  const { relevanceScore, ...rest } = parsed.data;
+  const { relevanceScore, featureSlug: bodyFeatureSlug, ...rest } = parsed.data;
+  const featureSlug = (res.locals.featureSlug as string | null) ?? bodyFeatureSlug ?? null;
 
   try {
     const [result] = await db
       .insert(campaignOutletJournalists)
       .values({
         ...rest,
+        featureSlug,
         relevanceScore: String(relevanceScore),
       })
       .returning();

@@ -35,8 +35,11 @@ export function requireIdentityHeaders(
     return;
   }
 
+  const featureSlug = req.headers["x-feature-slug"] as string | undefined;
+
   res.locals.orgId = orgId;
   res.locals.userId = userId;
   res.locals.runId = runId;
+  res.locals.featureSlug = featureSlug ?? null;
   next();
 }

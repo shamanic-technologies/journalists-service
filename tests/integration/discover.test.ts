@@ -205,7 +205,8 @@ describe("POST /journalists/discover-emails", () => {
         operation: "discover-emails",
       },
       "test-org-id",
-      "test-user-id"
+      "test-user-id",
+      "test-feature"
     );
 
     // Verify Apollo was called with child run ID (not parent)
@@ -224,7 +225,8 @@ describe("POST /journalists/discover-emails", () => {
       },
       "test-org-id",
       "test-user-id",
-      CHILD_RUN_ID
+      CHILD_RUN_ID,
+      "test-feature"
     );
 
     // Verify data was stored in enriched_individuals
