@@ -773,6 +773,124 @@
           "email"
         ]
       },
+      "DiscoveredJournalist": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistName": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "individual",
+              "organization"
+            ]
+          },
+          "relevanceScore": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "whyRelevant": {
+            "type": "string"
+          },
+          "whyNotRelevant": {
+            "type": "string"
+          },
+          "articleUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isNew": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "journalistName",
+          "firstName",
+          "lastName",
+          "entityType",
+          "relevanceScore",
+          "whyRelevant",
+          "whyNotRelevant",
+          "articleUrls",
+          "isNew"
+        ]
+      },
+      "DiscoverJournalistsResponse": {
+        "type": "object",
+        "properties": {
+          "journalists": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiscoveredJournalist"
+            }
+          },
+          "totalArticlesSearched": {
+            "type": "number"
+          },
+          "totalNamesExtracted": {
+            "type": "number"
+          },
+          "totalJournalistsStored": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "journalists",
+          "totalArticlesSearched",
+          "totalNamesExtracted",
+          "totalJournalistsStored"
+        ]
+      },
+      "DiscoverJournalistsRequest": {
+        "type": "object",
+        "properties": {
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "brandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "campaignId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "featureInputs": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {}
+          },
+          "maxArticles": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30,
+            "default": 15
+          }
+        },
+        "required": [
+          "outletId",
+          "brandId",
+          "campaignId"
+        ]
+      },
       "DiscoverEmailsResult": {
         "type": "object",
         "properties": {
@@ -2139,6 +2257,57 @@
                   "required": [
                     "emails"
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists/discover": {
+      "post": {
+        "summary": "Discover relevant journalists for a brand on an outlet via Google search + scraping + LLM scoring",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverJournalistsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Discovered journalists with relevance scores",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverJournalistsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
