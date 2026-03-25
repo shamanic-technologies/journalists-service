@@ -343,6 +343,42 @@ export const DiscoverEmailsResponseSchema = z
   })
   .openapi("DiscoverEmailsResponse");
 
+// ==================== Discover Journalists Schemas ====================
+
+export const DiscoverJournalistsSchema = z
+  .object({
+    outletId: z.string().uuid(),
+    brandId: z.string().uuid(),
+    campaignId: z.string().uuid(),
+    featureInputs: z.record(z.string()).default({}),
+    maxArticles: z.number().int().min(1).max(30).default(15),
+  })
+  .openapi("DiscoverJournalistsRequest");
+
+export const DiscoveredJournalistSchema = z
+  .object({
+    id: z.string().uuid(),
+    journalistName: z.string(),
+    firstName: z.string(),
+    lastName: z.string(),
+    entityType: z.enum(["individual", "organization"]),
+    relevanceScore: z.number().min(0).max(100),
+    whyRelevant: z.string(),
+    whyNotRelevant: z.string(),
+    articleUrls: z.array(z.string()),
+    isNew: z.boolean(),
+  })
+  .openapi("DiscoveredJournalist");
+
+export const DiscoverJournalistsResponseSchema = z
+  .object({
+    journalists: z.array(DiscoveredJournalistSchema),
+    totalArticlesSearched: z.number(),
+    totalNamesExtracted: z.number(),
+    totalJournalistsStored: z.number(),
+  })
+  .openapi("DiscoverJournalistsResponse");
+
 // ==================== Internal Schemas ====================
 
 export const JournalistWithEmailsSchema = z
@@ -428,6 +464,9 @@ registry.registerPath({ method: "get", path: "/journalists/need-enrichment", sum
 registry.registerPath({ method: "get", path: "/journalists/need-agent-search", summary: "Journalists needing agent search", security: [{ [apiKeyAuth.name]: [] }], responses: { 200: { description: "Journalists needing agent search", content: { "application/json": { schema: z.object({ journalists: z.array(NeedAgentSearchSchema) }) } } } } });
 
 registry.registerPath({ method: "get", path: "/journalists/emails/need-verification", summary: "Emails needing verification", security: [{ [apiKeyAuth.name]: [] }], responses: { 200: { description: "Emails needing verification", content: { "application/json": { schema: z.object({ emails: z.array(NeedVerificationSchema) }) } } } } });
+
+// Discover Journalists
+registry.registerPath({ method: "post", path: "/journalists/discover", summary: "Discover relevant journalists for a brand on an outlet via Google search + scraping + LLM scoring", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: DiscoverJournalistsSchema } } } }, responses: { 200: { description: "Discovered journalists with relevance scores", content: { "application/json": { schema: DiscoverJournalistsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Discover Emails (Apollo)
 registry.registerPath({ method: "post", path: "/journalists/discover-emails", summary: "Discover journalist emails via Apollo person match", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: DiscoverEmailsSchema } } } }, responses: { 200: { description: "Discovery results", content: { "application/json": { schema: DiscoverEmailsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
