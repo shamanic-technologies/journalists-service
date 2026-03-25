@@ -379,6 +379,45 @@ export const DiscoverJournalistsResponseSchema = z
   })
   .openapi("DiscoverJournalistsResponse");
 
+// ==================== Resolve Journalists Schemas ====================
+
+export const ResolveJournalistsSchema = z
+  .object({
+    outletId: z.string().uuid(),
+    featureInputs: z.record(z.string()).default({}),
+    maxArticles: z.number().int().min(1).max(30).default(15),
+  })
+  .openapi("ResolveJournalistsRequest");
+
+const ResolvedJournalistEmailSchema = z
+  .object({
+    email: z.string(),
+    isValid: z.boolean(),
+    confidence: z.number(),
+  })
+  .openapi("ResolvedJournalistEmail");
+
+export const ResolvedJournalistSchema = z
+  .object({
+    id: z.string().uuid(),
+    journalistName: z.string(),
+    firstName: z.string(),
+    lastName: z.string(),
+    entityType: z.enum(["individual", "organization"]),
+    relevanceScore: z.number().min(0).max(100),
+    whyRelevant: z.string(),
+    whyNotRelevant: z.string(),
+    emails: z.array(ResolvedJournalistEmailSchema),
+  })
+  .openapi("ResolvedJournalist");
+
+export const ResolveJournalistsResponseSchema = z
+  .object({
+    journalists: z.array(ResolvedJournalistSchema),
+    cached: z.boolean(),
+  })
+  .openapi("ResolveJournalistsResponse");
+
 // ==================== Internal Schemas ====================
 
 export const JournalistWithEmailsSchema = z
@@ -475,6 +514,9 @@ registry.registerPath({ method: "post", path: "/journalists/discover-emails", su
 registry.registerPath({ method: "get", path: "/journalists/engagement/{journalistId}", summary: "Journalist engagement metrics", security: [{ [apiKeyAuth.name]: [] }], request: { params: z.object({ journalistId: z.string().uuid() }) }, responses: { 200: { description: "Engagement data", content: { "application/json": { schema: z.object({ engagement: JournalistEngagementSchema }) } } } } });
 
 registry.registerPath({ method: "get", path: "/journalists/status", summary: "Journalist status by campaign", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ campaign_id: z.string().uuid().optional() }) }, responses: { 200: { description: "Statuses", content: { "application/json": { schema: z.object({ statuses: z.array(JournalistStatusSchema) }) } } } } });
+
+// Resolve Journalists
+registry.registerPath({ method: "post", path: "/journalists/resolve", summary: "Resolve journalists for a campaign+outlet: discover if needed, score, return with emails", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: ResolveJournalistsSchema } } } }, responses: { 200: { description: "Resolved journalists sorted by relevance score", content: { "application/json": { schema: ResolveJournalistsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Internal
 registry.registerPath({ method: "get", path: "/internal/journalists/by-outlet-with-emails/{outletId}", summary: "Journalists with valid emails for an outlet", security: [{ [apiKeyAuth.name]: [] }], request: { params: z.object({ outletId: z.string().uuid() }) }, responses: { 200: { description: "Journalists with emails", content: { "application/json": { schema: z.object({ journalists: z.array(JournalistWithEmailsSchema) }) } } } } });

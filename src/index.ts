@@ -16,6 +16,7 @@ import engagementRoutes from "./routes/engagement.js";
 import internalRoutes from "./routes/internal.js";
 import discoverRoutes from "./routes/discover.js";
 import discoverJournalistsRoutes from "./routes/discover-journalists.js";
+import resolveJournalistsRoutes from "./routes/resolve-journalists.js";
 import { requireApiKey, requireIdentityHeaders } from "./middleware/auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -50,6 +51,7 @@ app.use(emailPipelineRoutes);
 app.use(engagementRoutes);
 app.use(discoverRoutes);
 app.use(discoverJournalistsRoutes);
+app.use(resolveJournalistsRoutes);
 app.use(journalistsRoutes);
 app.use(outletJournalistsRoutes);
 app.use(campaignOutletJournalistsRoutes);
