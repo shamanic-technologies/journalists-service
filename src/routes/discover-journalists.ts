@@ -9,14 +9,14 @@ import { eq, and } from "drizzle-orm";
 import { createChildRun } from "../lib/runs-client.js";
 import { fetchBrand } from "../lib/brand-client.js";
 import { fetchOutlet } from "../lib/outlets-client.js";
-import { batchSearch, type SearchResult } from "../lib/google-client.js";
-import { scrapeUrl } from "../lib/scraping-client.js";
+import {
+  discoverOutletArticles,
+  type DiscoveredArticle,
+} from "../lib/articles-client.js";
 import { chatComplete } from "../lib/chat-client.js";
 import { DiscoverJournalistsSchema } from "../schemas.js";
 
 const router = Router();
-
-const MAX_SCRAPE_CONCURRENCY = 5;
 
 // ── helpers ──────────────────────────────────────────────────────────
 
@@ -32,18 +32,6 @@ function truncate(text: string, maxLen: number): string {
   return text.length > maxLen ? text.slice(0, maxLen) + "..." : text;
 }
 
-function dedupeUrls(results: SearchResult[]): string[] {
-  const seen = new Set<string>();
-  const urls: string[] = [];
-  for (const r of results) {
-    if (!seen.has(r.link)) {
-      seen.add(r.link);
-      urls.push(r.link);
-    }
-  }
-  return urls;
-}
-
 interface LlmJournalist {
   firstName: string;
   lastName: string;
@@ -53,122 +41,59 @@ interface LlmJournalist {
   articleUrls: string[];
 }
 
-// ── Step 1: generate search queries via LLM ─────────────────────────
+// ── Build author-article map from articles-service response ─────────
 
-async function generateSearchQueries(
-  brandName: string,
-  brandDescription: string,
-  outletName: string,
-  outletDomain: string,
-  featureInputs: Record<string, string>,
-  orgId: string,
-  userId: string,
-  runId: string,
-  featureSlug: string | null
-): Promise<Array<{ query: string; type: "web" | "news" }>> {
-  const featureContext = Object.entries(featureInputs)
-    .map(([k, v]) => `- ${k}: ${v}`)
-    .join("\n");
-
-  const response = await chatComplete(
-    {
-      systemPrompt: `You are a PR research assistant. Generate Google search queries to find articles and their journalist authors on a specific media outlet that are relevant for a brand. Return JSON.`,
-      message: `Brand: ${brandName}
-Description: ${truncate(brandDescription, 500)}
-Outlet: ${outletName} (domain: ${outletDomain})
-
-Feature search criteria:
-${featureContext || "(none specified)"}
-
-Generate 4-6 search queries to find articles on this outlet relevant to this brand. Use "site:${outletDomain}" prefix for web queries. Include 1-2 news queries (without site: prefix, using the outlet name).
-
-Return JSON: { "queries": [{ "query": "...", "type": "web" | "news" }] }`,
-      responseFormat: "json",
-      temperature: 0.3,
-      maxTokens: 1000,
-    },
-    orgId,
-    userId,
-    runId,
-    featureSlug
-  );
-
-  const parsed = response.json as { queries?: Array<{ query: string; type: "web" | "news" }> } | undefined;
-  if (!parsed?.queries || !Array.isArray(parsed.queries)) {
-    // Fallback: build queries programmatically
-    return [
-      { query: `site:${outletDomain} ${brandName}`, type: "web" },
-      { query: `site:${outletDomain} ${brandDescription.split(" ").slice(0, 5).join(" ")}`, type: "web" },
-      { query: `${outletName} ${brandName}`, type: "news" },
-    ];
-  }
-
-  return parsed.queries.slice(0, 8);
+interface AuthorWithArticles {
+  firstName: string;
+  lastName: string;
+  articles: Array<{
+    url: string;
+    title: string | null;
+    publishedAt: string | null;
+  }>;
 }
 
-// ── Step 2: scrape articles in parallel (with concurrency limit) ────
+function groupArticlesByAuthor(
+  articles: DiscoveredArticle[]
+): AuthorWithArticles[] {
+  const authorMap = new Map<string, AuthorWithArticles>();
 
-interface ScrapedArticle {
-  url: string;
-  title: string;
-  snippet: string;
-  content: string; // first ~1500 chars of markdown
-}
+  for (const article of articles) {
+    for (const author of article.authors) {
+      if (!author.firstName || !author.lastName) continue;
 
-async function scrapeArticles(
-  urls: string[],
-  searchResults: SearchResult[],
-  orgId: string,
-  userId: string,
-  runId: string,
-  featureSlug: string | null
-): Promise<ScrapedArticle[]> {
-  const articles: ScrapedArticle[] = [];
+      const key = `${author.firstName.toLowerCase()} ${author.lastName.toLowerCase()}`;
+      const existing = authorMap.get(key);
 
-  // Build a map from URL to search result for title/snippet fallback
-  const resultByUrl = new Map<string, SearchResult>();
-  for (const r of searchResults) {
-    resultByUrl.set(r.link, r);
-  }
-
-  // Process in batches of MAX_SCRAPE_CONCURRENCY
-  for (let i = 0; i < urls.length; i += MAX_SCRAPE_CONCURRENCY) {
-    const batch = urls.slice(i, i + MAX_SCRAPE_CONCURRENCY);
-    const results = await Promise.allSettled(
-      batch.map((url) => scrapeUrl(url, orgId, userId, runId, featureSlug))
-    );
-
-    for (let j = 0; j < batch.length; j++) {
-      const url = batch[j];
-      const result = results[j];
-      const searchHit = resultByUrl.get(url);
-
-      if (result.status === "fulfilled" && result.value.result.rawMarkdown) {
-        articles.push({
-          url,
-          title: searchHit?.title ?? "",
-          snippet: searchHit?.snippet ?? "",
-          content: truncate(result.value.result.rawMarkdown, 1500),
+      if (existing) {
+        existing.articles.push({
+          url: article.url,
+          title: article.title,
+          publishedAt: article.publishedAt,
         });
-      } else if (searchHit) {
-        // Fallback: use search snippet even if scrape failed
-        articles.push({
-          url,
-          title: searchHit.title,
-          snippet: searchHit.snippet,
-          content: "",
+      } else {
+        authorMap.set(key, {
+          firstName: author.firstName,
+          lastName: author.lastName,
+          articles: [
+            {
+              url: article.url,
+              title: article.title,
+              publishedAt: article.publishedAt,
+            },
+          ],
         });
       }
     }
   }
 
-  return articles;
+  return Array.from(authorMap.values());
 }
 
-// ── Step 3: extract + score journalists via LLM ─────────────────────
+// ── Score journalists via LLM ───────────────────────────────────────
 
-async function extractAndScoreJournalists(
-  articles: ScrapedArticle[],
+async function scoreJournalists(
+  authors: AuthorWithArticles[],
   brandName: string,
   brandDescription: string,
   featureInputs: Record<string, string>,
@@ -177,32 +102,28 @@ async function extractAndScoreJournalists(
   runId: string,
   featureSlug: string | null
 ): Promise<LlmJournalist[]> {
-  if (articles.length === 0) return [];
+  if (authors.length === 0) return [];
 
   const featureContext = Object.entries(featureInputs)
     .map(([k, v]) => `- ${k}: ${v}`)
     .join("\n");
 
-  const articlesText = articles
+  const authorsText = authors
     .map(
       (a, i) =>
-        `Article ${i + 1}:
-URL: ${a.url}
-Title: ${a.title}
-Snippet: ${a.snippet}
-Content excerpt: ${a.content || "(scraping failed)"}
+        `Journalist ${i + 1}: ${a.firstName} ${a.lastName}
+Articles (${a.articles.length}):
+${a.articles.map((art) => `  - "${art.title || "(untitled)"}" (${art.publishedAt || "date unknown"}) ${art.url}`).join("\n")}
 ---`
     )
     .join("\n");
 
   const response = await chatComplete(
     {
-      systemPrompt: `You are a PR research analyst. Your job is to identify HUMAN journalists (real people with first name + last name) from article bylines and metadata, then score their relevance to a brand.
+      systemPrompt: `You are a PR research analyst. Score journalists' relevance to a brand based on their published articles.
 
 Rules:
-- Only extract HUMAN individual journalists (not organizations, editorial teams, news desks, "Staff", "Admin", etc.)
-- Each journalist must have a clear first name and last name
-- Deduplicate: if the same journalist appears in multiple articles, merge them
+- Only keep HUMAN individual journalists (skip organizations, editorial teams, news desks, "Staff", "Admin", etc.)
 - Score relevance from 0-100 based on how well the journalist's coverage aligns with the brand
 - Provide a concise explanation for the relevance score (whyRelevant) and what might make them less relevant (whyNotRelevant)
 - Include the article URLs where each journalist was found`,
@@ -212,10 +133,10 @@ Description: ${truncate(brandDescription, 500)}
 Search criteria:
 ${featureContext || "(none specified)"}
 
-Articles to analyze:
-${articlesText}
+Journalists found on this outlet:
+${authorsText}
 
-Extract all human journalists from these articles. Score each journalist's relevance to the brand (0-100).
+Score each journalist's relevance to the brand (0-100). Filter out non-human entities.
 
 Return JSON:
 {
@@ -240,12 +161,13 @@ Return JSON:
     featureSlug
   );
 
-  const parsed = response.json as { journalists?: LlmJournalist[] } | undefined;
+  const parsed = response.json as
+    | { journalists?: LlmJournalist[] }
+    | undefined;
   if (!parsed?.journalists || !Array.isArray(parsed.journalists)) {
     return [];
   }
 
-  // Filter out invalid entries
   return parsed.journalists.filter(
     (j) =>
       j.firstName &&
@@ -256,7 +178,7 @@ Return JSON:
   );
 }
 
-// ── Step 4: store journalists in DB ─────────────────────────────────
+// ── Store journalists in DB ─────────────────────────────────────────
 
 interface StoredJournalist {
   id: string;
@@ -298,7 +220,6 @@ async function storeJournalists(
 
     if (existing.length > 0) {
       journalistId = existing[0].id;
-      // Update firstName/lastName if previously null
       if (!existing[0].firstName || !existing[0].lastName) {
         await db
           .update(pressJournalists)
@@ -323,7 +244,7 @@ async function storeJournalists(
       isNew = true;
     }
 
-    // Link to outlet (ignore if already linked)
+    // Link to outlet
     await db
       .insert(outletJournalists)
       .values({ outletId, journalistId })
@@ -401,51 +322,24 @@ router.post("/journalists/discover", async (req, res) => {
     const brandDescription = [brand.elevatorPitch, brand.bio, brand.mission]
       .filter(Boolean)
       .join(". ");
-    const outletName = outlet.outletName;
     const outletDomain = extractDomain(outlet.outletUrl);
 
-    // Step 1: Generate search queries via LLM
-    const searchQueries = await generateSearchQueries(
-      brandName,
-      brandDescription,
-      outletName,
+    // Step 1: Discover articles + authors via articles-service
+    const articlesResponse = await discoverOutletArticles(
       outletDomain,
-      featureInputs,
+      maxArticles,
       orgId,
       userId,
       childRunId,
       featureSlug
     );
 
-    // Step 2: Execute batch Google search
-    const searchResponse = await batchSearch(
-      searchQueries.map((q) => ({ ...q, num: 10 })),
-      orgId,
-      userId,
-      childRunId,
-      featureSlug
-    );
+    // Step 2: Group articles by author
+    const authors = groupArticlesByAuthor(articlesResponse.articles);
 
-    // Collect and deduplicate all search results
-    const allResults: SearchResult[] = [];
-    for (const batch of searchResponse.results) {
-      allResults.push(...batch.results);
-    }
-    const articleUrls = dedupeUrls(allResults).slice(0, maxArticles);
-
-    // Step 3: Scrape articles
-    const articles = await scrapeArticles(
-      articleUrls,
-      allResults,
-      orgId,
-      userId,
-      childRunId,
-      featureSlug
-    );
-
-    // Step 4: Extract and score journalists via LLM
-    const llmJournalists = await extractAndScoreJournalists(
-      articles,
+    // Step 3: Score journalists via LLM
+    const llmJournalists = await scoreJournalists(
+      authors,
       brandName,
       brandDescription,
       featureInputs,
@@ -455,7 +349,7 @@ router.post("/journalists/discover", async (req, res) => {
       featureSlug
     );
 
-    // Step 5: Store in DB
+    // Step 4: Store in DB
     const stored = await storeJournalists(
       llmJournalists,
       outletId,
@@ -468,8 +362,8 @@ router.post("/journalists/discover", async (req, res) => {
 
     res.json({
       journalists: stored,
-      totalArticlesSearched: articles.length,
-      totalNamesExtracted: llmJournalists.length,
+      totalArticlesSearched: articlesResponse.articles.length,
+      totalNamesExtracted: authors.length,
       totalJournalistsStored: stored.length,
     });
   } catch (err) {

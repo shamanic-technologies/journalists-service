@@ -13,4 +13,6 @@ process.env.SCRAPING_SERVICE_URL = "http://localhost:9994";
 process.env.SCRAPING_SERVICE_API_KEY = "test-scraping-key";
 process.env.CHAT_SERVICE_URL = "http://localhost:9993";
 process.env.CHAT_SERVICE_API_KEY = "test-chat-key";
+process.env.ARTICLES_SERVICE_URL = "http://localhost:9992";
+process.env.ARTICLES_SERVICE_API_KEY = "test-articles-key";
 process.env.NODE_ENV = "test";

@@ -12,7 +12,7 @@ import {
   outletJournalists,
   campaignOutletJournalists,
 } from "../../src/db/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 // Mock all external service clients
 vi.mock("../../src/lib/runs-client.js", () => ({
@@ -27,12 +27,8 @@ vi.mock("../../src/lib/outlets-client.js", () => ({
   fetchOutlet: vi.fn(),
 }));
 
-vi.mock("../../src/lib/google-client.js", () => ({
-  batchSearch: vi.fn(),
-}));
-
-vi.mock("../../src/lib/scraping-client.js", () => ({
-  scrapeUrl: vi.fn(),
+vi.mock("../../src/lib/articles-client.js", () => ({
+  discoverOutletArticles: vi.fn(),
 }));
 
 vi.mock("../../src/lib/chat-client.js", () => ({
@@ -42,15 +38,13 @@ vi.mock("../../src/lib/chat-client.js", () => ({
 import { createChildRun } from "../../src/lib/runs-client.js";
 import { fetchBrand } from "../../src/lib/brand-client.js";
 import { fetchOutlet } from "../../src/lib/outlets-client.js";
-import { batchSearch } from "../../src/lib/google-client.js";
-import { scrapeUrl } from "../../src/lib/scraping-client.js";
+import { discoverOutletArticles } from "../../src/lib/articles-client.js";
 import { chatComplete } from "../../src/lib/chat-client.js";
 
 const mockedCreateChildRun = vi.mocked(createChildRun);
 const mockedFetchBrand = vi.mocked(fetchBrand);
 const mockedFetchOutlet = vi.mocked(fetchOutlet);
-const mockedBatchSearch = vi.mocked(batchSearch);
-const mockedScrapeUrl = vi.mocked(scrapeUrl);
+const mockedDiscoverOutletArticles = vi.mocked(discoverOutletArticles);
 const mockedChatComplete = vi.mocked(chatComplete);
 
 const app = createTestApp();
@@ -88,86 +82,34 @@ function setupDefaultMocks() {
     outletUrl: "https://techcrunch.com",
   });
 
-  // LLM call 1: generate search queries
-  mockedChatComplete.mockResolvedValueOnce({
-    content: "",
-    json: {
-      queries: [
-        { query: "site:techcrunch.com SaaS developer tools", type: "web" },
-        { query: "site:techcrunch.com AI startup funding", type: "web" },
-        { query: "TechCrunch SaaS developer tools", type: "news" },
-      ],
-    },
-    tokensInput: 200,
-    tokensOutput: 100,
-    model: "claude-sonnet-4-6",
-  });
-
-  mockedBatchSearch.mockResolvedValue({
-    results: [
+  mockedDiscoverOutletArticles.mockResolvedValue({
+    articles: [
       {
-        query: "site:techcrunch.com SaaS developer tools",
-        type: "web",
-        results: [
-          {
-            title: "Top SaaS Tools for Developers in 2026",
-            link: "https://techcrunch.com/2026/01/15/top-saas-tools",
-            snippet: "By Sarah Johnson. The best developer tools...",
-            domain: "techcrunch.com",
-            position: 1,
-          },
-          {
-            title: "AI-Powered Dev Tools Raise $50M",
-            link: "https://techcrunch.com/2026/02/10/ai-dev-tools-funding",
-            snippet: "By Mike Chen. AI developer tools are booming...",
-            domain: "techcrunch.com",
-            position: 2,
-          },
-        ],
+        url: "https://techcrunch.com/2026/01/15/top-saas-tools",
+        title: "Top SaaS Tools for Developers in 2026",
+        snippet: "The best developer tools...",
+        publishedAt: "2026-01-15",
+        authors: [{ firstName: "Sarah", lastName: "Johnson" }],
       },
       {
-        query: "site:techcrunch.com AI startup funding",
-        type: "web",
-        results: [
-          {
-            title: "Enterprise SaaS Funding Trends",
-            link: "https://techcrunch.com/2026/03/01/enterprise-saas-trends",
-            snippet: "By Sarah Johnson. Enterprise SaaS continues...",
-            domain: "techcrunch.com",
-            position: 1,
-          },
-        ],
+        url: "https://techcrunch.com/2026/02/10/ai-dev-tools-funding",
+        title: "AI-Powered Dev Tools Raise $50M",
+        snippet: "AI developer tools are booming...",
+        publishedAt: "2026-02-10",
+        authors: [{ firstName: "Mike", lastName: "Chen" }],
       },
       {
-        query: "TechCrunch SaaS developer tools",
-        type: "news",
-        results: [
-          {
-            title: "New Wave of Developer Platforms",
-            link: "https://techcrunch.com/2026/03/20/new-developer-platforms",
-            snippet: "The developer tools market is evolving...",
-            source: "TechCrunch",
-            date: "2026-03-20",
-            domain: "techcrunch.com",
-          },
-        ],
+        url: "https://techcrunch.com/2026/03/01/enterprise-saas-trends",
+        title: "Enterprise SaaS Funding Trends",
+        snippet: "Enterprise SaaS continues...",
+        publishedAt: "2026-03-01",
+        authors: [{ firstName: "Sarah", lastName: "Johnson" }],
       },
     ],
   });
 
-  mockedScrapeUrl.mockImplementation(async (url) => ({
-    cached: false,
-    result: {
-      id: `scrape-${url}`,
-      url,
-      companyName: null,
-      description: null,
-      rawMarkdown: `# Article\n\nBy Sarah Johnson\n\nThis is an article about SaaS tools and developer platforms. The market continues to grow as AI transforms how developers work.`,
-    },
-  }));
-
-  // LLM call 2: extract + score journalists
-  mockedChatComplete.mockResolvedValueOnce({
+  // Single LLM call: score journalists
+  mockedChatComplete.mockResolvedValue({
     content: "",
     json: {
       journalists: [
@@ -252,6 +194,8 @@ describe("POST /journalists/discover", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(2);
+    expect(res.body.totalArticlesSearched).toBe(3);
+    expect(res.body.totalNamesExtracted).toBe(2);
     expect(res.body.totalJournalistsStored).toBe(2);
 
     // Should be sorted by relevance desc
@@ -283,6 +227,16 @@ describe("POST /journalists/discover", () => {
     );
     expect(mockedFetchOutlet).toHaveBeenCalledWith(
       OUTLET_ID,
+      "test-org-id",
+      "test-user-id",
+      CHILD_RUN_ID,
+      "test-feature"
+    );
+
+    // Verify articles-service was called with outlet domain and default maxArticles
+    expect(mockedDiscoverOutletArticles).toHaveBeenCalledWith(
+      "techcrunch.com",
+      15,
       "test-org-id",
       "test-user-id",
       CHILD_RUN_ID,
@@ -355,7 +309,7 @@ describe("POST /journalists/discover", () => {
     expect(mike.isNew).toBe(true);
   });
 
-  it("handles zero search results gracefully", async () => {
+  it("handles zero articles gracefully", async () => {
     mockedCreateChildRun.mockResolvedValue({
       run: {
         id: CHILD_RUN_ID,
@@ -383,38 +337,8 @@ describe("POST /journalists/discover", () => {
       outletUrl: "https://tinyblog.com",
     });
 
-    // LLM generates queries
-    mockedChatComplete.mockResolvedValueOnce({
-      content: "",
-      json: {
-        queries: [
-          { query: "site:tinyblog.com niche product", type: "web" },
-        ],
-      },
-      tokensInput: 100,
-      tokensOutput: 50,
-      model: "claude-sonnet-4-6",
-    });
-
-    // Google returns nothing
-    mockedBatchSearch.mockResolvedValue({
-      results: [
-        {
-          query: "site:tinyblog.com niche product",
-          type: "web",
-          results: [],
-        },
-      ],
-    });
-
-    // LLM extraction (called with empty articles)
-    mockedChatComplete.mockResolvedValueOnce({
-      content: "",
-      json: { journalists: [] },
-      tokensInput: 100,
-      tokensOutput: 20,
-      model: "claude-sonnet-4-6",
-    });
+    // Articles-service returns no articles
+    mockedDiscoverOutletArticles.mockResolvedValue({ articles: [] });
 
     const res = await request(app)
       .post("/journalists/discover")
@@ -428,10 +352,14 @@ describe("POST /journalists/discover", () => {
     expect(res.status).toBe(200);
     expect(res.body.journalists).toEqual([]);
     expect(res.body.totalArticlesSearched).toBe(0);
+    expect(res.body.totalNamesExtracted).toBe(0);
     expect(res.body.totalJournalistsStored).toBe(0);
+
+    // LLM should not be called when there are no authors
+    expect(mockedChatComplete).not.toHaveBeenCalled();
   });
 
-  it("handles scraping failures gracefully (falls back to snippets)", async () => {
+  it("returns 502 when articles-service fails", async () => {
     mockedCreateChildRun.mockResolvedValue({
       run: {
         id: CHILD_RUN_ID,
@@ -459,64 +387,9 @@ describe("POST /journalists/discover", () => {
       outletUrl: "https://techcrunch.com",
     });
 
-    let chatCallCount = 0;
-    mockedChatComplete.mockImplementation(async () => {
-      chatCallCount++;
-      if (chatCallCount === 1) {
-        // Query generation
-        return {
-          content: "",
-          json: {
-            queries: [
-              { query: "site:techcrunch.com SaaS", type: "web" },
-            ],
-          },
-          tokensInput: 100,
-          tokensOutput: 50,
-          model: "claude-sonnet-4-6",
-        };
-      }
-      // Extraction + scoring
-      return {
-        content: "",
-        json: {
-          journalists: [
-            {
-              firstName: "Jane",
-              lastName: "Doe",
-              relevanceScore: 70,
-              whyRelevant: "Jane Doe writes about SaaS.",
-              whyNotRelevant: "Limited data — only snippet available.",
-              articleUrls: ["https://techcrunch.com/article-1"],
-            },
-          ],
-        },
-        tokensInput: 500,
-        tokensOutput: 200,
-        model: "claude-sonnet-4-6",
-      };
-    });
-
-    mockedBatchSearch.mockResolvedValue({
-      results: [
-        {
-          query: "site:techcrunch.com SaaS",
-          type: "web",
-          results: [
-            {
-              title: "SaaS Article by Jane Doe",
-              link: "https://techcrunch.com/article-1",
-              snippet: "By Jane Doe. Great SaaS content here.",
-              domain: "techcrunch.com",
-              position: 1,
-            },
-          ],
-        },
-      ],
-    });
-
-    // Scraping fails for all URLs
-    mockedScrapeUrl.mockRejectedValue(new Error("Scraping failed"));
+    mockedDiscoverOutletArticles.mockRejectedValue(
+      new Error("Articles service POST /v1/discover/outlet-articles failed (500): Internal error")
+    );
 
     const res = await request(app)
       .post("/journalists/discover")
@@ -527,11 +400,8 @@ describe("POST /journalists/discover", () => {
         campaignId: CAMPAIGN_ID,
       });
 
-    expect(res.status).toBe(200);
-    expect(chatCallCount).toBe(2); // query gen + extraction
-    expect(res.body.totalArticlesSearched).toBe(1);
-    expect(res.body.journalists).toHaveLength(1);
-    expect(res.body.journalists[0].firstName).toBe("Jane");
+    expect(res.status).toBe(502);
+    expect(res.body.error).toContain("Articles service");
   });
 
   it("returns 502 when runs-service fails", async () => {
@@ -552,7 +422,7 @@ describe("POST /journalists/discover", () => {
     expect(res.body.error).toContain("Runs-service unavailable");
   });
 
-  it("passes featureInputs to LLM query generation", async () => {
+  it("passes featureInputs to LLM scoring prompt", async () => {
     setupDefaultMocks();
 
     await request(app)
@@ -569,15 +439,39 @@ describe("POST /journalists/discover", () => {
         },
       });
 
-    // Verify first chatComplete call (query generation) includes feature inputs
-    const queryGenCall = mockedChatComplete.mock.calls[0];
-    expect(queryGenCall[0].message).toContain("journalistTypes");
-    expect(queryGenCall[0].message).toContain("tech reporters, AI specialists");
-    expect(queryGenCall[0].message).toContain("geography");
-    expect(queryGenCall[0].message).toContain("US, UK");
+    // Verify chatComplete call (scoring) includes feature inputs
+    expect(mockedChatComplete).toHaveBeenCalledTimes(1);
+    const scoringCall = mockedChatComplete.mock.calls[0];
+    expect(scoringCall[0].message).toContain("journalistTypes");
+    expect(scoringCall[0].message).toContain("tech reporters, AI specialists");
+    expect(scoringCall[0].message).toContain("geography");
+    expect(scoringCall[0].message).toContain("US, UK");
   });
 
-  it("respects maxArticles parameter", async () => {
+  it("passes maxArticles to articles-service", async () => {
+    setupDefaultMocks();
+
+    await request(app)
+      .post("/journalists/discover")
+      .set(AUTH_HEADERS)
+      .send({
+        outletId: OUTLET_ID,
+        brandId: BRAND_ID,
+        campaignId: CAMPAIGN_ID,
+        maxArticles: 5,
+      });
+
+    expect(mockedDiscoverOutletArticles).toHaveBeenCalledWith(
+      "techcrunch.com",
+      5,
+      "test-org-id",
+      "test-user-id",
+      CHILD_RUN_ID,
+      "test-feature"
+    );
+  });
+
+  it("deduplicates authors across multiple articles", async () => {
     mockedCreateChildRun.mockResolvedValue({
       run: {
         id: CHILD_RUN_ID,
@@ -605,63 +499,73 @@ describe("POST /journalists/discover", () => {
       outletUrl: "https://techcrunch.com",
     });
 
-    mockedChatComplete.mockResolvedValueOnce({
-      content: "",
-      json: {
-        queries: [{ query: "site:techcrunch.com SaaS", type: "web" }],
-      },
-      tokensInput: 100,
-      tokensOutput: 50,
-      model: "claude-sonnet-4-6",
-    });
-
-    // Return 10 results
-    mockedBatchSearch.mockResolvedValue({
-      results: [
+    // Same author appears across 3 articles
+    mockedDiscoverOutletArticles.mockResolvedValue({
+      articles: [
         {
-          query: "site:techcrunch.com SaaS",
-          type: "web",
-          results: Array.from({ length: 10 }, (_, i) => ({
-            title: `Article ${i}`,
-            link: `https://techcrunch.com/article-${i}`,
-            snippet: `Snippet ${i}`,
-            domain: "techcrunch.com",
-            position: i + 1,
-          })),
+          url: "https://techcrunch.com/a1",
+          title: "Article 1",
+          snippet: null,
+          publishedAt: "2026-01-01",
+          authors: [{ firstName: "Sarah", lastName: "Johnson" }],
+        },
+        {
+          url: "https://techcrunch.com/a2",
+          title: "Article 2",
+          snippet: null,
+          publishedAt: "2026-02-01",
+          authors: [{ firstName: "Sarah", lastName: "Johnson" }],
+        },
+        {
+          url: "https://techcrunch.com/a3",
+          title: "Article 3",
+          snippet: null,
+          publishedAt: "2026-03-01",
+          authors: [{ firstName: "sarah", lastName: "johnson" }],
         },
       ],
     });
 
-    mockedScrapeUrl.mockResolvedValue({
-      cached: false,
-      result: {
-        id: "scrape-id",
-        url: "https://techcrunch.com/article",
-        companyName: null,
-        description: null,
-        rawMarkdown: "# Article\nBy Test Author\nContent here.",
-      },
-    });
-
-    mockedChatComplete.mockResolvedValueOnce({
+    mockedChatComplete.mockResolvedValue({
       content: "",
-      json: { journalists: [] },
+      json: {
+        journalists: [
+          {
+            firstName: "Sarah",
+            lastName: "Johnson",
+            relevanceScore: 85,
+            whyRelevant: "Prolific writer",
+            whyNotRelevant: "N/A",
+            articleUrls: [
+              "https://techcrunch.com/a1",
+              "https://techcrunch.com/a2",
+              "https://techcrunch.com/a3",
+            ],
+          },
+        ],
+      },
       tokensInput: 500,
-      tokensOutput: 50,
+      tokensOutput: 200,
       model: "claude-sonnet-4-6",
     });
 
-    await request(app)
+    const res = await request(app)
       .post("/journalists/discover")
       .set(AUTH_HEADERS)
       .send({
         outletId: OUTLET_ID,
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
-        maxArticles: 3,
       });
 
-    // Only 3 articles should be scraped (maxArticles = 3)
-    expect(mockedScrapeUrl).toHaveBeenCalledTimes(3);
+    expect(res.status).toBe(200);
+    // 3 articles found, but only 1 unique author
+    expect(res.body.totalArticlesSearched).toBe(3);
+    expect(res.body.totalNamesExtracted).toBe(1);
+    expect(res.body.totalJournalistsStored).toBe(1);
+
+    // LLM prompt should include all 3 articles for Sarah
+    const scoringCall = mockedChatComplete.mock.calls[0];
+    expect(scoringCall[0].message).toContain("Articles (3)");
   });
 });
