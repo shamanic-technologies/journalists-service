@@ -36,10 +36,14 @@ export function requireIdentityHeaders(
   }
 
   const featureSlug = req.headers["x-feature-slug"] as string | undefined;
+  const campaignId = req.headers["x-campaign-id"] as string | undefined;
+  const brandId = req.headers["x-brand-id"] as string | undefined;
 
   res.locals.orgId = orgId;
   res.locals.userId = userId;
   res.locals.runId = runId;
   res.locals.featureSlug = featureSlug ?? null;
+  res.locals.campaignId = campaignId ?? null;
+  res.locals.brandId = brandId ?? null;
   next();
 }

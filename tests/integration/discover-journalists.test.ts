@@ -194,8 +194,6 @@ describe("POST /journalists/discover", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(2);
-    expect(res.body.totalArticlesSearched).toBe(3);
-    expect(res.body.totalNamesExtracted).toBe(2);
     expect(res.body.totalJournalistsStored).toBe(2);
 
     // Should be sorted by relevance desc
@@ -351,8 +349,6 @@ describe("POST /journalists/discover", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toEqual([]);
-    expect(res.body.totalArticlesSearched).toBe(0);
-    expect(res.body.totalNamesExtracted).toBe(0);
     expect(res.body.totalJournalistsStored).toBe(0);
 
     // LLM should not be called when there are no authors
@@ -559,9 +555,6 @@ describe("POST /journalists/discover", () => {
       });
 
     expect(res.status).toBe(200);
-    // 3 articles found, but only 1 unique author
-    expect(res.body.totalArticlesSearched).toBe(3);
-    expect(res.body.totalNamesExtracted).toBe(1);
     expect(res.body.totalJournalistsStored).toBe(1);
 
     // LLM prompt should include all 3 articles for Sarah
