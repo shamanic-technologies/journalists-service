@@ -1,9 +1,5 @@
 import { db } from "../db/index.js";
-import {
-  pressJournalists,
-  outletJournalists,
-  campaignOutletJournalists,
-} from "../db/schema.js";
+import { journalists, campaignJournalists } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import {
   discoverOutletArticles,
@@ -189,23 +185,27 @@ Return JSON:
 // ── Store journalists in DB ──────────────────────────────────────────
 
 export async function storeJournalists(
-  journalists: LlmJournalist[],
+  llmJournalists: LlmJournalist[],
   outletId: string,
   campaignId: string,
+  orgId: string,
+  brandId: string,
   featureSlug: string | null
 ): Promise<StoredJournalist[]> {
   const stored: StoredJournalist[] = [];
 
-  for (const j of journalists) {
+  for (const j of llmJournalists) {
     const journalistName = `${j.firstName} ${j.lastName}`;
 
+    // Journalist identity is global: unique per (outlet, name, entity_type)
     const existing = await db
       .select()
-      .from(pressJournalists)
+      .from(journalists)
       .where(
         and(
-          eq(pressJournalists.journalistName, journalistName),
-          eq(pressJournalists.entityType, "individual")
+          eq(journalists.outletId, outletId),
+          eq(journalists.journalistName, journalistName),
+          eq(journalists.entityType, "individual")
         )
       );
 
@@ -216,18 +216,19 @@ export async function storeJournalists(
       journalistId = existing[0].id;
       if (!existing[0].firstName || !existing[0].lastName) {
         await db
-          .update(pressJournalists)
+          .update(journalists)
           .set({
             firstName: j.firstName,
             lastName: j.lastName,
             updatedAt: new Date(),
           })
-          .where(eq(pressJournalists.id, journalistId));
+          .where(eq(journalists.id, journalistId));
       }
     } else {
       const [created] = await db
-        .insert(pressJournalists)
+        .insert(journalists)
         .values({
+          outletId,
           entityType: "individual",
           journalistName,
           firstName: j.firstName,
@@ -238,21 +239,20 @@ export async function storeJournalists(
       isNew = true;
     }
 
+    // Campaign scoring is scoped
     await db
-      .insert(outletJournalists)
-      .values({ outletId, journalistId })
-      .onConflictDoNothing();
-
-    await db
-      .insert(campaignOutletJournalists)
+      .insert(campaignJournalists)
       .values({
+        journalistId,
+        orgId,
+        brandId,
+        featureSlug,
         campaignId,
         outletId,
-        journalistId,
-        featureSlug,
+        relevanceScore: String(j.relevanceScore),
         whyRelevant: j.whyRelevant,
         whyNotRelevant: j.whyNotRelevant,
-        relevanceScore: String(j.relevanceScore),
+        articleUrls: j.articleUrls || [],
       })
       .onConflictDoNothing();
 
@@ -284,6 +284,7 @@ export async function discoverAndScoreJournalists(opts: {
   featureInputs: Record<string, string>;
   maxArticles: number;
   orgId: string;
+  brandId: string;
   userId: string;
   runId: string;
   featureSlug: string | null;
@@ -314,6 +315,8 @@ export async function discoverAndScoreJournalists(opts: {
     llmJournalists,
     opts.outletId,
     opts.campaignId,
+    opts.orgId,
+    opts.brandId,
     opts.featureSlug
   );
 

@@ -5,13 +5,9 @@ import {
   text,
   timestamp,
   numeric,
-  boolean,
-  integer,
   jsonb,
-  date,
   uniqueIndex,
   index,
-  primaryKey,
 } from "drizzle-orm/pg-core";
 
 // ==================== Enums ====================
@@ -21,36 +17,18 @@ export const entityTypeEnum = pgEnum("entity_type", [
   "organization",
 ]);
 
-export const verificationStatusEnum = pgEnum("verification_status", [
-  "valid",
-  "accept_all",
-  "unknown",
-  "invalid",
-]);
-
-export const emailStatusEnum = pgEnum("email_status", [
-  "valid",
-  "invalid",
-  "risky",
-  "unknown",
-]);
-
-export const sourceStatusEnum = pgEnum("source_status", [
-  "Found online",
-  "Guessed from similar",
-  "Pure guess",
-]);
-
 // ==================== Tables ====================
 
-export const pressJournalists = pgTable(
-  "press_journalists",
+/** A journalist exists globally at an outlet — not scoped to any org/brand/campaign. */
+export const journalists = pgTable(
+  "journalists",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    entityType: entityTypeEnum("entity_type").notNull(),
-    journalistName: text("journalist_name").notNull(),
+    outletId: uuid("outlet_id").notNull(),
     firstName: text("first_name"),
     lastName: text("last_name"),
+    journalistName: text("journalist_name").notNull(),
+    entityType: entityTypeEnum("entity_type").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -59,161 +37,77 @@ export const pressJournalists = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("idx_journalists_name_type").on(
+    uniqueIndex("idx_journalists_outlet_name_type").on(
+      table.outletId,
       table.journalistName,
       table.entityType
     ),
   ]
 );
 
-export const outletJournalists = pgTable(
-  "outlet_journalists",
+/** Per-campaign relevance scoring — fully scoped to org/brand/campaign. */
+export const campaignJournalists = pgTable(
+  "campaign_journalists",
   {
-    outletId: uuid("outlet_id").notNull(),
+    id: uuid("id").primaryKey().defaultRandom(),
     journalistId: uuid("journalist_id")
       .notNull()
-      .references(() => pressJournalists.id, { onDelete: "cascade" }),
-  },
-  (table) => [
-    primaryKey({ columns: [table.outletId, table.journalistId] }),
-    index("idx_oj_journalist").on(table.journalistId),
-    index("idx_oj_outlet").on(table.outletId),
-  ]
-);
-
-export const campaignOutletJournalists = pgTable(
-  "campaign_outlet_journalists",
-  {
+      .references(() => journalists.id, { onDelete: "cascade" }),
+    orgId: uuid("org_id").notNull(),
+    brandId: uuid("brand_id").notNull(),
+    featureSlug: text("feature_slug"),
     campaignId: uuid("campaign_id").notNull(),
     outletId: uuid("outlet_id").notNull(),
-    journalistId: uuid("journalist_id")
-      .notNull()
-      .references(() => pressJournalists.id, { onDelete: "cascade" }),
-    featureSlug: text("feature_slug"),
-    whyRelevant: text("why_relevant").notNull(),
-    whyNotRelevant: text("why_not_relevant").notNull(),
     relevanceScore: numeric("relevance_score", {
       precision: 5,
       scale: 2,
     }).notNull(),
+    whyRelevant: text("why_relevant").notNull(),
+    whyNotRelevant: text("why_not_relevant").notNull(),
+    articleUrls: jsonb("article_urls").$type<string[]>(),
     createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (table) => [
-    primaryKey({
-      columns: [table.campaignId, table.outletId, table.journalistId],
-    }),
-    index("idx_coj_campaign").on(table.campaignId),
-    index("idx_coj_outlet").on(table.outletId),
+    uniqueIndex("idx_cj_campaign_outlet_journalist").on(
+      table.campaignId,
+      table.outletId,
+      table.journalistId
+    ),
+    index("idx_cj_campaign").on(table.campaignId),
+    index("idx_cj_journalist").on(table.journalistId),
+    index("idx_cj_org").on(table.orgId),
   ]
 );
 
-export const enrichedIndividuals = pgTable(
-  "enriched_individuals",
+/** Tracks when discovery was last run for a given scope — used for 7-day caching. */
+export const discoveryCache = pgTable(
+  "discovery_cache",
   {
-    firstName: text("first_name").notNull(),
-    lastName: text("last_name").notNull(),
-    domain: text("domain").notNull(),
-    enrichedAt: timestamp("enriched_at", { withTimezone: true }).notNull(),
-    position: text("position"),
-    twitter: text("twitter"),
-    linkedinUrl: text("linkedin_url"),
-    phoneNumber: text("phone_number"),
-    company: text("company"),
-    sources: jsonb("sources"),
-    verificationDate: date("verification_date"),
-    verificationStatus: verificationStatusEnum("verification_status"),
-    score: integer("score"),
-    acceptAll: boolean("accept_all"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (table) => [
-    primaryKey({
-      columns: [table.firstName, table.lastName, table.domain, table.enrichedAt],
-    }),
-    index("idx_ei_domain").on(table.domain),
-  ]
-);
-
-export const enrichedEmails = pgTable(
-  "enriched_emails",
-  {
-    email: text("email").notNull(),
-    enrichedAt: timestamp("enriched_at", { withTimezone: true }).notNull(),
-    score: integer("score").notNull().default(0),
-    acceptAll: boolean("accept_all").notNull().default(false),
-    status: emailStatusEnum("status").notNull(),
-    regexp: boolean("regexp").notNull().default(false),
-    gibberish: boolean("gibberish").notNull().default(false),
-    disposable: boolean("disposable").notNull().default(false),
-    webmail: boolean("webmail").notNull().default(false),
-    mxRecords: boolean("mx_records").notNull().default(false),
-    smtpServer: boolean("smtp_server").notNull().default(false),
-    smtpCheck: boolean("smtp_check").notNull().default(false),
-    block: boolean("block").notNull().default(false),
-    sources: jsonb("sources").notNull().default([]),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.email, table.enrichedAt] }),
-    index("idx_ee_email").on(table.email),
-  ]
-);
-
-export const searchedEmails = pgTable(
-  "searched_emails",
-  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull(),
+    brandId: uuid("brand_id").notNull(),
+    campaignId: uuid("campaign_id").notNull(),
     outletId: uuid("outlet_id").notNull(),
-    journalistId: uuid("journalist_id")
-      .notNull()
-      .references(() => pressJournalists.id, { onDelete: "cascade" }),
-    searchedAt: timestamp("searched_at", { withTimezone: true }).notNull(),
-    journalistEmail: text("journalist_email").notNull(),
-    sourceStatus: sourceStatusEnum("source_status"),
-    sourceQuote: text("source_quote"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    discoveredAt: timestamp("discovered_at", { withTimezone: true }).notNull(),
+    runId: uuid("run_id"),
   },
   (table) => [
-    primaryKey({
-      columns: [table.outletId, table.journalistId, table.searchedAt],
-    }),
-    index("idx_se_journalist").on(table.journalistId),
-    index("idx_se_outlet").on(table.outletId),
+    uniqueIndex("idx_dc_org_brand_campaign_outlet").on(
+      table.orgId,
+      table.brandId,
+      table.campaignId,
+      table.outletId
+    ),
   ]
 );
 
 // ==================== Type Exports ====================
 
-export type PressJournalist = typeof pressJournalists.$inferSelect;
-export type NewPressJournalist = typeof pressJournalists.$inferInsert;
-export type OutletJournalist = typeof outletJournalists.$inferSelect;
-export type NewOutletJournalist = typeof outletJournalists.$inferInsert;
-export type CampaignOutletJournalist =
-  typeof campaignOutletJournalists.$inferSelect;
-export type NewCampaignOutletJournalist =
-  typeof campaignOutletJournalists.$inferInsert;
-export type EnrichedIndividual = typeof enrichedIndividuals.$inferSelect;
-export type NewEnrichedIndividual = typeof enrichedIndividuals.$inferInsert;
-export type EnrichedEmail = typeof enrichedEmails.$inferSelect;
-export type NewEnrichedEmail = typeof enrichedEmails.$inferInsert;
-export type SearchedEmail = typeof searchedEmails.$inferSelect;
-export type NewSearchedEmail = typeof searchedEmails.$inferInsert;
+export type Journalist = typeof journalists.$inferSelect;
+export type NewJournalist = typeof journalists.$inferInsert;
+export type CampaignJournalist = typeof campaignJournalists.$inferSelect;
+export type NewCampaignJournalist = typeof campaignJournalists.$inferInsert;
+export type DiscoveryCache = typeof discoveryCache.$inferSelect;
+export type NewDiscoveryCache = typeof discoveryCache.$inferInsert;

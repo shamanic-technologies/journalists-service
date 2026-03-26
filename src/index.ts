@@ -7,12 +7,6 @@ import { dirname, join } from "path";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { db } from "./db/index.js";
 import healthRoutes from "./routes/health.js";
-import journalistsRoutes from "./routes/journalists.js";
-import outletJournalistsRoutes from "./routes/outlet-journalists.js";
-import campaignOutletJournalistsRoutes from "./routes/campaign-outlet-journalists.js";
-import enrichedRoutes from "./routes/enriched.js";
-import emailPipelineRoutes from "./routes/email-pipeline.js";
-import engagementRoutes from "./routes/engagement.js";
 import internalRoutes from "./routes/internal.js";
 import discoverRoutes from "./routes/discover.js";
 import discoverJournalistsRoutes from "./routes/discover-journalists.js";
@@ -46,16 +40,9 @@ app.use(healthRoutes);
 // Protected routes
 app.use(requireApiKey);
 app.use(requireIdentityHeaders);
-// Mount specific path routes before parametric /:id routes
-app.use(emailPipelineRoutes);
-app.use(engagementRoutes);
 app.use(discoverRoutes);
 app.use(discoverJournalistsRoutes);
 app.use(resolveJournalistsRoutes);
-app.use(journalistsRoutes);
-app.use(outletJournalistsRoutes);
-app.use(campaignOutletJournalistsRoutes);
-app.use(enrichedRoutes);
 app.use(internalRoutes);
 
 // 404

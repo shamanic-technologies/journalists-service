@@ -58,6 +58,7 @@ router.post("/journalists/discover", async (req, res) => {
       featureInputs,
       maxArticles,
       orgId,
+      brandId,
       userId,
       runId: childRunId,
       featureSlug,

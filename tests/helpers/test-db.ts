@@ -1,33 +1,29 @@
 import { db, sql } from "../../src/db/index.js";
 import {
-  pressJournalists,
-  outletJournalists,
-  campaignOutletJournalists,
-  enrichedIndividuals,
-  enrichedEmails,
-  searchedEmails,
+  journalists,
+  campaignJournalists,
+  discoveryCache,
 } from "../../src/db/schema.js";
 
 export async function cleanTestData() {
-  await db.delete(searchedEmails);
-  await db.delete(enrichedEmails);
-  await db.delete(enrichedIndividuals);
-  await db.delete(campaignOutletJournalists);
-  await db.delete(outletJournalists);
-  await db.delete(pressJournalists);
+  await db.delete(discoveryCache);
+  await db.delete(campaignJournalists);
+  await db.delete(journalists);
 }
 
 export async function insertTestJournalist(
   data: {
+    outletId: string;
     entityType?: "individual" | "organization";
     journalistName?: string;
     firstName?: string;
     lastName?: string;
-  } = {}
+  }
 ) {
   const [journalist] = await db
-    .insert(pressJournalists)
+    .insert(journalists)
     .values({
+      outletId: data.outletId,
       entityType: data.entityType || "individual",
       journalistName:
         data.journalistName || `Test Journalist ${Date.now()}-${Math.random()}`,

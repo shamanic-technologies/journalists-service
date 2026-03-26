@@ -1,11 +1,6 @@
 import { Router } from "express";
 import { db } from "../db/index.js";
-import {
-  pressJournalists,
-  outletJournalists,
-  enrichedIndividuals,
-  enrichedEmails,
-} from "../db/schema.js";
+import { journalists } from "../db/schema.js";
 import { eq, inArray, and } from "drizzle-orm";
 import {
   apolloMatchBulk,
@@ -18,34 +13,6 @@ import { DiscoverEmailsSchema } from "../schemas.js";
 const router = Router();
 
 const APOLLO_BATCH_SIZE = 10;
-
-function mapEmailStatus(
-  apolloStatus: string | null
-): "valid" | "invalid" | "risky" | "unknown" {
-  switch (apolloStatus) {
-    case "verified":
-      return "valid";
-    case "invalid":
-      return "invalid";
-    case "guessed":
-    case "unavailable":
-    default:
-      return "unknown";
-  }
-}
-
-function mapVerificationStatus(
-  apolloStatus: string | null
-): "valid" | "accept_all" | "unknown" | "invalid" {
-  switch (apolloStatus) {
-    case "verified":
-      return "valid";
-    case "invalid":
-      return "invalid";
-    default:
-      return "unknown";
-  }
-}
 
 // POST /journalists/discover-emails
 router.post("/journalists/discover-emails", async (req, res) => {
@@ -68,6 +35,7 @@ router.post("/journalists/discover-emails", async (req, res) => {
   const runId = res.locals.runId as string;
   const featureSlug = res.locals.featureSlug as string | null;
 
+  try {
   // Create a child run in runs-service (parentRunId = caller's runId from header)
   const { run: childRun } = await createChildRun(
     {
@@ -82,57 +50,45 @@ router.post("/journalists/discover-emails", async (req, res) => {
   const childRunId = childRun.id;
 
   // Fetch journalists to discover emails for
-  let journalists: Array<{
-    journalistId: string;
+  let journalistRows: Array<{
+    id: string;
     firstName: string | null;
     lastName: string | null;
   }>;
 
   if (journalistIds && journalistIds.length > 0) {
-    // Specific journalist IDs provided
-    const rows = await db
+    journalistRows = await db
       .select({
-        journalistId: outletJournalists.journalistId,
-        firstName: pressJournalists.firstName,
-        lastName: pressJournalists.lastName,
+        id: journalists.id,
+        firstName: journalists.firstName,
+        lastName: journalists.lastName,
       })
-      .from(outletJournalists)
-      .innerJoin(
-        pressJournalists,
-        eq(outletJournalists.journalistId, pressJournalists.id)
-      )
+      .from(journalists)
       .where(
         and(
-          eq(outletJournalists.outletId, outletId),
-          inArray(outletJournalists.journalistId, journalistIds)
+          eq(journalists.outletId, outletId),
+          inArray(journalists.id, journalistIds)
         )
       );
-    journalists = rows;
   } else {
-    // All journalists for the outlet
-    const rows = await db
+    journalistRows = await db
       .select({
-        journalistId: outletJournalists.journalistId,
-        firstName: pressJournalists.firstName,
-        lastName: pressJournalists.lastName,
+        id: journalists.id,
+        firstName: journalists.firstName,
+        lastName: journalists.lastName,
       })
-      .from(outletJournalists)
-      .innerJoin(
-        pressJournalists,
-        eq(outletJournalists.journalistId, pressJournalists.id)
-      )
-      .where(eq(outletJournalists.outletId, outletId));
-    journalists = rows;
+      .from(journalists)
+      .where(eq(journalists.outletId, outletId));
   }
 
   // Filter to journalists with firstName + lastName
-  const matchable = journalists.filter((j) => j.firstName && j.lastName);
+  const matchable = journalistRows.filter((j) => j.firstName && j.lastName);
 
   if (matchable.length === 0) {
     res.json({
       discovered: 0,
-      total: journalists.length,
-      skipped: journalists.length,
+      total: journalistRows.length,
+      skipped: journalistRows.length,
       results: [],
     });
     return;
@@ -172,60 +128,24 @@ router.post("/journalists/discover-emails", async (req, res) => {
         apolloResponse.results[k];
       if (result) {
         allResults.push({
-          journalistId: batch[k].journalistId,
+          journalistId: batch[k].id,
           ...result,
         });
       }
     }
   }
 
-  // Store results in enriched_individuals + enriched_emails
-  const now = new Date();
   let discovered = 0;
-
   for (const result of allResults) {
-    const journalist = matchable.find(
-      (j) => j.journalistId === result.journalistId
-    )!;
-
-    // Always store enriched_individuals record (even if no email found)
-    await db
-      .insert(enrichedIndividuals)
-      .values({
-        firstName: journalist.firstName!,
-        lastName: journalist.lastName!,
-        domain: organizationDomain,
-        enrichedAt: now,
-        position: result.person?.title || null,
-        linkedinUrl: result.person?.linkedinUrl || null,
-        company: result.person?.organizationName || null,
-        verificationStatus: mapVerificationStatus(
-          result.person?.emailStatus || null
-        ),
-        sources: [{ type: "apollo", enrichmentId: result.enrichmentId }],
-      })
-      .onConflictDoNothing();
-
-    // Store email if found
     if (result.person?.email) {
       discovered++;
-
-      await db
-        .insert(enrichedEmails)
-        .values({
-          email: result.person.email,
-          enrichedAt: now,
-          status: mapEmailStatus(result.person.emailStatus),
-          sources: [{ type: "apollo", enrichmentId: result.enrichmentId }],
-        })
-        .onConflictDoNothing();
     }
   }
 
   res.json({
     discovered,
     total: matchable.length,
-    skipped: journalists.length - matchable.length,
+    skipped: journalistRows.length - matchable.length,
     results: allResults.map((r) => ({
       journalistId: r.journalistId,
       email: r.person?.email || null,
@@ -234,6 +154,12 @@ router.post("/journalists/discover-emails", async (req, res) => {
       enrichmentId: r.enrichmentId,
     })),
   });
+  } catch (err) {
+    console.error("Discover emails error:", err);
+    const message =
+      err instanceof Error ? err.message : "Internal server error";
+    res.status(500).json({ error: message });
+  }
 });
 
 export default router;

@@ -3,14 +3,12 @@ import request from "supertest";
 import { createTestApp, AUTH_HEADERS } from "../helpers/test-app.js";
 import {
   cleanTestData,
-  insertTestJournalist,
   closeDb,
 } from "../helpers/test-db.js";
 import { db } from "../../src/db/index.js";
 import {
-  pressJournalists,
-  outletJournalists,
-  campaignOutletJournalists,
+  campaignJournalists,
+  discoveryCache,
 } from "../../src/db/schema.js";
 import { eq, and } from "drizzle-orm";
 
@@ -64,7 +62,7 @@ function setupDiscoverMocks() {
   mockedCreateChildRun.mockResolvedValue({
     run: {
       id: CHILD_RUN_ID,
-      parentRunId: "test-run-id",
+      parentRunId: "99999999-9999-9999-9999-999999999999",
       service: "journalists-service",
       operation: "resolve-journalists",
     },
@@ -193,11 +191,9 @@ describe("POST /journalists/resolve", () => {
     expect(res.body.journalists[0].firstName).toBe("Sarah");
     expect(res.body.journalists[0].relevanceScore).toBe(92);
     expect(res.body.journalists[0].whyRelevant).toContain("Sarah Johnson");
+    expect(res.body.journalists[0].articleUrls).toBeDefined();
     expect(res.body.journalists[1].firstName).toBe("Mike");
     expect(res.body.journalists[1].relevanceScore).toBe(78);
-
-    // emails[] present (empty since no searched_emails exist)
-    expect(res.body.journalists[0].emails).toEqual([]);
 
     // Discovery was triggered
     expect(mockedDiscoverOutletArticles).toHaveBeenCalledTimes(1);
@@ -206,14 +202,26 @@ describe("POST /journalists/resolve", () => {
     // Stored in DB
     const dbScores = await db
       .select()
-      .from(campaignOutletJournalists)
+      .from(campaignJournalists)
       .where(
         and(
-          eq(campaignOutletJournalists.campaignId, CAMPAIGN_ID),
-          eq(campaignOutletJournalists.outletId, OUTLET_ID)
+          eq(campaignJournalists.campaignId, CAMPAIGN_ID),
+          eq(campaignJournalists.outletId, OUTLET_ID)
         )
       );
     expect(dbScores).toHaveLength(2);
+
+    // Discovery cache populated
+    const cache = await db
+      .select()
+      .from(discoveryCache)
+      .where(
+        and(
+          eq(discoveryCache.campaignId, CAMPAIGN_ID),
+          eq(discoveryCache.outletId, OUTLET_ID)
+        )
+      );
+    expect(cache).toHaveLength(1);
   });
 
   it("returns cached results on second call (cache hit)", async () => {
