@@ -137,6 +137,35 @@ export const ResolveJournalistsResponseSchema = z
   })
   .openapi("ResolveJournalistsResponse");
 
+// ==================== Campaign Outlet Journalists Schemas ====================
+
+export const CampaignOutletJournalistSchema = z
+  .object({
+    id: z.string().uuid(),
+    journalistId: z.string().uuid(),
+    campaignId: z.string().uuid(),
+    outletId: z.string().uuid(),
+    orgId: z.string().uuid(),
+    brandId: z.string().uuid(),
+    featureSlug: z.string().nullable(),
+    relevanceScore: z.string(),
+    whyRelevant: z.string(),
+    whyNotRelevant: z.string(),
+    articleUrls: z.array(z.string()).nullable(),
+    createdAt: z.string(),
+    journalistName: z.string(),
+    firstName: z.string().nullable(),
+    lastName: z.string().nullable(),
+    entityType: z.enum(["individual", "organization"]),
+  })
+  .openapi("CampaignOutletJournalist");
+
+export const CampaignOutletJournalistsResponseSchema = z
+  .object({
+    campaignJournalists: z.array(CampaignOutletJournalistSchema),
+  })
+  .openapi("CampaignOutletJournalistsResponse");
+
 // ==================== Path Registrations ====================
 
 // Health
@@ -150,6 +179,9 @@ registry.registerPath({ method: "post", path: "/journalists/discover-emails", su
 
 // Resolve Journalists
 registry.registerPath({ method: "post", path: "/journalists/resolve", summary: "Resolve journalists for a campaign+outlet: discover if needed, score, and return", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: ResolveJournalistsSchema } } } }, responses: { 200: { description: "Resolved journalists sorted by relevance score", content: { "application/json": { schema: ResolveJournalistsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+
+// Campaign Outlet Journalists
+registry.registerPath({ method: "get", path: "/campaign-outlet-journalists", summary: "Get journalists associated with a campaign, optionally filtered by outlet", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ campaign_id: z.string().uuid(), outlet_id: z.string().uuid().optional() }) }, responses: { 200: { description: "Campaign journalists with journalist details", content: { "application/json": { schema: CampaignOutletJournalistsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Internal
 registry.registerPath({ method: "get", path: "/internal/journalists/by-ids", summary: "Batch lookup journalists by IDs", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ ids: z.string() }) }, responses: { 200: { description: "Journalists", content: { "application/json": { schema: z.object({ journalists: z.array(JournalistSchema) }) } } } } });
