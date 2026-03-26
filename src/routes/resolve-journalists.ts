@@ -3,7 +3,11 @@ import { db } from "../db/index.js";
 import { journalists, campaignJournalists, discoveryCache } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { createChildRun } from "../lib/runs-client.js";
-import { fetchBrand } from "../lib/brand-client.js";
+import {
+  extractBrandFields,
+  getFieldValue,
+} from "../lib/brand-client.js";
+import { fetchCampaign } from "../lib/campaign-client.js";
 import { fetchOutlet } from "../lib/outlets-client.js";
 import {
   extractDomain,
@@ -22,7 +26,7 @@ router.post("/journalists/resolve", async (req, res) => {
     return;
   }
 
-  const { outletId, featureInputs, maxArticles } = parsed.data;
+  const { outletId, maxArticles } = parsed.data;
 
   const orgId = res.locals.orgId as string;
   const userId = res.locals.userId as string;
@@ -77,15 +81,30 @@ router.post("/journalists/resolve", async (req, res) => {
     );
     const childRunId = childRun.id;
 
-    const [brand, outlet] = await Promise.all([
-      fetchBrand(brandId, orgId, userId, childRunId, featureSlug),
+    const [brandFields, campaign, outlet] = await Promise.all([
+      extractBrandFields(
+        brandId,
+        [
+          { key: "brand_name", description: "The brand's name" },
+          {
+            key: "brand_description",
+            description:
+              "A concise description of what the brand does, its products, and market positioning",
+          },
+        ],
+        orgId,
+        userId,
+        childRunId,
+        campaignId,
+        featureSlug
+      ),
+      fetchCampaign(campaignId, orgId, userId, childRunId, featureSlug),
       fetchOutlet(outletId, orgId, userId, childRunId, featureSlug),
     ]);
 
-    const brandName = brand.name || "Unknown Brand";
-    const brandDescription = [brand.elevatorPitch, brand.bio, brand.mission]
-      .filter(Boolean)
-      .join(". ");
+    const brandName = getFieldValue(brandFields.results, "brand_name") || "Unknown Brand";
+    const brandDescription = getFieldValue(brandFields.results, "brand_description");
+    const featureInputs = campaign.featureInputs ?? {};
     const outletDomain = extractDomain(outlet.outletUrl);
 
     await discoverAndScoreJournalists({

@@ -44,9 +44,6 @@ export const JournalistSchema = z
 export const DiscoverJournalistsSchema = z
   .object({
     outletId: z.string().uuid(),
-    brandId: z.string().uuid(),
-    campaignId: z.string().uuid(),
-    featureInputs: z.record(z.string()).default({}),
     maxArticles: z.number().int().min(1).max(30).default(15),
   })
   .openapi("DiscoverJournalistsRequest");
@@ -80,7 +77,6 @@ export const DiscoverJournalistsResponseSchema = z
 export const ResolveJournalistsSchema = z
   .object({
     outletId: z.string().uuid(),
-    featureInputs: z.record(z.string()).default({}),
     maxArticles: z.number().int().min(1).max(30).default(15),
   })
   .openapi("ResolveJournalistsRequest");
