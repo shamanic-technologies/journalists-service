@@ -15,7 +15,7 @@ const document = generator.generateDocument({
   info: {
     title: "Journalists Service",
     description:
-      "Manages journalist profiles, outlet affiliations, email discovery pipeline, and engagement tracking.",
+      "Manages journalist profiles, outlet affiliations, and engagement tracking.",
     version: "1.0.0",
   },
   servers: [
