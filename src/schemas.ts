@@ -39,37 +39,6 @@ export const JournalistSchema = z
   })
   .openapi("Journalist");
 
-// ==================== Discover Emails Schemas ====================
-
-export const DiscoverEmailsSchema = z
-  .object({
-    outletId: z.string().uuid(),
-    organizationDomain: z.string().min(1),
-    journalistIds: z.array(z.string().uuid()).optional(),
-    brandId: z.string().uuid(),
-    campaignId: z.string().uuid(),
-  })
-  .openapi("DiscoverEmailsRequest");
-
-export const DiscoverEmailsResultSchema = z
-  .object({
-    journalistId: z.string().uuid(),
-    email: z.string().nullable(),
-    emailStatus: z.string().nullable(),
-    cached: z.boolean(),
-    enrichmentId: z.string(),
-  })
-  .openapi("DiscoverEmailsResult");
-
-export const DiscoverEmailsResponseSchema = z
-  .object({
-    discovered: z.number(),
-    total: z.number(),
-    skipped: z.number(),
-    results: z.array(DiscoverEmailsResultSchema),
-  })
-  .openapi("DiscoverEmailsResponse");
-
 // ==================== Discover Journalists Schemas ====================
 
 export const DiscoverJournalistsSchema = z
@@ -173,9 +142,6 @@ registry.registerPath({ method: "get", path: "/health", summary: "Health check",
 
 // Discover Journalists
 registry.registerPath({ method: "post", path: "/journalists/discover", summary: "Discover relevant journalists for a brand on an outlet via article search + LLM scoring", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: DiscoverJournalistsSchema } } } }, responses: { 200: { description: "Discovered journalists with relevance scores", content: { "application/json": { schema: DiscoverJournalistsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
-
-// Discover Emails (Apollo)
-registry.registerPath({ method: "post", path: "/journalists/discover-emails", summary: "Discover journalist emails via Apollo person match", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: DiscoverEmailsSchema } } } }, responses: { 200: { description: "Discovery results", content: { "application/json": { schema: DiscoverEmailsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Resolve Journalists
 registry.registerPath({ method: "post", path: "/journalists/resolve", summary: "Resolve journalists for a campaign+outlet: discover if needed, score, and return", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: ResolveJournalistsSchema } } } }, responses: { 200: { description: "Resolved journalists sorted by relevance score", content: { "application/json": { schema: ResolveJournalistsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
