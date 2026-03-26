@@ -5,6 +5,7 @@ import internalRoutes from "../../src/routes/internal.js";
 import discoverRoutes from "../../src/routes/discover.js";
 import discoverJournalistsRoutes from "../../src/routes/discover-journalists.js";
 import resolveJournalistsRoutes from "../../src/routes/resolve-journalists.js";
+import campaignOutletJournalistsRoutes from "../../src/routes/campaign-outlet-journalists.js";
 import { requireApiKey, requireIdentityHeaders } from "../../src/middleware/auth.js";
 
 export function createTestApp() {
@@ -17,6 +18,7 @@ export function createTestApp() {
   app.use(discoverRoutes);
   app.use(discoverJournalistsRoutes);
   app.use(resolveJournalistsRoutes);
+  app.use(campaignOutletJournalistsRoutes);
   app.use(internalRoutes);
   app.use((_req: express.Request, res: express.Response) => {
     res.status(404).json({ error: "Not found" });

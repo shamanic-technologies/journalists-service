@@ -334,6 +334,108 @@
           "outletId"
         ]
       },
+      "CampaignOutletJournalist": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "campaignId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orgId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "brandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "featureSlug": {
+            "type": "string",
+            "nullable": true
+          },
+          "relevanceScore": {
+            "type": "string"
+          },
+          "whyRelevant": {
+            "type": "string"
+          },
+          "whyNotRelevant": {
+            "type": "string"
+          },
+          "articleUrls": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "journalistName": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          },
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "individual",
+              "organization"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "journalistId",
+          "campaignId",
+          "outletId",
+          "orgId",
+          "brandId",
+          "featureSlug",
+          "relevanceScore",
+          "whyRelevant",
+          "whyNotRelevant",
+          "articleUrls",
+          "createdAt",
+          "journalistName",
+          "firstName",
+          "lastName",
+          "entityType"
+        ]
+      },
+      "CampaignOutletJournalistsResponse": {
+        "type": "object",
+        "properties": {
+          "campaignJournalists": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CampaignOutletJournalist"
+            }
+          }
+        },
+        "required": [
+          "campaignJournalists"
+        ]
+      },
       "Journalist": {
         "type": "object",
         "properties": {
@@ -550,6 +652,58 @@
           },
           "502": {
             "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaign-outlet-journalists": {
+      "get": {
+        "summary": "Get journalists associated with a campaign, optionally filtered by outlet",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "campaign_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "outlet_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Campaign journalists with journalist details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignOutletJournalistsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
             "content": {
               "application/json": {
                 "schema": {

@@ -34,6 +34,36 @@ export async function insertTestJournalist(
   return journalist;
 }
 
+export async function insertTestCampaignJournalist(data: {
+  journalistId: string;
+  orgId: string;
+  brandId: string;
+  campaignId: string;
+  outletId: string;
+  relevanceScore?: string;
+  whyRelevant?: string;
+  whyNotRelevant?: string;
+  articleUrls?: string[];
+  featureSlug?: string;
+}) {
+  const [row] = await db
+    .insert(campaignJournalists)
+    .values({
+      journalistId: data.journalistId,
+      orgId: data.orgId,
+      brandId: data.brandId,
+      campaignId: data.campaignId,
+      outletId: data.outletId,
+      relevanceScore: data.relevanceScore ?? "75.00",
+      whyRelevant: data.whyRelevant ?? "Test relevance",
+      whyNotRelevant: data.whyNotRelevant ?? "Test not relevant",
+      articleUrls: data.articleUrls ?? [],
+      featureSlug: data.featureSlug ?? null,
+    })
+    .returning();
+  return row;
+}
+
 export async function closeDb() {
   await sql.end();
 }
