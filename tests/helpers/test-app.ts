@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import healthRoutes from "../../src/routes/health.js";
 import internalRoutes from "../../src/routes/internal.js";
-import discoverRoutes from "../../src/routes/discover.js";
 import discoverJournalistsRoutes from "../../src/routes/discover-journalists.js";
 import resolveJournalistsRoutes from "../../src/routes/resolve-journalists.js";
 import campaignOutletJournalistsRoutes from "../../src/routes/campaign-outlet-journalists.js";
@@ -15,7 +14,6 @@ export function createTestApp() {
   app.use(healthRoutes);
   app.use(requireApiKey);
   app.use(requireIdentityHeaders);
-  app.use(discoverRoutes);
   app.use(discoverJournalistsRoutes);
   app.use(resolveJournalistsRoutes);
   app.use(campaignOutletJournalistsRoutes);

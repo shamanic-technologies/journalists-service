@@ -16,7 +16,12 @@ vi.mock("../../src/lib/runs-client.js", () => ({
 }));
 
 vi.mock("../../src/lib/brand-client.js", () => ({
-  fetchBrand: vi.fn(),
+  extractBrandFields: vi.fn(),
+  getFieldValue: vi.fn(),
+}));
+
+vi.mock("../../src/lib/campaign-client.js", () => ({
+  fetchCampaign: vi.fn(),
 }));
 
 vi.mock("../../src/lib/outlets-client.js", () => ({
@@ -32,13 +37,16 @@ vi.mock("../../src/lib/chat-client.js", () => ({
 }));
 
 import { createChildRun } from "../../src/lib/runs-client.js";
-import { fetchBrand } from "../../src/lib/brand-client.js";
+import { extractBrandFields, getFieldValue } from "../../src/lib/brand-client.js";
+import { fetchCampaign } from "../../src/lib/campaign-client.js";
 import { fetchOutlet } from "../../src/lib/outlets-client.js";
 import { discoverOutletArticles } from "../../src/lib/articles-client.js";
 import { chatComplete } from "../../src/lib/chat-client.js";
 
 const mockedCreateChildRun = vi.mocked(createChildRun);
-const mockedFetchBrand = vi.mocked(fetchBrand);
+const mockedExtractBrandFields = vi.mocked(extractBrandFields);
+const mockedGetFieldValue = vi.mocked(getFieldValue);
+const mockedFetchCampaign = vi.mocked(fetchCampaign);
 const mockedFetchOutlet = vi.mocked(fetchOutlet);
 const mockedDiscoverOutletArticles = vi.mocked(discoverOutletArticles);
 const mockedChatComplete = vi.mocked(chatComplete);
@@ -50,6 +58,12 @@ const BRAND_ID = "44444444-4444-4444-4444-444444444444";
 const CAMPAIGN_ID = "55555555-5555-5555-5555-555555555555";
 const CHILD_RUN_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 
+const DISCOVER_HEADERS = {
+  ...AUTH_HEADERS,
+  "x-campaign-id": CAMPAIGN_ID,
+  "x-brand-id": BRAND_ID,
+};
+
 function setupDefaultMocks() {
   mockedCreateChildRun.mockResolvedValue({
     run: {
@@ -60,16 +74,32 @@ function setupDefaultMocks() {
     },
   });
 
-  mockedFetchBrand.mockResolvedValue({
-    id: BRAND_ID,
-    name: "TechCorp",
-    domain: "techcorp.com",
-    brandUrl: "https://techcorp.com",
-    elevatorPitch: "Enterprise SaaS platform for developer tools",
-    bio: "TechCorp builds AI-powered developer tools",
-    mission: "Empowering developers worldwide",
-    location: "San Francisco, CA",
-    categories: "SaaS, Developer Tools, AI",
+  mockedExtractBrandFields.mockResolvedValue({
+    brandId: BRAND_ID,
+    results: [
+      { key: "brand_name", value: "TechCorp", cached: false },
+      {
+        key: "brand_description",
+        value: "Enterprise SaaS platform for developer tools. TechCorp builds AI-powered developer tools. Empowering developers worldwide",
+        cached: false,
+      },
+    ],
+  });
+
+  mockedGetFieldValue.mockImplementation((_results, key) => {
+    if (key === "brand_name") return "TechCorp";
+    if (key === "brand_description")
+      return "Enterprise SaaS platform for developer tools. TechCorp builds AI-powered developer tools. Empowering developers worldwide";
+    return "";
+  });
+
+  mockedFetchCampaign.mockResolvedValue({
+    id: CAMPAIGN_ID,
+    featureInputs: {
+      journalistTypes: "tech reporters",
+      geography: "US",
+    },
+    brandId: BRAND_ID,
   });
 
   mockedFetchOutlet.mockResolvedValue({
@@ -156,17 +186,35 @@ describe("POST /journalists/discover", () => {
   it("returns 400 for invalid request body", async () => {
     const res = await request(app)
       .post("/journalists/discover")
-      .set(AUTH_HEADERS)
+      .set(DISCOVER_HEADERS)
       .send({});
 
     expect(res.status).toBe(400);
   });
 
+  it("returns 400 without x-campaign-id header", async () => {
+    const res = await request(app)
+      .post("/journalists/discover")
+      .set(AUTH_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("x-campaign-id");
+  });
+
+  it("returns 400 without x-brand-id header", async () => {
+    const res = await request(app)
+      .post("/journalists/discover")
+      .set({ ...AUTH_HEADERS, "x-campaign-id": CAMPAIGN_ID })
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("x-brand-id");
+  });
+
   it("returns 401 without auth", async () => {
     const res = await request(app).post("/journalists/discover").send({
       outletId: OUTLET_ID,
-      brandId: BRAND_ID,
-      campaignId: CAMPAIGN_ID,
     });
 
     expect(res.status).toBe(401);
@@ -177,16 +225,8 @@ describe("POST /journalists/discover", () => {
 
     const res = await request(app)
       .post("/journalists/discover")
-      .set(AUTH_HEADERS)
-      .send({
-        outletId: OUTLET_ID,
-        brandId: BRAND_ID,
-        campaignId: CAMPAIGN_ID,
-        featureInputs: {
-          journalistTypes: "tech reporters",
-          geography: "US",
-        },
-      });
+      .set(DISCOVER_HEADERS)
+      .send({ outletId: OUTLET_ID });
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(2);
@@ -211,14 +251,33 @@ describe("POST /journalists/discover", () => {
       "test-feature"
     );
 
-    // Verify brand + outlet were fetched
-    expect(mockedFetchBrand).toHaveBeenCalledWith(
+    // Verify brand extract-fields was called with campaignId
+    expect(mockedExtractBrandFields).toHaveBeenCalledWith(
       BRAND_ID,
+      [
+        { key: "brand_name", description: "The brand's name" },
+        {
+          key: "brand_description",
+          description:
+            "A concise description of what the brand does, its products, and market positioning",
+        },
+      ],
+      "22222222-2222-2222-2222-222222222222",
+      "33333333-3333-3333-3333-333333333333",
+      CHILD_RUN_ID,
+      CAMPAIGN_ID,
+      "test-feature"
+    );
+
+    // Verify campaign was fetched for featureInputs
+    expect(mockedFetchCampaign).toHaveBeenCalledWith(
+      CAMPAIGN_ID,
       "22222222-2222-2222-2222-222222222222",
       "33333333-3333-3333-3333-333333333333",
       CHILD_RUN_ID,
       "test-feature"
     );
+
     expect(mockedFetchOutlet).toHaveBeenCalledWith(
       OUTLET_ID,
       "22222222-2222-2222-2222-222222222222",
@@ -280,12 +339,8 @@ describe("POST /journalists/discover", () => {
 
     const res = await request(app)
       .post("/journalists/discover")
-      .set(AUTH_HEADERS)
-      .send({
-        outletId: OUTLET_ID,
-        brandId: BRAND_ID,
-        campaignId: CAMPAIGN_ID,
-      });
+      .set(DISCOVER_HEADERS)
+      .send({ outletId: OUTLET_ID });
 
     expect(res.status).toBe(200);
     const sarah = res.body.journalists.find(
@@ -309,16 +364,24 @@ describe("POST /journalists/discover", () => {
       },
     });
 
-    mockedFetchBrand.mockResolvedValue({
-      id: BRAND_ID,
-      name: "NicheCorp",
-      domain: "nichecorp.com",
-      brandUrl: "https://nichecorp.com",
-      elevatorPitch: "Niche product",
-      bio: null,
-      mission: null,
-      location: null,
-      categories: null,
+    mockedExtractBrandFields.mockResolvedValue({
+      brandId: BRAND_ID,
+      results: [
+        { key: "brand_name", value: "NicheCorp", cached: false },
+        { key: "brand_description", value: "Niche product", cached: false },
+      ],
+    });
+
+    mockedGetFieldValue.mockImplementation((_results, key) => {
+      if (key === "brand_name") return "NicheCorp";
+      if (key === "brand_description") return "Niche product";
+      return "";
+    });
+
+    mockedFetchCampaign.mockResolvedValue({
+      id: CAMPAIGN_ID,
+      featureInputs: null,
+      brandId: BRAND_ID,
     });
 
     mockedFetchOutlet.mockResolvedValue({
@@ -332,12 +395,8 @@ describe("POST /journalists/discover", () => {
 
     const res = await request(app)
       .post("/journalists/discover")
-      .set(AUTH_HEADERS)
-      .send({
-        outletId: OUTLET_ID,
-        brandId: BRAND_ID,
-        campaignId: CAMPAIGN_ID,
-      });
+      .set(DISCOVER_HEADERS)
+      .send({ outletId: OUTLET_ID });
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toEqual([]);
@@ -357,16 +416,24 @@ describe("POST /journalists/discover", () => {
       },
     });
 
-    mockedFetchBrand.mockResolvedValue({
-      id: BRAND_ID,
-      name: "TechCorp",
-      domain: "techcorp.com",
-      brandUrl: "https://techcorp.com",
-      elevatorPitch: "SaaS platform",
-      bio: null,
-      mission: null,
-      location: null,
-      categories: null,
+    mockedExtractBrandFields.mockResolvedValue({
+      brandId: BRAND_ID,
+      results: [
+        { key: "brand_name", value: "TechCorp", cached: false },
+        { key: "brand_description", value: "SaaS platform", cached: false },
+      ],
+    });
+
+    mockedGetFieldValue.mockImplementation((_results, key) => {
+      if (key === "brand_name") return "TechCorp";
+      if (key === "brand_description") return "SaaS platform";
+      return "";
+    });
+
+    mockedFetchCampaign.mockResolvedValue({
+      id: CAMPAIGN_ID,
+      featureInputs: null,
+      brandId: BRAND_ID,
     });
 
     mockedFetchOutlet.mockResolvedValue({
@@ -381,12 +448,8 @@ describe("POST /journalists/discover", () => {
 
     const res = await request(app)
       .post("/journalists/discover")
-      .set(AUTH_HEADERS)
-      .send({
-        outletId: OUTLET_ID,
-        brandId: BRAND_ID,
-        campaignId: CAMPAIGN_ID,
-      });
+      .set(DISCOVER_HEADERS)
+      .send({ outletId: OUTLET_ID });
 
     expect(res.status).toBe(502);
     expect(res.body.error).toContain("Articles service");
@@ -399,35 +462,32 @@ describe("POST /journalists/discover", () => {
 
     const res = await request(app)
       .post("/journalists/discover")
-      .set(AUTH_HEADERS)
-      .send({
-        outletId: OUTLET_ID,
-        brandId: BRAND_ID,
-        campaignId: CAMPAIGN_ID,
-      });
+      .set(DISCOVER_HEADERS)
+      .send({ outletId: OUTLET_ID });
 
     expect(res.status).toBe(502);
     expect(res.body.error).toContain("Runs-service unavailable");
   });
 
-  it("passes featureInputs to LLM scoring prompt", async () => {
+  it("injects campaign context (featureInputs) into LLM scoring prompt", async () => {
     setupDefaultMocks();
+
+    mockedFetchCampaign.mockResolvedValue({
+      id: CAMPAIGN_ID,
+      featureInputs: {
+        journalistTypes: "tech reporters, AI specialists",
+        geography: "US, UK",
+        topics: "enterprise SaaS",
+      },
+      brandId: BRAND_ID,
+    });
 
     await request(app)
       .post("/journalists/discover")
-      .set(AUTH_HEADERS)
-      .send({
-        outletId: OUTLET_ID,
-        brandId: BRAND_ID,
-        campaignId: CAMPAIGN_ID,
-        featureInputs: {
-          journalistTypes: "tech reporters, AI specialists",
-          geography: "US, UK",
-          topics: "enterprise SaaS",
-        },
-      });
+      .set(DISCOVER_HEADERS)
+      .send({ outletId: OUTLET_ID });
 
-    // Verify chatComplete call (scoring) includes feature inputs
+    // Verify chatComplete call (scoring) includes campaign context
     expect(mockedChatComplete).toHaveBeenCalledTimes(1);
     const scoringCall = mockedChatComplete.mock.calls[0];
     expect(scoringCall[0].message).toContain("journalistTypes");
@@ -441,11 +501,9 @@ describe("POST /journalists/discover", () => {
 
     await request(app)
       .post("/journalists/discover")
-      .set(AUTH_HEADERS)
+      .set(DISCOVER_HEADERS)
       .send({
         outletId: OUTLET_ID,
-        brandId: BRAND_ID,
-        campaignId: CAMPAIGN_ID,
         maxArticles: 5,
       });
 
@@ -469,16 +527,24 @@ describe("POST /journalists/discover", () => {
       },
     });
 
-    mockedFetchBrand.mockResolvedValue({
-      id: BRAND_ID,
-      name: "TechCorp",
-      domain: "techcorp.com",
-      brandUrl: "https://techcorp.com",
-      elevatorPitch: "SaaS platform",
-      bio: null,
-      mission: null,
-      location: null,
-      categories: null,
+    mockedExtractBrandFields.mockResolvedValue({
+      brandId: BRAND_ID,
+      results: [
+        { key: "brand_name", value: "TechCorp", cached: false },
+        { key: "brand_description", value: "SaaS platform", cached: false },
+      ],
+    });
+
+    mockedGetFieldValue.mockImplementation((_results, key) => {
+      if (key === "brand_name") return "TechCorp";
+      if (key === "brand_description") return "SaaS platform";
+      return "";
+    });
+
+    mockedFetchCampaign.mockResolvedValue({
+      id: CAMPAIGN_ID,
+      featureInputs: null,
+      brandId: BRAND_ID,
     });
 
     mockedFetchOutlet.mockResolvedValue({
@@ -539,12 +605,8 @@ describe("POST /journalists/discover", () => {
 
     const res = await request(app)
       .post("/journalists/discover")
-      .set(AUTH_HEADERS)
-      .send({
-        outletId: OUTLET_ID,
-        brandId: BRAND_ID,
-        campaignId: CAMPAIGN_ID,
-      });
+      .set(DISCOVER_HEADERS)
+      .send({ outletId: OUTLET_ID });
 
     expect(res.status).toBe(200);
     expect(res.body.totalJournalistsStored).toBe(1);

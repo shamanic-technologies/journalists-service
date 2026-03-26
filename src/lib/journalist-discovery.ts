@@ -108,7 +108,7 @@ export async function scoreJournalists(
 ): Promise<LlmJournalist[]> {
   if (authors.length === 0) return [];
 
-  const featureContext = Object.entries(featureInputs)
+  const campaignContext = Object.entries(featureInputs)
     .map(([k, v]) => `- ${k}: ${v}`)
     .join("\n");
 
@@ -134,8 +134,8 @@ Rules:
       message: `Brand: ${brandName}
 Description: ${truncate(brandDescription, 500)}
 
-Search criteria:
-${featureContext || "(none specified)"}
+Campaign context:
+${campaignContext || "(none specified)"}
 
 Journalists found on this outlet:
 ${authorsText}

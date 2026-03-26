@@ -18,7 +18,12 @@ vi.mock("../../src/lib/runs-client.js", () => ({
 }));
 
 vi.mock("../../src/lib/brand-client.js", () => ({
-  fetchBrand: vi.fn(),
+  extractBrandFields: vi.fn(),
+  getFieldValue: vi.fn(),
+}));
+
+vi.mock("../../src/lib/campaign-client.js", () => ({
+  fetchCampaign: vi.fn(),
 }));
 
 vi.mock("../../src/lib/outlets-client.js", () => ({
@@ -34,13 +39,16 @@ vi.mock("../../src/lib/chat-client.js", () => ({
 }));
 
 import { createChildRun } from "../../src/lib/runs-client.js";
-import { fetchBrand } from "../../src/lib/brand-client.js";
+import { extractBrandFields, getFieldValue } from "../../src/lib/brand-client.js";
+import { fetchCampaign } from "../../src/lib/campaign-client.js";
 import { fetchOutlet } from "../../src/lib/outlets-client.js";
 import { discoverOutletArticles } from "../../src/lib/articles-client.js";
 import { chatComplete } from "../../src/lib/chat-client.js";
 
 const mockedCreateChildRun = vi.mocked(createChildRun);
-const mockedFetchBrand = vi.mocked(fetchBrand);
+const mockedExtractBrandFields = vi.mocked(extractBrandFields);
+const mockedGetFieldValue = vi.mocked(getFieldValue);
+const mockedFetchCampaign = vi.mocked(fetchCampaign);
 const mockedFetchOutlet = vi.mocked(fetchOutlet);
 const mockedDiscoverOutletArticles = vi.mocked(discoverOutletArticles);
 const mockedChatComplete = vi.mocked(chatComplete);
@@ -68,16 +76,29 @@ function setupDiscoverMocks() {
     },
   });
 
-  mockedFetchBrand.mockResolvedValue({
-    id: BRAND_ID,
-    name: "TechCorp",
-    domain: "techcorp.com",
-    brandUrl: "https://techcorp.com",
-    elevatorPitch: "Enterprise SaaS platform for developer tools",
-    bio: "TechCorp builds AI-powered developer tools",
-    mission: "Empowering developers worldwide",
-    location: "San Francisco, CA",
-    categories: "SaaS, Developer Tools, AI",
+  mockedExtractBrandFields.mockResolvedValue({
+    brandId: BRAND_ID,
+    results: [
+      { key: "brand_name", value: "TechCorp", cached: false },
+      {
+        key: "brand_description",
+        value: "Enterprise SaaS platform for developer tools. TechCorp builds AI-powered developer tools. Empowering developers worldwide",
+        cached: false,
+      },
+    ],
+  });
+
+  mockedGetFieldValue.mockImplementation((_results, key) => {
+    if (key === "brand_name") return "TechCorp";
+    if (key === "brand_description")
+      return "Enterprise SaaS platform for developer tools. TechCorp builds AI-powered developer tools. Empowering developers worldwide";
+    return "";
+  });
+
+  mockedFetchCampaign.mockResolvedValue({
+    id: CAMPAIGN_ID,
+    featureInputs: { angle: "developer tools" },
+    brandId: BRAND_ID,
   });
 
   mockedFetchOutlet.mockResolvedValue({
@@ -198,6 +219,12 @@ describe("POST /journalists/resolve", () => {
     // Discovery was triggered
     expect(mockedDiscoverOutletArticles).toHaveBeenCalledTimes(1);
     expect(mockedChatComplete).toHaveBeenCalledTimes(1);
+
+    // Brand extract-fields was called (not fetchBrand)
+    expect(mockedExtractBrandFields).toHaveBeenCalledTimes(1);
+
+    // Campaign was fetched for featureInputs
+    expect(mockedFetchCampaign).toHaveBeenCalledTimes(1);
 
     // Stored in DB
     const dbScores = await db

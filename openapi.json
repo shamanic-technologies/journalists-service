@@ -120,21 +120,6 @@
             "type": "string",
             "format": "uuid"
           },
-          "brandId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "campaignId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "featureInputs": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "default": {}
-          },
           "maxArticles": {
             "type": "integer",
             "minimum": 1,
@@ -143,9 +128,7 @@
           }
         },
         "required": [
-          "outletId",
-          "brandId",
-          "campaignId"
+          "outletId"
         ]
       },
       "ResolvedJournalist": {
@@ -225,13 +208,6 @@
           "outletId": {
             "type": "string",
             "format": "uuid"
-          },
-          "featureInputs": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "default": {}
           },
           "maxArticles": {
             "type": "integer",
