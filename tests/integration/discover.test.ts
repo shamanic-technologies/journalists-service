@@ -7,8 +7,7 @@ import {
   closeDb,
 } from "../helpers/test-db.js";
 import { db } from "../../src/db/index.js";
-import { pressJournalists, outletJournalists, enrichedIndividuals, enrichedEmails } from "../../src/db/schema.js";
-import { and, eq } from "drizzle-orm";
+import { journalists } from "../../src/db/schema.js";
 
 // Mock the Apollo client
 vi.mock("../../src/lib/apollo-client.js", () => ({
@@ -78,7 +77,7 @@ describe("POST /journalists/discover-emails", () => {
   it("returns 400 without x-org-id header", async () => {
     const res = await request(app)
       .post("/journalists/discover-emails")
-      .set({ "x-api-key": "test-api-key", "x-user-id": "test-user-id" })
+      .set({ "x-api-key": "test-api-key", "x-user-id": "33333333-3333-3333-3333-333333333333" })
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
@@ -93,7 +92,7 @@ describe("POST /journalists/discover-emails", () => {
   it("returns 400 without x-user-id header", async () => {
     const res = await request(app)
       .post("/journalists/discover-emails")
-      .set({ "x-api-key": "test-api-key", "x-org-id": "test-org-id" })
+      .set({ "x-api-key": "test-api-key", "x-org-id": "22222222-2222-2222-2222-222222222222" })
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
@@ -108,7 +107,7 @@ describe("POST /journalists/discover-emails", () => {
   it("returns 400 without x-run-id header", async () => {
     const res = await request(app)
       .post("/journalists/discover-emails")
-      .set({ "x-api-key": "test-api-key", "x-org-id": "test-org-id", "x-user-id": "test-user-id" })
+      .set({ "x-api-key": "test-api-key", "x-org-id": "22222222-2222-2222-2222-222222222222", "x-user-id": "33333333-3333-3333-3333-333333333333" })
       .send({
         outletId: OUTLET_ID,
         organizationDomain: "example.com",
@@ -143,14 +142,10 @@ describe("POST /journalists/discover-emails", () => {
 
   it("creates a child run and calls Apollo with child run ID", async () => {
     const journalist = await insertTestJournalist({
-      journalistName: "DiscoverTest",
+      outletId: OUTLET_ID,
+      journalistName: "John Doe",
       firstName: "John",
       lastName: "Doe",
-    });
-
-    await db.insert(outletJournalists).values({
-      outletId: OUTLET_ID,
-      journalistId: journalist.id,
     });
 
     mockedApolloMatchBulk.mockResolvedValue({
@@ -200,12 +195,12 @@ describe("POST /journalists/discover-emails", () => {
     // Verify child run was created with x-run-id header as parentRunId
     expect(mockedCreateChildRun).toHaveBeenCalledWith(
       {
-        parentRunId: "test-run-id",
+        parentRunId: "99999999-9999-9999-9999-999999999999",
         service: "journalists-service",
         operation: "discover-emails",
       },
-      "test-org-id",
-      "test-user-id",
+      "22222222-2222-2222-2222-222222222222",
+      "33333333-3333-3333-3333-333333333333",
       "test-feature"
     );
 
@@ -223,58 +218,30 @@ describe("POST /journalists/discover-emails", () => {
         brandId: BRAND_ID,
         campaignId: CAMPAIGN_ID,
       },
-      "test-org-id",
-      "test-user-id",
+      "22222222-2222-2222-2222-222222222222",
+      "33333333-3333-3333-3333-333333333333",
       CHILD_RUN_ID,
       "test-feature"
     );
-
-    // Verify data was stored in enriched_individuals
-    const individuals = await db
-      .select()
-      .from(enrichedIndividuals)
-      .where(
-        and(
-          eq(enrichedIndividuals.firstName, "John"),
-          eq(enrichedIndividuals.lastName, "Doe")
-        )
-      );
-    expect(individuals).toHaveLength(1);
-    expect(individuals[0].position).toBe("Senior Reporter");
-    expect(individuals[0].linkedinUrl).toBe("https://linkedin.com/in/johndoe");
-    expect(individuals[0].verificationStatus).toBe("valid");
-
-    // Verify data was stored in enriched_emails
-    const emails = await db
-      .select()
-      .from(enrichedEmails)
-      .where(
-        eq(enrichedEmails.email, "john.doe@example.com")
-      );
-    expect(emails).toHaveLength(1);
-    expect(emails[0].status).toBe("valid");
   });
 
   it("skips journalists without firstName/lastName", async () => {
     const journalistWithName = await insertTestJournalist({
-      journalistName: "WithName",
+      outletId: OUTLET_ID,
+      journalistName: "Jane Smith",
       firstName: "Jane",
       lastName: "Smith",
     });
 
-    // Insert directly to get null firstName/lastName (helper defaults to "Test"/"Journalist")
+    // Insert directly to get null firstName/lastName
     const [journalistNoName] = await db
-      .insert(pressJournalists)
+      .insert(journalists)
       .values({
+        outletId: OUTLET_ID,
         entityType: "organization",
         journalistName: "NoName Outlet",
       })
       .returning();
-
-    await db.insert(outletJournalists).values([
-      { outletId: OUTLET_ID, journalistId: journalistWithName.id },
-      { outletId: OUTLET_ID, journalistId: journalistNoName.id },
-    ]);
 
     mockedApolloMatchBulk.mockResolvedValue({
       results: [
@@ -317,20 +284,17 @@ describe("POST /journalists/discover-emails", () => {
 
   it("filters by specific journalistIds when provided", async () => {
     const j1 = await insertTestJournalist({
-      journalistName: "FilterJ1",
+      outletId: OUTLET_ID,
+      journalistName: "Alice One",
       firstName: "Alice",
       lastName: "One",
     });
     const j2 = await insertTestJournalist({
-      journalistName: "FilterJ2",
+      outletId: OUTLET_ID,
+      journalistName: "Bob Two",
       firstName: "Bob",
       lastName: "Two",
     });
-
-    await db.insert(outletJournalists).values([
-      { outletId: OUTLET_ID, journalistId: j1.id },
-      { outletId: OUTLET_ID, journalistId: j2.id },
-    ]);
 
     mockedApolloMatchBulk.mockResolvedValue({
       results: [
@@ -378,14 +342,10 @@ describe("POST /journalists/discover-emails", () => {
 
   it("handles Apollo returning null person (no match)", async () => {
     const journalist = await insertTestJournalist({
-      journalistName: "NoMatch",
+      outletId: OUTLET_ID,
+      journalistName: "Unknown Person",
       firstName: "Unknown",
       lastName: "Person",
-    });
-
-    await db.insert(outletJournalists).values({
-      outletId: OUTLET_ID,
-      journalistId: journalist.id,
     });
 
     mockedApolloMatchBulk.mockResolvedValue({
@@ -416,17 +376,12 @@ describe("POST /journalists/discover-emails", () => {
 
   it("batches Apollo calls for more than 10 journalists", async () => {
     // Create 12 journalists
-    const journalists = [];
     for (let i = 0; i < 12; i++) {
-      const j = await insertTestJournalist({
-        journalistName: `Batch${i}`,
+      await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: `First${i} Last${i}`,
         firstName: `First${i}`,
         lastName: `Last${i}`,
-      });
-      journalists.push(j);
-      await db.insert(outletJournalists).values({
-        outletId: OUTLET_ID,
-        journalistId: j.id,
       });
     }
 
@@ -492,14 +447,10 @@ describe("POST /journalists/discover-emails", () => {
 
   it("returns 500 if runs-service call fails", async () => {
     const journalist = await insertTestJournalist({
-      journalistName: "RunsFail",
+      outletId: OUTLET_ID,
+      journalistName: "Test Person",
       firstName: "Test",
       lastName: "Person",
-    });
-
-    await db.insert(outletJournalists).values({
-      outletId: OUTLET_ID,
-      journalistId: journalist.id,
     });
 
     mockedCreateChildRun.mockRejectedValue(

@@ -7,11 +7,7 @@ import {
   closeDb,
 } from "../helpers/test-db.js";
 import { db } from "../../src/db/index.js";
-import {
-  pressJournalists,
-  outletJournalists,
-  campaignOutletJournalists,
-} from "../../src/db/schema.js";
+import { journalists, campaignJournalists } from "../../src/db/schema.js";
 import { eq } from "drizzle-orm";
 
 // Mock all external service clients
@@ -58,7 +54,7 @@ function setupDefaultMocks() {
   mockedCreateChildRun.mockResolvedValue({
     run: {
       id: CHILD_RUN_ID,
-      parentRunId: "test-run-id",
+      parentRunId: "99999999-9999-9999-9999-999999999999",
       service: "journalists-service",
       operation: "discover-journalists",
     },
@@ -206,27 +202,27 @@ describe("POST /journalists/discover", () => {
     // Verify child run was created
     expect(mockedCreateChildRun).toHaveBeenCalledWith(
       {
-        parentRunId: "test-run-id",
+        parentRunId: "99999999-9999-9999-9999-999999999999",
         service: "journalists-service",
         operation: "discover-journalists",
       },
-      "test-org-id",
-      "test-user-id",
+      "22222222-2222-2222-2222-222222222222",
+      "33333333-3333-3333-3333-333333333333",
       "test-feature"
     );
 
     // Verify brand + outlet were fetched
     expect(mockedFetchBrand).toHaveBeenCalledWith(
       BRAND_ID,
-      "test-org-id",
-      "test-user-id",
+      "22222222-2222-2222-2222-222222222222",
+      "33333333-3333-3333-3333-333333333333",
       CHILD_RUN_ID,
       "test-feature"
     );
     expect(mockedFetchOutlet).toHaveBeenCalledWith(
       OUTLET_ID,
-      "test-org-id",
-      "test-user-id",
+      "22222222-2222-2222-2222-222222222222",
+      "33333333-3333-3333-3333-333333333333",
       CHILD_RUN_ID,
       "test-feature"
     );
@@ -235,17 +231,17 @@ describe("POST /journalists/discover", () => {
     expect(mockedDiscoverOutletArticles).toHaveBeenCalledWith(
       "techcrunch.com",
       15,
-      "test-org-id",
-      "test-user-id",
+      "22222222-2222-2222-2222-222222222222",
+      "33333333-3333-3333-3333-333333333333",
       CHILD_RUN_ID,
       "test-feature"
     );
 
-    // Verify stored in DB
+    // Verify stored in journalists table
     const dbJournalists = await db
       .select()
-      .from(pressJournalists)
-      .where(eq(pressJournalists.entityType, "individual"));
+      .from(journalists)
+      .where(eq(journalists.outletId, OUTLET_ID));
     expect(dbJournalists).toHaveLength(2);
 
     const sarahDb = dbJournalists.find((j) => j.firstName === "Sarah");
@@ -253,18 +249,11 @@ describe("POST /journalists/discover", () => {
     expect(sarahDb!.lastName).toBe("Johnson");
     expect(sarahDb!.journalistName).toBe("Sarah Johnson");
 
-    // Verify outlet links
-    const outletLinks = await db
-      .select()
-      .from(outletJournalists)
-      .where(eq(outletJournalists.outletId, OUTLET_ID));
-    expect(outletLinks).toHaveLength(2);
-
-    // Verify campaign-outlet-journalist links with relevance
+    // Verify campaign_journalists with relevance scores
     const campaignLinks = await db
       .select()
-      .from(campaignOutletJournalists)
-      .where(eq(campaignOutletJournalists.campaignId, CAMPAIGN_ID));
+      .from(campaignJournalists)
+      .where(eq(campaignJournalists.campaignId, CAMPAIGN_ID));
     expect(campaignLinks).toHaveLength(2);
 
     const sarahCampaign = campaignLinks.find(
@@ -273,11 +262,14 @@ describe("POST /journalists/discover", () => {
     expect(sarahCampaign).toBeDefined();
     expect(Number(sarahCampaign!.relevanceScore)).toBe(92);
     expect(sarahCampaign!.whyRelevant).toContain("Sarah Johnson");
+    expect(sarahCampaign!.orgId).toBe("22222222-2222-2222-2222-222222222222");
+    expect(sarahCampaign!.brandId).toBe(BRAND_ID);
   });
 
   it("marks existing journalists as isNew: false", async () => {
-    // Pre-insert Sarah Johnson
+    // Pre-insert Sarah Johnson at this outlet
     await insertTestJournalist({
+      outletId: OUTLET_ID,
       journalistName: "Sarah Johnson",
       firstName: "Sarah",
       lastName: "Johnson",
@@ -311,7 +303,7 @@ describe("POST /journalists/discover", () => {
     mockedCreateChildRun.mockResolvedValue({
       run: {
         id: CHILD_RUN_ID,
-        parentRunId: "test-run-id",
+        parentRunId: "99999999-9999-9999-9999-999999999999",
         service: "journalists-service",
         operation: "discover-journalists",
       },
@@ -359,7 +351,7 @@ describe("POST /journalists/discover", () => {
     mockedCreateChildRun.mockResolvedValue({
       run: {
         id: CHILD_RUN_ID,
-        parentRunId: "test-run-id",
+        parentRunId: "99999999-9999-9999-9999-999999999999",
         service: "journalists-service",
         operation: "discover-journalists",
       },
@@ -460,8 +452,8 @@ describe("POST /journalists/discover", () => {
     expect(mockedDiscoverOutletArticles).toHaveBeenCalledWith(
       "techcrunch.com",
       5,
-      "test-org-id",
-      "test-user-id",
+      "22222222-2222-2222-2222-222222222222",
+      "33333333-3333-3333-3333-333333333333",
       CHILD_RUN_ID,
       "test-feature"
     );
@@ -471,7 +463,7 @@ describe("POST /journalists/discover", () => {
     mockedCreateChildRun.mockResolvedValue({
       run: {
         id: CHILD_RUN_ID,
-        parentRunId: "test-run-id",
+        parentRunId: "99999999-9999-9999-9999-999999999999",
         service: "journalists-service",
         operation: "discover-journalists",
       },

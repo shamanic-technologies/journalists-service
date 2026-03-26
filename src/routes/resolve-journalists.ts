@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, sql } from "../db/index.js";
-import { campaignOutletJournalists } from "../db/schema.js";
+import { db } from "../db/index.js";
+import { journalists, campaignJournalists, discoveryCache } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { createChildRun } from "../lib/runs-client.js";
 import { fetchBrand } from "../lib/brand-client.js";
@@ -41,31 +41,25 @@ router.post("/journalists/resolve", async (req, res) => {
   }
 
   try {
-    // Check cache: do we have scores for this campaign+outlet?
-    const existingScores = await db
+    // Check discovery cache
+    const cached = await db
       .select()
-      .from(campaignOutletJournalists)
+      .from(discoveryCache)
       .where(
         and(
-          eq(campaignOutletJournalists.campaignId, campaignId),
-          eq(campaignOutletJournalists.outletId, outletId)
+          eq(discoveryCache.orgId, orgId),
+          eq(discoveryCache.brandId, brandId),
+          eq(discoveryCache.campaignId, campaignId),
+          eq(discoveryCache.outletId, outletId)
         )
       );
 
     const isFresh =
-      existingScores.length > 0 &&
-      existingScores.every(
-        (s) =>
-          Date.now() - new Date(s.createdAt).getTime() < CACHE_MAX_AGE_MS
-      );
+      cached.length > 0 &&
+      Date.now() - new Date(cached[0].discoveredAt).getTime() < CACHE_MAX_AGE_MS;
 
     if (isFresh) {
-      // Fast path: return cached scores with journalist info + emails
-      const result = await fetchJournalistsWithEmails(
-        outletId,
-        campaignId,
-        existingScores
-      );
+      const result = await fetchResolvedJournalists(campaignId, outletId);
       res.json({ journalists: result, cached: true });
       return;
     }
@@ -103,27 +97,37 @@ router.post("/journalists/resolve", async (req, res) => {
       featureInputs,
       maxArticles,
       orgId,
+      brandId,
       userId,
       runId: childRunId,
       featureSlug,
     });
 
-    // Re-fetch from DB to get the full picture with emails
-    const freshScores = await db
-      .select()
-      .from(campaignOutletJournalists)
-      .where(
-        and(
-          eq(campaignOutletJournalists.campaignId, campaignId),
-          eq(campaignOutletJournalists.outletId, outletId)
-        )
-      );
+    // Upsert discovery cache
+    await db
+      .insert(discoveryCache)
+      .values({
+        orgId,
+        brandId,
+        campaignId,
+        outletId,
+        discoveredAt: new Date(),
+        runId: childRunId,
+      })
+      .onConflictDoUpdate({
+        target: [
+          discoveryCache.orgId,
+          discoveryCache.brandId,
+          discoveryCache.campaignId,
+          discoveryCache.outletId,
+        ],
+        set: {
+          discoveredAt: new Date(),
+          runId: childRunId,
+        },
+      });
 
-    const result = await fetchJournalistsWithEmails(
-      outletId,
-      campaignId,
-      freshScores
-    );
+    const result = await fetchResolvedJournalists(campaignId, outletId);
     res.json({ journalists: result, cached: false });
   } catch (err) {
     console.error("Resolve journalists error:", err);
@@ -133,7 +137,7 @@ router.post("/journalists/resolve", async (req, res) => {
   }
 });
 
-// ── Fetch journalists with scores + emails ───────────────────────────
+// ── Fetch resolved journalists ───────────────────────────────────────
 
 interface ResolvedJournalist {
   id: string;
@@ -144,91 +148,47 @@ interface ResolvedJournalist {
   relevanceScore: number;
   whyRelevant: string;
   whyNotRelevant: string;
-  emails: Array<{ email: string; isValid: boolean; confidence: number }>;
+  articleUrls: string[];
 }
 
-async function fetchJournalistsWithEmails(
-  outletId: string,
+async function fetchResolvedJournalists(
   campaignId: string,
-  scores: Array<{
-    journalistId: string;
-    relevanceScore: string;
-    whyRelevant: string;
-    whyNotRelevant: string;
-  }>
+  outletId: string
 ): Promise<ResolvedJournalist[]> {
-  if (scores.length === 0) return [];
-
-  const journalistIds = scores.map((s) => s.journalistId);
-
-  // Fetch journalist details
-  const journalists = await sql.unsafe(
-    `SELECT id, journalist_name, first_name, last_name, entity_type
-     FROM press_journalists
-     WHERE id = ANY($1)`,
-    [journalistIds]
-  );
-
-  // Fetch emails
-  const emails = await sql.unsafe(
-    `SELECT journalist_id, email, is_valid, confidence
-     FROM v_valid_journalist_emails
-     WHERE outlet_id = $1 AND journalist_id = ANY($2)`,
-    [outletId, journalistIds]
-  );
-
-  // Build email map
-  const emailsByJournalist = new Map<
-    string,
-    Array<{ email: string; isValid: boolean; confidence: number }>
-  >();
-  for (const e of emails) {
-    const jId = e.journalist_id as string;
-    if (!emailsByJournalist.has(jId)) {
-      emailsByJournalist.set(jId, []);
-    }
-    emailsByJournalist.get(jId)!.push({
-      email: e.email as string,
-      isValid: e.is_valid as boolean,
-      confidence: Number(e.confidence),
-    });
-  }
-
-  // Build score map
-  const scoreMap = new Map(
-    scores.map((s) => [
-      s.journalistId,
-      {
-        relevanceScore: Number(s.relevanceScore),
-        whyRelevant: s.whyRelevant,
-        whyNotRelevant: s.whyNotRelevant,
-      },
-    ])
-  );
-
-  // Assemble + sort by relevance DESC
-  const result: ResolvedJournalist[] = journalists
-    .map((j) => {
-      const score = scoreMap.get(j.id as string);
-      const journalistEmails = emailsByJournalist.get(j.id as string) || [];
-      // Sort emails by confidence DESC
-      journalistEmails.sort((a, b) => b.confidence - a.confidence);
-
-      return {
-        id: j.id as string,
-        journalistName: j.journalist_name as string,
-        firstName: (j.first_name as string) || "",
-        lastName: (j.last_name as string) || "",
-        entityType: j.entity_type as string,
-        relevanceScore: score?.relevanceScore ?? 0,
-        whyRelevant: score?.whyRelevant ?? "",
-        whyNotRelevant: score?.whyNotRelevant ?? "",
-        emails: journalistEmails,
-      };
+  const rows = await db
+    .select({
+      id: journalists.id,
+      journalistName: journalists.journalistName,
+      firstName: journalists.firstName,
+      lastName: journalists.lastName,
+      entityType: journalists.entityType,
+      relevanceScore: campaignJournalists.relevanceScore,
+      whyRelevant: campaignJournalists.whyRelevant,
+      whyNotRelevant: campaignJournalists.whyNotRelevant,
+      articleUrls: campaignJournalists.articleUrls,
     })
-    .sort((a, b) => b.relevanceScore - a.relevanceScore);
+    .from(campaignJournalists)
+    .innerJoin(journalists, eq(campaignJournalists.journalistId, journalists.id))
+    .where(
+      and(
+        eq(campaignJournalists.campaignId, campaignId),
+        eq(campaignJournalists.outletId, outletId)
+      )
+    );
 
-  return result;
+  return rows
+    .map((r) => ({
+      id: r.id,
+      journalistName: r.journalistName,
+      firstName: r.firstName || "",
+      lastName: r.lastName || "",
+      entityType: r.entityType,
+      relevanceScore: Number(r.relevanceScore),
+      whyRelevant: r.whyRelevant,
+      whyNotRelevant: r.whyNotRelevant,
+      articleUrls: (r.articleUrls as string[]) || [],
+    }))
+    .sort((a, b) => b.relevanceScore - a.relevanceScore);
 }
 
 export default router;

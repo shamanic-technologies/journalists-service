@@ -22,6 +22,13 @@
       "when": 1774318795220,
       "tag": "0002_chunky_tinkerer",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1774800000000,
+      "tag": "0003_full_schema_refactor",
+      "breakpoints": true
     }
   ]
 }

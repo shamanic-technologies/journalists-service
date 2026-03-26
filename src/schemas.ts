@@ -24,11 +24,12 @@ export const ErrorResponseSchema = z
   })
   .openapi("ErrorResponse");
 
-// ==================== Journalist Schemas ====================
+// ==================== Journalist Schema ====================
 
 export const JournalistSchema = z
   .object({
     id: z.string().uuid(),
+    outletId: z.string().uuid(),
     entityType: z.enum(["individual", "organization"]),
     journalistName: z.string(),
     firstName: z.string().nullable(),
@@ -37,280 +38,6 @@ export const JournalistSchema = z
     updatedAt: z.string(),
   })
   .openapi("Journalist");
-
-export const CreateJournalistSchema = z
-  .object({
-    entityType: z.enum(["individual", "organization"]),
-    journalistName: z.string().min(1),
-    firstName: z.string().optional(),
-    lastName: z.string().optional(),
-  })
-  .openapi("CreateJournalistRequest");
-
-export const UpdateJournalistSchema = z
-  .object({
-    journalistName: z.string().min(1).optional(),
-    firstName: z.string().nullable().optional(),
-    lastName: z.string().nullable().optional(),
-  })
-  .openapi("UpdateJournalistRequest");
-
-export const JournalistListQuerySchema = z.object({
-  entity_type: z.enum(["individual", "organization"]).optional(),
-  outlet_id: z.string().uuid().optional(),
-  campaign_id: z.string().uuid().optional(),
-});
-
-// ==================== Outlet-Journalist Schemas ====================
-
-export const OutletJournalistSchema = z
-  .object({
-    outletId: z.string().uuid(),
-    journalistId: z.string().uuid(),
-  })
-  .openapi("OutletJournalist");
-
-export const CreateOutletJournalistSchema = z
-  .object({
-    outletId: z.string().uuid(),
-    journalistId: z.string().uuid(),
-  })
-  .openapi("CreateOutletJournalistRequest");
-
-export const OutletJournalistWithDetailsSchema = z
-  .object({
-    outletId: z.string().uuid(),
-    journalistId: z.string().uuid(),
-    journalistName: z.string().optional(),
-    firstName: z.string().nullable().optional(),
-    lastName: z.string().nullable().optional(),
-    entityType: z.enum(["individual", "organization"]).optional(),
-  })
-  .openapi("OutletJournalistWithDetails");
-
-// ==================== Campaign-Outlet-Journalist Schemas ====================
-
-export const CampaignOutletJournalistSchema = z
-  .object({
-    campaignId: z.string().uuid(),
-    outletId: z.string().uuid(),
-    journalistId: z.string().uuid(),
-    featureSlug: z.string().nullable(),
-    whyRelevant: z.string(),
-    whyNotRelevant: z.string(),
-    relevanceScore: z.string(),
-    createdAt: z.string(),
-    updatedAt: z.string(),
-  })
-  .openapi("CampaignOutletJournalist");
-
-export const CreateCampaignOutletJournalistSchema = z
-  .object({
-    campaignId: z.string().uuid(),
-    outletId: z.string().uuid(),
-    journalistId: z.string().uuid(),
-    featureSlug: z.string().optional(),
-    whyRelevant: z.string().min(1),
-    whyNotRelevant: z.string().min(1),
-    relevanceScore: z.number().min(0).max(100),
-  })
-  .openapi("CreateCampaignOutletJournalistRequest");
-
-export const UpdateCampaignOutletJournalistSchema = z
-  .object({
-    whyRelevant: z.string().min(1).optional(),
-    whyNotRelevant: z.string().min(1).optional(),
-    relevanceScore: z.number().min(0).max(100).optional(),
-  })
-  .openapi("UpdateCampaignOutletJournalistRequest");
-
-// ==================== Enriched Individual Schemas ====================
-
-export const CreateEnrichedIndividualSchema = z
-  .object({
-    firstName: z.string().min(1),
-    lastName: z.string().min(1),
-    domain: z.string().min(1),
-    enrichedAt: z.string(),
-    position: z.string().optional(),
-    twitter: z.string().optional(),
-    linkedinUrl: z.string().optional(),
-    phoneNumber: z.string().optional(),
-    company: z.string().optional(),
-    sources: z.any().optional(),
-    verificationDate: z.string().optional(),
-    verificationStatus: z
-      .enum(["valid", "accept_all", "unknown", "invalid"])
-      .optional(),
-    score: z.number().int().optional(),
-    acceptAll: z.boolean().optional(),
-  })
-  .openapi("CreateEnrichedIndividualRequest");
-
-export const BulkEnrichedIndividualsSchema = z
-  .object({
-    items: z.array(CreateEnrichedIndividualSchema).min(1).max(1000),
-  })
-  .openapi("BulkEnrichedIndividualsRequest");
-
-// ==================== Enriched Email Schemas ====================
-
-export const CreateEnrichedEmailSchema = z
-  .object({
-    email: z.string().email(),
-    enrichedAt: z.string(),
-    score: z.number().int().default(0),
-    acceptAll: z.boolean().default(false),
-    status: z.enum(["valid", "invalid", "risky", "unknown"]),
-    regexp: z.boolean().default(false),
-    gibberish: z.boolean().default(false),
-    disposable: z.boolean().default(false),
-    webmail: z.boolean().default(false),
-    mxRecords: z.boolean().default(false),
-    smtpServer: z.boolean().default(false),
-    smtpCheck: z.boolean().default(false),
-    block: z.boolean().default(false),
-    sources: z.any().default([]),
-  })
-  .openapi("CreateEnrichedEmailRequest");
-
-export const BulkEnrichedEmailsSchema = z
-  .object({
-    items: z.array(CreateEnrichedEmailSchema).min(1).max(1000),
-  })
-  .openapi("BulkEnrichedEmailsRequest");
-
-// ==================== Searched Email Schemas ====================
-
-export const CreateSearchedEmailSchema = z
-  .object({
-    outletId: z.string().uuid(),
-    journalistId: z.string().uuid(),
-    searchedAt: z.string(),
-    journalistEmail: z.string().email(),
-    sourceStatus: z
-      .enum(["Found online", "Guessed from similar", "Pure guess"])
-      .optional(),
-    sourceQuote: z.string().optional(),
-  })
-  .openapi("CreateSearchedEmailRequest");
-
-// ==================== Email Pipeline View Schemas ====================
-
-export const ValidJournalistEmailSchema = z
-  .object({
-    journalistId: z.string().uuid(),
-    outletId: z.string().uuid(),
-    email: z.string(),
-    isValid: z.boolean(),
-    type: z.string(),
-    source: z.string(),
-    confidence: z.number(),
-  })
-  .openapi("ValidJournalistEmail");
-
-export const EnrichedEmailEventSchema = z
-  .object({
-    outletId: z.string().uuid(),
-    journalistId: z.string().uuid(),
-    email: z.string(),
-    enrichedAt: z.string(),
-    status: z.string(),
-    score: z.number().nullable(),
-    acceptAll: z.boolean().nullable(),
-  })
-  .openapi("EnrichedEmailEvent");
-
-export const EnrichedIndividualEventSchema = z
-  .object({
-    outletId: z.string().uuid(),
-    journalistId: z.string().uuid(),
-    firstName: z.string(),
-    lastName: z.string(),
-    domain: z.string(),
-    enrichedAt: z.string(),
-    position: z.string().nullable(),
-    verificationStatus: z.string().nullable(),
-    score: z.number().nullable(),
-  })
-  .openapi("EnrichedIndividualEvent");
-
-export const SearchedEmailEventSchema = z
-  .object({
-    outletId: z.string().uuid(),
-    journalistId: z.string().uuid(),
-    journalistEmail: z.string(),
-    searchedAt: z.string(),
-    sourceStatus: z.string().nullable(),
-    sourceQuote: z.string().nullable(),
-  })
-  .openapi("SearchedEmailEvent");
-
-export const NeedEmailUpdateSchema = z
-  .object({
-    outletId: z.string().uuid(),
-    journalistId: z.string().uuid(),
-    journalistName: z.string(),
-    firstName: z.string().nullable(),
-    lastName: z.string().nullable(),
-    lastSearchedAt: z.string().nullable(),
-    lastEnrichedAt: z.string().nullable(),
-  })
-  .openapi("NeedEmailUpdate");
-
-export const NeedEnrichmentSchema = z
-  .object({
-    outletId: z.string().uuid(),
-    journalistId: z.string().uuid(),
-    journalistName: z.string(),
-    firstName: z.string().nullable(),
-    lastName: z.string().nullable(),
-  })
-  .openapi("NeedEnrichment");
-
-export const NeedAgentSearchSchema = z
-  .object({
-    outletId: z.string().uuid(),
-    journalistId: z.string().uuid(),
-    journalistName: z.string(),
-    firstName: z.string().nullable(),
-    lastName: z.string().nullable(),
-  })
-  .openapi("NeedAgentSearch");
-
-export const NeedVerificationSchema = z
-  .object({
-    outletId: z.string().uuid(),
-    journalistId: z.string().uuid(),
-    email: z.string(),
-  })
-  .openapi("NeedVerification");
-
-// ==================== Engagement Schemas ====================
-
-export const JournalistEngagementSchema = z
-  .object({
-    journalistId: z.string().uuid(),
-    journalistName: z.string(),
-    pitchBounces: z.number(),
-    deliveries: z.number(),
-    lastEngagementAt: z.string().nullable(),
-    totalPitches: z.number(),
-    totalOpens: z.number(),
-    totalReplies: z.number(),
-  })
-  .openapi("JournalistEngagement");
-
-export const JournalistStatusSchema = z
-  .object({
-    campaignId: z.string().uuid(),
-    outletId: z.string().uuid(),
-    journalistId: z.string().uuid(),
-    journalistName: z.string(),
-    status: z.string(),
-    relevanceScore: z.string(),
-  })
-  .openapi("JournalistStatus");
 
 // ==================== Discover Emails Schemas ====================
 
@@ -389,14 +116,6 @@ export const ResolveJournalistsSchema = z
   })
   .openapi("ResolveJournalistsRequest");
 
-const ResolvedJournalistEmailSchema = z
-  .object({
-    email: z.string(),
-    isValid: z.boolean(),
-    confidence: z.number(),
-  })
-  .openapi("ResolvedJournalistEmail");
-
 export const ResolvedJournalistSchema = z
   .object({
     id: z.string().uuid(),
@@ -407,7 +126,7 @@ export const ResolvedJournalistSchema = z
     relevanceScore: z.number().min(0).max(100),
     whyRelevant: z.string(),
     whyNotRelevant: z.string(),
-    emails: z.array(ResolvedJournalistEmailSchema),
+    articleUrls: z.array(z.string()),
   })
   .openapi("ResolvedJournalist");
 
@@ -418,107 +137,19 @@ export const ResolveJournalistsResponseSchema = z
   })
   .openapi("ResolveJournalistsResponse");
 
-// ==================== Internal Schemas ====================
-
-export const JournalistWithEmailsSchema = z
-  .object({
-    id: z.string().uuid(),
-    journalistName: z.string(),
-    firstName: z.string().nullable(),
-    lastName: z.string().nullable(),
-    entityType: z.enum(["individual", "organization"]),
-    emails: z.array(
-      z.object({
-        email: z.string(),
-        isValid: z.boolean(),
-        confidence: z.number(),
-      })
-    ),
-  })
-  .openapi("JournalistWithEmails");
-
 // ==================== Path Registrations ====================
 
 // Health
 registry.registerPath({ method: "get", path: "/health", summary: "Health check", responses: { 200: { description: "Service is healthy", content: { "application/json": { schema: z.object({ status: z.string(), timestamp: z.string(), service: z.string() }) } } } } });
 
-// POST /journalists
-registry.registerPath({ method: "post", path: "/journalists", summary: "Create a journalist", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: CreateJournalistSchema } } } }, responses: { 201: { description: "Created", content: { "application/json": { schema: z.object({ journalist: JournalistSchema }) } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 409: { description: "Duplicate journalist", content: { "application/json": { schema: ErrorResponseSchema } } } } });
-
-// GET /journalists
-registry.registerPath({ method: "get", path: "/journalists", summary: "List journalists with optional filters", security: [{ [apiKeyAuth.name]: [] }], request: { query: JournalistListQuerySchema }, responses: { 200: { description: "List of journalists", content: { "application/json": { schema: z.object({ journalists: z.array(JournalistSchema) }) } } } } });
-
-// GET /journalists/:id
-registry.registerPath({ method: "get", path: "/journalists/{id}", summary: "Get journalist by ID", security: [{ [apiKeyAuth.name]: [] }], request: { params: z.object({ id: z.string().uuid() }) }, responses: { 200: { description: "Journalist details", content: { "application/json": { schema: z.object({ journalist: JournalistSchema }) } } }, 404: { description: "Not found", content: { "application/json": { schema: ErrorResponseSchema } } } } });
-
-// PATCH /journalists/:id
-registry.registerPath({ method: "patch", path: "/journalists/{id}", summary: "Update journalist", security: [{ [apiKeyAuth.name]: [] }], request: { params: z.object({ id: z.string().uuid() }), body: { content: { "application/json": { schema: UpdateJournalistSchema } } } }, responses: { 200: { description: "Updated", content: { "application/json": { schema: z.object({ journalist: JournalistSchema }) } } }, 404: { description: "Not found", content: { "application/json": { schema: ErrorResponseSchema } } } } });
-
-// POST /outlet-journalists
-registry.registerPath({ method: "post", path: "/outlet-journalists", summary: "Link journalist to outlet", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: CreateOutletJournalistSchema } } } }, responses: { 201: { description: "Linked", content: { "application/json": { schema: z.object({ outletJournalist: OutletJournalistSchema }) } } } } });
-
-// GET /outlet-journalists
-registry.registerPath({ method: "get", path: "/outlet-journalists", summary: "List outlet-journalist links", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ outlet_id: z.string().uuid().optional(), journalist_id: z.string().uuid().optional() }) }, responses: { 200: { description: "List of links", content: { "application/json": { schema: z.object({ outletJournalists: z.array(OutletJournalistWithDetailsSchema) }) } } } } });
-
-// DELETE /outlet-journalists/:outletId/:journalistId
-registry.registerPath({ method: "delete", path: "/outlet-journalists/{outletId}/{journalistId}", summary: "Remove outlet-journalist link", security: [{ [apiKeyAuth.name]: [] }], request: { params: z.object({ outletId: z.string().uuid(), journalistId: z.string().uuid() }) }, responses: { 200: { description: "Deleted", content: { "application/json": { schema: z.object({ deleted: z.boolean() }) } } }, 404: { description: "Not found", content: { "application/json": { schema: ErrorResponseSchema } } } } });
-
-// POST /campaign-outlet-journalists
-registry.registerPath({ method: "post", path: "/campaign-outlet-journalists", summary: "Link journalist to campaign+outlet with relevance", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: CreateCampaignOutletJournalistSchema } } } }, responses: { 201: { description: "Created", content: { "application/json": { schema: z.object({ campaignOutletJournalist: CampaignOutletJournalistSchema }) } } } } });
-
-// GET /campaign-outlet-journalists
-registry.registerPath({ method: "get", path: "/campaign-outlet-journalists", summary: "List campaign-outlet-journalist links", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ campaign_id: z.string().uuid(), outlet_id: z.string().uuid().optional() }) }, responses: { 200: { description: "List", content: { "application/json": { schema: z.object({ campaignOutletJournalists: z.array(CampaignOutletJournalistSchema) }) } } } } });
-
-// PATCH /campaign-outlet-journalists/:campaignId/:outletId/:journalistId
-registry.registerPath({ method: "patch", path: "/campaign-outlet-journalists/{campaignId}/{outletId}/{journalistId}", summary: "Update campaign-outlet-journalist relevance", security: [{ [apiKeyAuth.name]: [] }], request: { params: z.object({ campaignId: z.string().uuid(), outletId: z.string().uuid(), journalistId: z.string().uuid() }), body: { content: { "application/json": { schema: UpdateCampaignOutletJournalistSchema } } } }, responses: { 200: { description: "Updated", content: { "application/json": { schema: z.object({ campaignOutletJournalist: CampaignOutletJournalistSchema }) } } }, 404: { description: "Not found", content: { "application/json": { schema: ErrorResponseSchema } } } } });
-
-// POST /enriched-individuals
-registry.registerPath({ method: "post", path: "/enriched-individuals", summary: "Record an enriched individual", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: CreateEnrichedIndividualSchema } } } }, responses: { 201: { description: "Created", content: { "application/json": { schema: z.object({ created: z.boolean() }) } } } } });
-
-// POST /enriched-individuals/bulk
-registry.registerPath({ method: "post", path: "/enriched-individuals/bulk", summary: "Bulk insert enriched individuals", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: BulkEnrichedIndividualsSchema } } } }, responses: { 201: { description: "Bulk inserted", content: { "application/json": { schema: z.object({ inserted: z.number(), total: z.number() }) } } } } });
-
-// POST /enriched-emails
-registry.registerPath({ method: "post", path: "/enriched-emails", summary: "Record an enriched email", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: CreateEnrichedEmailSchema } } } }, responses: { 201: { description: "Created", content: { "application/json": { schema: z.object({ created: z.boolean() }) } } } } });
-
-// POST /enriched-emails/bulk
-registry.registerPath({ method: "post", path: "/enriched-emails/bulk", summary: "Bulk insert enriched emails", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: BulkEnrichedEmailsSchema } } } }, responses: { 201: { description: "Bulk inserted", content: { "application/json": { schema: z.object({ inserted: z.number(), total: z.number() }) } } } } });
-
-// POST /searched-emails
-registry.registerPath({ method: "post", path: "/searched-emails", summary: "Record an agent search email result", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: CreateSearchedEmailSchema } } } }, responses: { 201: { description: "Created", content: { "application/json": { schema: z.object({ created: z.boolean() }) } } } } });
-
-// Email Pipeline GET endpoints
-registry.registerPath({ method: "get", path: "/journalists/emails/valid", summary: "Valid journalist emails", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ outlet_id: z.string().uuid().optional(), journalist_id: z.string().uuid().optional() }) }, responses: { 200: { description: "Valid emails", content: { "application/json": { schema: z.object({ emails: z.array(ValidJournalistEmailSchema) }) } } } } });
-
-registry.registerPath({ method: "get", path: "/journalists/emails/enrichment-events", summary: "Enriched email events", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ outlet_id: z.string().uuid().optional(), journalist_id: z.string().uuid().optional() }) }, responses: { 200: { description: "Events", content: { "application/json": { schema: z.object({ events: z.array(EnrichedEmailEventSchema) }) } } } } });
-
-registry.registerPath({ method: "get", path: "/journalists/emails/enriched-individual-events", summary: "Enriched individual events", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ outlet_id: z.string().uuid().optional(), journalist_id: z.string().uuid().optional() }) }, responses: { 200: { description: "Events", content: { "application/json": { schema: z.object({ events: z.array(EnrichedIndividualEventSchema) }) } } } } });
-
-registry.registerPath({ method: "get", path: "/journalists/emails/searched-events", summary: "Searched email events", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ outlet_id: z.string().uuid().optional(), journalist_id: z.string().uuid().optional() }) }, responses: { 200: { description: "Events", content: { "application/json": { schema: z.object({ events: z.array(SearchedEmailEventSchema) }) } } } } });
-
-registry.registerPath({ method: "get", path: "/journalists/need-email-update", summary: "Journalists needing email update", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ limit: z.string().optional(), offset: z.string().optional() }) }, responses: { 200: { description: "Journalists needing update", content: { "application/json": { schema: z.object({ journalists: z.array(NeedEmailUpdateSchema) }) } } } } });
-
-registry.registerPath({ method: "get", path: "/journalists/need-enrichment", summary: "Journalists needing enrichment", security: [{ [apiKeyAuth.name]: [] }], responses: { 200: { description: "Journalists needing enrichment", content: { "application/json": { schema: z.object({ journalists: z.array(NeedEnrichmentSchema) }) } } } } });
-
-registry.registerPath({ method: "get", path: "/journalists/need-agent-search", summary: "Journalists needing agent search", security: [{ [apiKeyAuth.name]: [] }], responses: { 200: { description: "Journalists needing agent search", content: { "application/json": { schema: z.object({ journalists: z.array(NeedAgentSearchSchema) }) } } } } });
-
-registry.registerPath({ method: "get", path: "/journalists/emails/need-verification", summary: "Emails needing verification", security: [{ [apiKeyAuth.name]: [] }], responses: { 200: { description: "Emails needing verification", content: { "application/json": { schema: z.object({ emails: z.array(NeedVerificationSchema) }) } } } } });
-
 // Discover Journalists
-registry.registerPath({ method: "post", path: "/journalists/discover", summary: "Discover relevant journalists for a brand on an outlet via Google search + scraping + LLM scoring", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: DiscoverJournalistsSchema } } } }, responses: { 200: { description: "Discovered journalists with relevance scores", content: { "application/json": { schema: DiscoverJournalistsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+registry.registerPath({ method: "post", path: "/journalists/discover", summary: "Discover relevant journalists for a brand on an outlet via article search + LLM scoring", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: DiscoverJournalistsSchema } } } }, responses: { 200: { description: "Discovered journalists with relevance scores", content: { "application/json": { schema: DiscoverJournalistsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Discover Emails (Apollo)
 registry.registerPath({ method: "post", path: "/journalists/discover-emails", summary: "Discover journalist emails via Apollo person match", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: DiscoverEmailsSchema } } } }, responses: { 200: { description: "Discovery results", content: { "application/json": { schema: DiscoverEmailsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
-// Engagement
-registry.registerPath({ method: "get", path: "/journalists/engagement/{journalistId}", summary: "Journalist engagement metrics", security: [{ [apiKeyAuth.name]: [] }], request: { params: z.object({ journalistId: z.string().uuid() }) }, responses: { 200: { description: "Engagement data", content: { "application/json": { schema: z.object({ engagement: JournalistEngagementSchema }) } } } } });
-
-registry.registerPath({ method: "get", path: "/journalists/status", summary: "Journalist status by campaign", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ campaign_id: z.string().uuid().optional() }) }, responses: { 200: { description: "Statuses", content: { "application/json": { schema: z.object({ statuses: z.array(JournalistStatusSchema) }) } } } } });
-
 // Resolve Journalists
-registry.registerPath({ method: "post", path: "/journalists/resolve", summary: "Resolve journalists for a campaign+outlet: discover if needed, score, return with emails", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: ResolveJournalistsSchema } } } }, responses: { 200: { description: "Resolved journalists sorted by relevance score", content: { "application/json": { schema: ResolveJournalistsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+registry.registerPath({ method: "post", path: "/journalists/resolve", summary: "Resolve journalists for a campaign+outlet: discover if needed, score, and return", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: ResolveJournalistsSchema } } } }, responses: { 200: { description: "Resolved journalists sorted by relevance score", content: { "application/json": { schema: ResolveJournalistsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Internal
-registry.registerPath({ method: "get", path: "/internal/journalists/by-outlet-with-emails/{outletId}", summary: "Journalists with valid emails for an outlet", security: [{ [apiKeyAuth.name]: [] }], request: { params: z.object({ outletId: z.string().uuid() }) }, responses: { 200: { description: "Journalists with emails", content: { "application/json": { schema: z.object({ journalists: z.array(JournalistWithEmailsSchema) }) } } } } });
-
 registry.registerPath({ method: "get", path: "/internal/journalists/by-ids", summary: "Batch lookup journalists by IDs", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ ids: z.string() }) }, responses: { 200: { description: "Journalists", content: { "application/json": { schema: z.object({ journalists: z.array(JournalistSchema) }) } } } } });
