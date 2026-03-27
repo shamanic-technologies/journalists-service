@@ -1,3 +1,5 @@
+import { type ServiceContext, buildServiceHeaders } from "./service-context.js";
+
 const BRAND_SERVICE_URL = process.env.BRAND_SERVICE_URL;
 const BRAND_SERVICE_API_KEY = process.env.BRAND_SERVICE_API_KEY;
 
@@ -26,23 +28,14 @@ export interface ExtractFieldsResponse {
 export async function extractBrandFields(
   brandId: string,
   fields: FieldRequest[],
-  orgId: string,
-  userId: string,
-  runId: string,
-  campaignId: string | null = null,
-  featureSlug: string | null = null
+  ctx: ServiceContext
 ): Promise<ExtractFieldsResponse> {
   const { url, apiKey } = getConfig();
 
-  const headers: Record<string, string> = {
+  const headers = {
+    ...buildServiceHeaders(ctx, apiKey),
     "Content-Type": "application/json",
-    "x-api-key": apiKey,
-    "x-org-id": orgId,
-    "x-user-id": userId,
-    "x-run-id": runId,
   };
-  if (campaignId) headers["x-campaign-id"] = campaignId;
-  if (featureSlug) headers["x-feature-slug"] = featureSlug;
 
   const response = await fetch(`${url}/brands/${brandId}/extract-fields`, {
     method: "POST",

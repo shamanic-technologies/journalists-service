@@ -1,3 +1,5 @@
+import { type ServiceContext, buildServiceHeaders } from "./service-context.js";
+
 const CHAT_SERVICE_URL = process.env.CHAT_SERVICE_URL;
 const CHAT_SERVICE_API_KEY = process.env.CHAT_SERVICE_API_KEY;
 
@@ -25,23 +27,14 @@ export interface CompleteResponse {
 
 export async function chatComplete(
   request: CompleteRequest,
-  orgId: string,
-  userId: string,
-  runId: string,
-  featureSlug: string | null = null,
-  campaignId: string | null = null
+  ctx: ServiceContext
 ): Promise<CompleteResponse> {
   const { url, apiKey } = getConfig();
 
-  const headers: Record<string, string> = {
+  const headers = {
+    ...buildServiceHeaders(ctx, apiKey),
     "Content-Type": "application/json",
-    "x-api-key": apiKey,
-    "x-org-id": orgId,
-    "x-user-id": userId,
-    "x-run-id": runId,
   };
-  if (featureSlug) headers["x-feature-slug"] = featureSlug;
-  if (campaignId) headers["x-campaign-id"] = campaignId;
 
   const response = await fetch(`${url}/complete`, {
     method: "POST",

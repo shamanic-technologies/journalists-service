@@ -1,3 +1,5 @@
+import { type ServiceContext, buildServiceHeaders } from "./service-context.js";
+
 const ARTICLES_SERVICE_URL = process.env.ARTICLES_SERVICE_URL;
 const ARTICLES_SERVICE_API_KEY = process.env.ARTICLES_SERVICE_API_KEY;
 
@@ -28,23 +30,14 @@ export interface DiscoverOutletArticlesResponse {
 export async function discoverOutletArticles(
   outletDomain: string,
   maxArticles: number,
-  orgId: string,
-  userId: string,
-  runId: string,
-  featureSlug: string | null = null,
-  campaignId: string | null = null
+  ctx: ServiceContext
 ): Promise<DiscoverOutletArticlesResponse> {
   const { url, apiKey } = getConfig();
 
-  const headers: Record<string, string> = {
+  const headers = {
+    ...buildServiceHeaders(ctx, apiKey),
     "Content-Type": "application/json",
-    "x-api-key": apiKey,
-    "x-org-id": orgId,
-    "x-user-id": userId,
-    "x-run-id": runId,
   };
-  if (featureSlug) headers["x-feature-slug"] = featureSlug;
-  if (campaignId) headers["x-campaign-id"] = campaignId;
 
   const response = await fetch(`${url}/v1/discover/outlet-articles`, {
     method: "POST",
