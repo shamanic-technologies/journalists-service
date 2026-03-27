@@ -17,6 +17,13 @@ export const entityTypeEnum = pgEnum("entity_type", [
   "organization",
 ]);
 
+export const bufferStatusEnum = pgEnum("buffer_status", [
+  "buffered",
+  "claimed",
+  "served",
+  "skipped",
+]);
+
 // ==================== Tables ====================
 
 /** A journalist exists globally at an outlet — not scoped to any org/brand/campaign. */
@@ -45,7 +52,7 @@ export const journalists = pgTable(
   ]
 );
 
-/** Per-campaign relevance scoring — fully scoped to org/brand/campaign. */
+/** Per-campaign relevance scoring + buffer status — fully scoped to org/brand/campaign. */
 export const campaignJournalists = pgTable(
   "campaign_journalists",
   {
@@ -65,6 +72,7 @@ export const campaignJournalists = pgTable(
     whyRelevant: text("why_relevant").notNull(),
     whyNotRelevant: text("why_not_relevant").notNull(),
     articleUrls: jsonb("article_urls").$type<string[]>(),
+    status: bufferStatusEnum("status").notNull().default("buffered"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -78,6 +86,12 @@ export const campaignJournalists = pgTable(
     index("idx_cj_campaign").on(table.campaignId),
     index("idx_cj_journalist").on(table.journalistId),
     index("idx_cj_org").on(table.orgId),
+    index("idx_cj_buffer_claim").on(
+      table.campaignId,
+      table.outletId,
+      table.status,
+      table.relevanceScore
+    ),
   ]
 );
 
@@ -103,6 +117,20 @@ export const discoveryCache = pgTable(
   ]
 );
 
+/** Idempotency cache for buffer/next — prevents double-serving on workflow retries. */
+export const idempotencyCache = pgTable(
+  "idempotency_cache",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    idempotencyKey: text("idempotency_key").notNull().unique(),
+    responseBody: jsonb("response_body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  }
+);
+
 // ==================== Type Exports ====================
 
 export type Journalist = typeof journalists.$inferSelect;
@@ -111,3 +139,4 @@ export type CampaignJournalist = typeof campaignJournalists.$inferSelect;
 export type NewCampaignJournalist = typeof campaignJournalists.$inferInsert;
 export type DiscoveryCache = typeof discoveryCache.$inferSelect;
 export type NewDiscoveryCache = typeof discoveryCache.$inferInsert;
+export type IdempotencyCache = typeof idempotencyCache.$inferSelect;

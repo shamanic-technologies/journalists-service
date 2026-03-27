@@ -3,9 +3,11 @@ import {
   journalists,
   campaignJournalists,
   discoveryCache,
+  idempotencyCache,
 } from "../../src/db/schema.js";
 
 export async function cleanTestData() {
+  await db.delete(idempotencyCache);
   await db.delete(discoveryCache);
   await db.delete(campaignJournalists);
   await db.delete(journalists);
@@ -45,6 +47,7 @@ export async function insertTestCampaignJournalist(data: {
   whyNotRelevant?: string;
   articleUrls?: string[];
   featureSlug?: string;
+  status?: "buffered" | "claimed" | "served" | "skipped";
 }) {
   const [row] = await db
     .insert(campaignJournalists)
@@ -59,6 +62,7 @@ export async function insertTestCampaignJournalist(data: {
       whyNotRelevant: data.whyNotRelevant ?? "Test not relevant",
       articleUrls: data.articleUrls ?? [],
       featureSlug: data.featureSlug ?? null,
+      status: data.status ?? "buffered",
     })
     .returning();
   return row;

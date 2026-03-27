@@ -19,131 +19,7 @@
       }
     },
     "schemas": {
-      "DiscoveredJournalist": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "journalistName": {
-            "type": "string"
-          },
-          "firstName": {
-            "type": "string"
-          },
-          "lastName": {
-            "type": "string"
-          },
-          "entityType": {
-            "type": "string",
-            "enum": [
-              "individual",
-              "organization"
-            ]
-          },
-          "relevanceScore": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 100
-          },
-          "whyRelevant": {
-            "type": "string"
-          },
-          "whyNotRelevant": {
-            "type": "string"
-          },
-          "articleUrls": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "isNew": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "id",
-          "journalistName",
-          "firstName",
-          "lastName",
-          "entityType",
-          "relevanceScore",
-          "whyRelevant",
-          "whyNotRelevant",
-          "articleUrls",
-          "isNew"
-        ]
-      },
-      "DiscoverJournalistsResponse": {
-        "type": "object",
-        "properties": {
-          "journalists": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DiscoveredJournalist"
-            }
-          },
-          "totalArticlesSearched": {
-            "type": "number"
-          },
-          "totalNamesExtracted": {
-            "type": "number"
-          },
-          "totalJournalistsStored": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "journalists",
-          "totalArticlesSearched",
-          "totalNamesExtracted",
-          "totalJournalistsStored"
-        ]
-      },
-      "ErrorResponse": {
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "error"
-        ]
-      },
-      "DiscoverJournalistsRequest": {
-        "type": "object",
-        "properties": {
-          "outletId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "maxArticles": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 30,
-            "default": 15
-          },
-          "count": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 20,
-            "default": 1
-          },
-          "acceptanceThreshold": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 100,
-            "default": 70
-          }
-        },
-        "required": [
-          "outletId"
-        ]
-      },
-      "ResolvedJournalist": {
+      "BufferNextJournalist": {
         "type": "object",
         "properties": {
           "id": {
@@ -196,25 +72,32 @@
           "articleUrls"
         ]
       },
-      "ResolveJournalistsResponse": {
+      "BufferNextResponse": {
         "type": "object",
         "properties": {
-          "journalists": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ResolvedJournalist"
-            }
-          },
-          "cached": {
+          "found": {
             "type": "boolean"
+          },
+          "journalist": {
+            "$ref": "#/components/schemas/BufferNextJournalist"
           }
         },
         "required": [
-          "journalists",
-          "cached"
+          "found"
         ]
       },
-      "ResolveJournalistsRequest": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "BufferNextRequest": {
         "type": "object",
         "properties": {
           "outletId": {
@@ -227,17 +110,8 @@
             "maximum": 30,
             "default": 15
           },
-          "count": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 20,
-            "default": 1
-          },
-          "acceptanceThreshold": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 100,
-            "default": 70
+          "idempotencyKey": {
+            "type": "string"
           }
         },
         "required": [
@@ -291,6 +165,15 @@
               "type": "string"
             }
           },
+          "status": {
+            "type": "string",
+            "enum": [
+              "buffered",
+              "claimed",
+              "served",
+              "skipped"
+            ]
+          },
           "createdAt": {
             "type": "string"
           },
@@ -325,6 +208,7 @@
           "whyRelevant",
           "whyNotRelevant",
           "articleUrls",
+          "status",
           "createdAt",
           "journalistName",
           "firstName",
@@ -430,9 +314,9 @@
         }
       }
     },
-    "/journalists/discover": {
+    "/buffer/next": {
       "post": {
-        "summary": "Discover relevant journalists for a brand on an outlet via article search + LLM scoring",
+        "summary": "Pull next best journalist from buffer for a campaign+outlet. Refills buffer automatically on first call.",
         "security": [
           {
             "ApiKeyAuth": []
@@ -442,69 +326,18 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DiscoverJournalistsRequest"
+                "$ref": "#/components/schemas/BufferNextRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Discovered journalists with relevance scores",
+            "description": "Next journalist or { found: false } if buffer exhausted",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DiscoverJournalistsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Upstream service error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/journalists/resolve": {
-      "post": {
-        "summary": "Resolve journalists for a campaign+outlet: discover if needed, score, and return",
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResolveJournalistsRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Resolved journalists sorted by relevance score",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResolveJournalistsResponse"
+                  "$ref": "#/components/schemas/BufferNextResponse"
                 }
               }
             }
