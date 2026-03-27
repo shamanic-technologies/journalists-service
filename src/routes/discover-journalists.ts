@@ -48,7 +48,8 @@ router.post("/journalists/discover", async (req, res) => {
       },
       orgId,
       userId,
-      featureSlug
+      featureSlug,
+      campaignId
     );
     const childRunId = childRun.id;
 
@@ -70,7 +71,7 @@ router.post("/journalists/discover", async (req, res) => {
         featureSlug
       ),
       fetchCampaign(campaignId, orgId, userId, childRunId, featureSlug),
-      fetchOutlet(outletId, orgId, userId, childRunId, featureSlug),
+      fetchOutlet(outletId, orgId, userId, childRunId, featureSlug, campaignId),
     ]);
 
     const brandName = getFieldValue(brandFields.results, "brand_name") || "Unknown Brand";

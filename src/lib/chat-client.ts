@@ -28,7 +28,8 @@ export async function chatComplete(
   orgId: string,
   userId: string,
   runId: string,
-  featureSlug: string | null = null
+  featureSlug: string | null = null,
+  campaignId: string | null = null
 ): Promise<CompleteResponse> {
   const { url, apiKey } = getConfig();
 
@@ -40,6 +41,7 @@ export async function chatComplete(
     "x-run-id": runId,
   };
   if (featureSlug) headers["x-feature-slug"] = featureSlug;
+  if (campaignId) headers["x-campaign-id"] = campaignId;
 
   const response = await fetch(`${url}/complete`, {
     method: "POST",
