@@ -45,6 +45,8 @@ export const DiscoverJournalistsSchema = z
   .object({
     outletId: z.string().uuid(),
     maxArticles: z.number().int().min(1).max(30).default(15),
+    count: z.number().int().min(1).max(20).default(1),
+    acceptanceThreshold: z.number().min(0).max(100).default(70),
   })
   .openapi("DiscoverJournalistsRequest");
 
@@ -78,6 +80,8 @@ export const ResolveJournalistsSchema = z
   .object({
     outletId: z.string().uuid(),
     maxArticles: z.number().int().min(1).max(30).default(15),
+    count: z.number().int().min(1).max(20).default(1),
+    acceptanceThreshold: z.number().min(0).max(100).default(70),
   })
   .openapi("ResolveJournalistsRequest");
 

@@ -126,34 +126,37 @@ function setupDiscoverMocks() {
     ],
   });
 
-  mockedChatComplete.mockResolvedValue({
-    content: "",
-    json: {
-      journalists: [
-        {
-          firstName: "Sarah",
-          lastName: "Johnson",
-          relevanceScore: 92,
-          whyRelevant: "Sarah Johnson covers SaaS and developer tools.",
-          whyNotRelevant: "Some consumer tech coverage.",
-          articleUrls: ["https://techcrunch.com/2026/01/15/top-saas-tools"],
-        },
-        {
-          firstName: "Mike",
-          lastName: "Chen",
-          relevanceScore: 78,
-          whyRelevant: "Mike Chen covers AI funding rounds.",
-          whyNotRelevant: "Focuses more on funding than products.",
-          articleUrls: [
-            "https://techcrunch.com/2026/02/10/ai-dev-tools-funding",
-          ],
-        },
-      ],
-    },
-    tokensInput: 1500,
-    tokensOutput: 500,
-    model: "claude-sonnet-4-6",
-  });
+  mockedChatComplete
+    .mockResolvedValueOnce({
+      content: "",
+      json: {
+        firstName: "Sarah",
+        lastName: "Johnson",
+        relevanceScore: 92,
+        whyRelevant: "Sarah Johnson covers SaaS and developer tools.",
+        whyNotRelevant: "Some consumer tech coverage.",
+        articleUrls: ["https://techcrunch.com/2026/01/15/top-saas-tools"],
+      },
+      tokensInput: 500,
+      tokensOutput: 200,
+      model: "claude-sonnet-4-6",
+    })
+    .mockResolvedValueOnce({
+      content: "",
+      json: {
+        firstName: "Mike",
+        lastName: "Chen",
+        relevanceScore: 78,
+        whyRelevant: "Mike Chen covers AI funding rounds.",
+        whyNotRelevant: "Focuses more on funding than products.",
+        articleUrls: [
+          "https://techcrunch.com/2026/02/10/ai-dev-tools-funding",
+        ],
+      },
+      tokensInput: 500,
+      tokensOutput: 200,
+      model: "claude-sonnet-4-6",
+    });
 }
 
 describe("POST /journalists/resolve", () => {
@@ -202,7 +205,7 @@ describe("POST /journalists/resolve", () => {
     const res = await request(app)
       .post("/journalists/resolve")
       .set(RESOLVE_HEADERS)
-      .send({ outletId: OUTLET_ID });
+      .send({ outletId: OUTLET_ID, count: 20, acceptanceThreshold: 0 });
 
     expect(res.status).toBe(200);
     expect(res.body.cached).toBe(false);
@@ -218,7 +221,7 @@ describe("POST /journalists/resolve", () => {
 
     // Discovery was triggered
     expect(mockedDiscoverOutletArticles).toHaveBeenCalledTimes(1);
-    expect(mockedChatComplete).toHaveBeenCalledTimes(1);
+    expect(mockedChatComplete).toHaveBeenCalledTimes(2);
 
     // Brand extract-fields was called (not fetchBrand)
     expect(mockedExtractBrandFields).toHaveBeenCalledTimes(1);
@@ -258,7 +261,7 @@ describe("POST /journalists/resolve", () => {
     const res1 = await request(app)
       .post("/journalists/resolve")
       .set(RESOLVE_HEADERS)
-      .send({ outletId: OUTLET_ID });
+      .send({ outletId: OUTLET_ID, count: 20, acceptanceThreshold: 0 });
 
     expect(res1.status).toBe(200);
     expect(res1.body.cached).toBe(false);
