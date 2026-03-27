@@ -34,7 +34,7 @@ router.post("/journalists/discover", async (req, res) => {
     return;
   }
 
-  const { outletId, maxArticles } = parsed.data;
+  const { outletId, maxArticles, count, acceptanceThreshold } = parsed.data;
   const ctx = getCtx(res.locals);
 
   if (!ctx.campaignId) {
@@ -90,6 +90,8 @@ router.post("/journalists/discover", async (req, res) => {
       brandDescription,
       featureInputs,
       maxArticles,
+      count,
+      acceptanceThreshold,
       orgId: ctx.orgId,
       brandId,
       ctx: childCtx,
