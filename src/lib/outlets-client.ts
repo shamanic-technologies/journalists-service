@@ -31,6 +31,6 @@ export async function fetchOutlet(
     throw new Error(`Outlets service GET /outlets/${outletId} failed (${response.status}): ${body}`);
   }
 
-  const data = (await response.json()) as { outlet: OutletInfo };
-  return data.outlet;
+  const data = (await response.json()) as OutletInfo;
+  return data;
 }

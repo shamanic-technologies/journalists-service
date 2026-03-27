@@ -132,7 +132,7 @@ describe("all 7 headers forwarded by every client", () => {
 
   it("outlets-client forwards all 7 headers", async () => {
     fetchSpy.mockResolvedValueOnce(
-      mockOkResponse({ outlet: { id: "o1", outletName: "Test", outletUrl: "https://test.com" } })
+      mockOkResponse({ id: "o1", outletName: "Test", outletUrl: "https://test.com" })
     );
 
     const { fetchOutlet } = await import("../../src/lib/outlets-client.js");
@@ -140,6 +140,21 @@ describe("all 7 headers forwarded by every client", () => {
 
     const headers = getHeaders();
     expectAll7Headers(headers);
+  });
+
+  it("outlets-client parses flat response (no wrapper)", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockOkResponse({ id: "o1", outletName: "Test Outlet", outletUrl: "https://test.com" })
+    );
+
+    const { fetchOutlet } = await import("../../src/lib/outlets-client.js");
+    const result = await fetchOutlet("outlet-1", FULL_CTX);
+
+    expect(result).toEqual({
+      id: "o1",
+      outletName: "Test Outlet",
+      outletUrl: "https://test.com",
+    });
   });
 
   it("omits optional headers when null", async () => {
