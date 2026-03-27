@@ -8,8 +8,7 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { db } from "./db/index.js";
 import healthRoutes from "./routes/health.js";
 import internalRoutes from "./routes/internal.js";
-import discoverJournalistsRoutes from "./routes/discover-journalists.js";
-import resolveJournalistsRoutes from "./routes/resolve-journalists.js";
+import bufferNextRoutes from "./routes/buffer-next.js";
 import campaignOutletJournalistsRoutes from "./routes/campaign-outlet-journalists.js";
 import { requireApiKey, requireIdentityHeaders } from "./middleware/auth.js";
 
@@ -40,8 +39,7 @@ app.use(healthRoutes);
 // Protected routes
 app.use(requireApiKey);
 app.use(requireIdentityHeaders);
-app.use(discoverJournalistsRoutes);
-app.use(resolveJournalistsRoutes);
+app.use(bufferNextRoutes);
 app.use(campaignOutletJournalistsRoutes);
 app.use(internalRoutes);
 

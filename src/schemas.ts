@@ -39,53 +39,17 @@ export const JournalistSchema = z
   })
   .openapi("Journalist");
 
-// ==================== Discover Journalists Schemas ====================
+// ==================== Buffer/Next Schemas ====================
 
-export const DiscoverJournalistsSchema = z
+export const BufferNextSchema = z
   .object({
     outletId: z.string().uuid(),
     maxArticles: z.number().int().min(1).max(30).default(15),
-    count: z.number().int().min(1).max(20).default(1),
-    acceptanceThreshold: z.number().min(0).max(100).default(70),
+    idempotencyKey: z.string().optional(),
   })
-  .openapi("DiscoverJournalistsRequest");
+  .openapi("BufferNextRequest");
 
-export const DiscoveredJournalistSchema = z
-  .object({
-    id: z.string().uuid(),
-    journalistName: z.string(),
-    firstName: z.string(),
-    lastName: z.string(),
-    entityType: z.enum(["individual", "organization"]),
-    relevanceScore: z.number().min(0).max(100),
-    whyRelevant: z.string(),
-    whyNotRelevant: z.string(),
-    articleUrls: z.array(z.string()),
-    isNew: z.boolean(),
-  })
-  .openapi("DiscoveredJournalist");
-
-export const DiscoverJournalistsResponseSchema = z
-  .object({
-    journalists: z.array(DiscoveredJournalistSchema),
-    totalArticlesSearched: z.number(),
-    totalNamesExtracted: z.number(),
-    totalJournalistsStored: z.number(),
-  })
-  .openapi("DiscoverJournalistsResponse");
-
-// ==================== Resolve Journalists Schemas ====================
-
-export const ResolveJournalistsSchema = z
-  .object({
-    outletId: z.string().uuid(),
-    maxArticles: z.number().int().min(1).max(30).default(15),
-    count: z.number().int().min(1).max(20).default(1),
-    acceptanceThreshold: z.number().min(0).max(100).default(70),
-  })
-  .openapi("ResolveJournalistsRequest");
-
-export const ResolvedJournalistSchema = z
+export const BufferNextJournalistSchema = z
   .object({
     id: z.string().uuid(),
     journalistName: z.string(),
@@ -97,14 +61,14 @@ export const ResolvedJournalistSchema = z
     whyNotRelevant: z.string(),
     articleUrls: z.array(z.string()),
   })
-  .openapi("ResolvedJournalist");
+  .openapi("BufferNextJournalist");
 
-export const ResolveJournalistsResponseSchema = z
+export const BufferNextResponseSchema = z
   .object({
-    journalists: z.array(ResolvedJournalistSchema),
-    cached: z.boolean(),
+    found: z.boolean(),
+    journalist: BufferNextJournalistSchema.optional(),
   })
-  .openapi("ResolveJournalistsResponse");
+  .openapi("BufferNextResponse");
 
 // ==================== Campaign Outlet Journalists Schemas ====================
 
@@ -121,6 +85,7 @@ export const CampaignOutletJournalistSchema = z
     whyRelevant: z.string(),
     whyNotRelevant: z.string(),
     articleUrls: z.array(z.string()).nullable(),
+    status: z.enum(["buffered", "claimed", "served", "skipped"]),
     createdAt: z.string(),
     journalistName: z.string(),
     firstName: z.string().nullable(),
@@ -140,11 +105,8 @@ export const CampaignOutletJournalistsResponseSchema = z
 // Health
 registry.registerPath({ method: "get", path: "/health", summary: "Health check", responses: { 200: { description: "Service is healthy", content: { "application/json": { schema: z.object({ status: z.string(), timestamp: z.string(), service: z.string() }) } } } } });
 
-// Discover Journalists
-registry.registerPath({ method: "post", path: "/journalists/discover", summary: "Discover relevant journalists for a brand on an outlet via article search + LLM scoring", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: DiscoverJournalistsSchema } } } }, responses: { 200: { description: "Discovered journalists with relevance scores", content: { "application/json": { schema: DiscoverJournalistsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
-
-// Resolve Journalists
-registry.registerPath({ method: "post", path: "/journalists/resolve", summary: "Resolve journalists for a campaign+outlet: discover if needed, score, and return", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: ResolveJournalistsSchema } } } }, responses: { 200: { description: "Resolved journalists sorted by relevance score", content: { "application/json": { schema: ResolveJournalistsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+// Buffer/Next
+registry.registerPath({ method: "post", path: "/buffer/next", summary: "Pull next best journalist from buffer for a campaign+outlet. Refills buffer automatically on first call.", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: BufferNextSchema } } } }, responses: { 200: { description: "Next journalist or { found: false } if buffer exhausted", content: { "application/json": { schema: BufferNextResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Campaign Outlet Journalists
 registry.registerPath({ method: "get", path: "/campaign-outlet-journalists", summary: "Get journalists associated with a campaign, optionally filtered by outlet", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ campaign_id: z.string().uuid(), outlet_id: z.string().uuid().optional() }) }, responses: { 200: { description: "Campaign journalists with journalist details", content: { "application/json": { schema: CampaignOutletJournalistsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });

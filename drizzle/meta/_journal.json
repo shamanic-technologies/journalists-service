@@ -29,6 +29,13 @@
       "when": 1774800000000,
       "tag": "0003_full_schema_refactor",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774854000000,
+      "tag": "0004_buffer_next",
+      "breakpoints": true
     }
   ]
 }

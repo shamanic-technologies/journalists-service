@@ -39,6 +39,7 @@ router.get("/campaign-outlet-journalists", async (req, res) => {
       whyRelevant: campaignJournalists.whyRelevant,
       whyNotRelevant: campaignJournalists.whyNotRelevant,
       articleUrls: campaignJournalists.articleUrls,
+      status: campaignJournalists.status,
       createdAt: campaignJournalists.createdAt,
       journalistName: journalists.journalistName,
       firstName: journalists.firstName,

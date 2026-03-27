@@ -95,83 +95,89 @@ export function groupArticlesByAuthor(
   return Array.from(authorMap.values());
 }
 
-// ── Score a single journalist via LLM ────────────────────────────────
+// ── Score journalists via LLM (batch) ────────────────────────────────
 
-export async function scoreSingleJournalist(
-  author: AuthorWithArticles,
+export async function scoreJournalists(
+  authors: AuthorWithArticles[],
   brandName: string,
   brandDescription: string,
   featureInputs: Record<string, string>,
   ctx: ServiceContext
-): Promise<LlmJournalist | null> {
+): Promise<LlmJournalist[]> {
+  if (authors.length === 0) return [];
+
   const campaignContext = Object.entries(featureInputs)
     .map(([k, v]) => `- ${k}: ${v}`)
     .join("\n");
 
-  const articlesText = author.articles
+  const authorsText = authors
     .map(
-      (art) =>
-        `  - "${art.title || "(untitled)"}" (${art.publishedAt || "date unknown"}) ${art.url}`
+      (a, i) =>
+        `Journalist ${i + 1}: ${a.firstName} ${a.lastName}
+Articles (${a.articles.length}):
+${a.articles.map((art) => `  - "${art.title || "(untitled)"}" (${art.publishedAt || "date unknown"}) ${art.url}`).join("\n")}
+---`
     )
     .join("\n");
 
   const response = await chatComplete(
     {
-      systemPrompt: `You are a PR research analyst. Score a journalist's relevance to a brand based on their published articles.
+      systemPrompt: `You are a PR research analyst. Score journalists' relevance to a brand based on their published articles.
 
 Rules:
-- If this is NOT a real human journalist (e.g. organization, editorial team, news desk, "Staff", "Admin"), return {"skip": true}
+- Only keep HUMAN individual journalists (skip organizations, editorial teams, news desks, "Staff", "Admin", etc.)
 - Score relevance from 0-100 based on how well the journalist's coverage aligns with the brand
 - Provide a concise explanation for the relevance score (whyRelevant) and what might make them less relevant (whyNotRelevant)
-- Include the article URLs provided`,
+- Include the article URLs where each journalist was found`,
       message: `Brand: ${brandName}
 Description: ${truncate(brandDescription, 500)}
 
 Campaign context:
 ${campaignContext || "(none specified)"}
 
-Journalist: ${author.firstName} ${author.lastName}
-Articles (${author.articles.length}):
-${articlesText}
+Journalists found on this outlet:
+${authorsText}
 
-Score this journalist's relevance to the brand (0-100).
+Score each journalist's relevance to the brand (0-100). Filter out non-human entities.
 
-Return JSON (one of):
-{"skip": true}
-OR
+Return JSON:
 {
-  "firstName": "string",
-  "lastName": "string",
-  "relevanceScore": number (0-100),
-  "whyRelevant": "string",
-  "whyNotRelevant": "string",
-  "articleUrls": ["url1", "url2"]
+  "journalists": [
+    {
+      "firstName": "string",
+      "lastName": "string",
+      "relevanceScore": number (0-100),
+      "whyRelevant": "string - why this journalist is relevant",
+      "whyNotRelevant": "string - potential concerns or reasons for lower score",
+      "articleUrls": ["url1", "url2"]
+    }
+  ]
 }`,
       responseFormat: "json",
       temperature: 0.2,
-      maxTokens: 2000,
+      maxTokens: 8000,
     },
     ctx
   );
 
-  const parsed = response.json as Record<string, unknown> | undefined;
-  if (!parsed || parsed.skip) return null;
-
-  const j = parsed as unknown as LlmJournalist;
-  if (
-    !j.firstName ||
-    !j.lastName ||
-    typeof j.relevanceScore !== "number" ||
-    j.relevanceScore < 0 ||
-    j.relevanceScore > 100
-  ) {
-    return null;
+  const parsed = response.json as
+    | { journalists?: LlmJournalist[] }
+    | undefined;
+  if (!parsed?.journalists || !Array.isArray(parsed.journalists)) {
+    return [];
   }
 
-  return j;
+  return parsed.journalists.filter(
+    (j) =>
+      j.firstName &&
+      j.lastName &&
+      typeof j.relevanceScore === "number" &&
+      j.relevanceScore >= 0 &&
+      j.relevanceScore <= 100
+  );
 }
 
-// ── Store journalists in DB ──────────────────────────────────────────
+// ── Store journalists in DB (as buffered) ────────────────────────────
 
 export async function storeJournalists(
   llmJournalists: LlmJournalist[],
@@ -228,7 +234,7 @@ export async function storeJournalists(
       isNew = true;
     }
 
-    // Campaign scoring is scoped
+    // Campaign scoring — status defaults to 'buffered'
     await db
       .insert(campaignJournalists)
       .values({
@@ -262,9 +268,9 @@ export async function storeJournalists(
   return stored;
 }
 
-// ── Full discover + score pipeline ───────────────────────────────────
+// ── Refill buffer: discover + score + store as buffered ──────────────
 
-export async function discoverAndScoreJournalists(opts: {
+export async function refillBuffer(opts: {
   outletDomain: string;
   outletId: string;
   campaignId: string;
@@ -272,12 +278,10 @@ export async function discoverAndScoreJournalists(opts: {
   brandDescription: string;
   featureInputs: Record<string, string>;
   maxArticles: number;
-  count: number;
-  acceptanceThreshold: number;
   orgId: string;
   brandId: string;
   ctx: ServiceContext;
-}): Promise<StoredJournalist[]> {
+}): Promise<number> {
   const articlesResponse = await discoverOutletArticles(
     opts.outletDomain,
     opts.maxArticles,
@@ -286,33 +290,16 @@ export async function discoverAndScoreJournalists(opts: {
 
   const authors = groupArticlesByAuthor(articlesResponse.articles);
 
-  // Sort by article count descending — most prolific authors first (better signal, more likely relevant)
-  authors.sort((a, b) => b.articles.length - a.articles.length);
-
-  const accepted: LlmJournalist[] = [];
-  const scored: LlmJournalist[] = [];
-
-  for (const author of authors) {
-    const result = await scoreSingleJournalist(
-      author,
-      opts.brandName,
-      opts.brandDescription,
-      opts.featureInputs,
-      opts.ctx
-    );
-
-    if (!result) continue;
-
-    scored.push(result);
-
-    if (result.relevanceScore >= opts.acceptanceThreshold) {
-      accepted.push(result);
-      if (accepted.length >= opts.count) break;
-    }
-  }
+  const llmJournalists = await scoreJournalists(
+    authors,
+    opts.brandName,
+    opts.brandDescription,
+    opts.featureInputs,
+    opts.ctx
+  );
 
   const stored = await storeJournalists(
-    scored,
+    llmJournalists,
     opts.outletId,
     opts.campaignId,
     opts.orgId,
@@ -320,6 +307,5 @@ export async function discoverAndScoreJournalists(opts: {
     opts.ctx.featureSlug
   );
 
-  stored.sort((a, b) => b.relevanceScore - a.relevanceScore);
-  return stored;
+  return stored.length;
 }
