@@ -104,7 +104,8 @@ export async function scoreJournalists(
   orgId: string,
   userId: string,
   runId: string,
-  featureSlug: string | null
+  featureSlug: string | null,
+  campaignId: string | null = null
 ): Promise<LlmJournalist[]> {
   if (authors.length === 0) return [];
 
@@ -162,7 +163,8 @@ Return JSON:
     orgId,
     userId,
     runId,
-    featureSlug
+    featureSlug,
+    campaignId
   );
 
   const parsed = response.json as
@@ -295,7 +297,8 @@ export async function discoverAndScoreJournalists(opts: {
     opts.orgId,
     opts.userId,
     opts.runId,
-    opts.featureSlug
+    opts.featureSlug,
+    opts.campaignId
   );
 
   const authors = groupArticlesByAuthor(articlesResponse.articles);
@@ -308,7 +311,8 @@ export async function discoverAndScoreJournalists(opts: {
     opts.orgId,
     opts.userId,
     opts.runId,
-    opts.featureSlug
+    opts.featureSlug,
+    opts.campaignId
   );
 
   const stored = await storeJournalists(

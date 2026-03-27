@@ -19,7 +19,8 @@ export async function fetchOutlet(
   orgId: string,
   userId: string,
   runId: string,
-  featureSlug: string | null = null
+  featureSlug: string | null = null,
+  campaignId: string | null = null
 ): Promise<OutletInfo> {
   const { url, apiKey } = getConfig();
 
@@ -30,6 +31,7 @@ export async function fetchOutlet(
     "x-run-id": runId,
   };
   if (featureSlug) headers["x-feature-slug"] = featureSlug;
+  if (campaignId) headers["x-campaign-id"] = campaignId;
 
   const response = await fetch(`${url}/outlets/${outletId}`, { headers });
 

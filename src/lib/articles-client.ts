@@ -31,7 +31,8 @@ export async function discoverOutletArticles(
   orgId: string,
   userId: string,
   runId: string,
-  featureSlug: string | null = null
+  featureSlug: string | null = null,
+  campaignId: string | null = null
 ): Promise<DiscoverOutletArticlesResponse> {
   const { url, apiKey } = getConfig();
 
@@ -43,6 +44,7 @@ export async function discoverOutletArticles(
     "x-run-id": runId,
   };
   if (featureSlug) headers["x-feature-slug"] = featureSlug;
+  if (campaignId) headers["x-campaign-id"] = campaignId;
 
   const response = await fetch(`${url}/v1/discover/outlet-articles`, {
     method: "POST",

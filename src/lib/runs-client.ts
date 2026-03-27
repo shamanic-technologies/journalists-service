@@ -18,7 +18,8 @@ export async function createChildRun(
   request: { parentRunId: string; serviceName: string; taskName: string },
   orgId: string,
   userId: string,
-  featureSlug: string | null = null
+  featureSlug: string | null = null,
+  campaignId: string | null = null
 ): Promise<CreateRunResponse> {
   const { url, apiKey } = getRunsConfig();
 
@@ -29,9 +30,8 @@ export async function createChildRun(
     "x-user-id": userId,
     "x-run-id": request.parentRunId,
   };
-  if (featureSlug) {
-    headers["x-feature-slug"] = featureSlug;
-  }
+  if (featureSlug) headers["x-feature-slug"] = featureSlug;
+  if (campaignId) headers["x-campaign-id"] = campaignId;
 
   const response = await fetch(`${url}/v1/runs`, {
     method: "POST",
