@@ -1,14 +1,17 @@
 -- Buffer status enum
-CREATE TYPE "public"."buffer_status" AS ENUM('buffered', 'claimed', 'served', 'skipped');
+DO $$ BEGIN
+  CREATE TYPE "public"."buffer_status" AS ENUM('buffered', 'claimed', 'served', 'skipped');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Add status column to campaign_journalists (existing rows become 'served' since they were already returned)
-ALTER TABLE "campaign_journalists" ADD COLUMN "status" "buffer_status" NOT NULL DEFAULT 'served';
+ALTER TABLE "campaign_journalists" ADD COLUMN IF NOT EXISTS "status" "buffer_status" NOT NULL DEFAULT 'served';
 
 -- New rows should default to 'buffered'
 ALTER TABLE "campaign_journalists" ALTER COLUMN "status" SET DEFAULT 'buffered';
 
 -- Index for efficient buffer claiming: (campaign, outlet, status, relevance_score DESC)
-CREATE INDEX "idx_cj_buffer_claim" ON "campaign_journalists" ("campaign_id", "outlet_id", "status", "relevance_score");
+CREATE INDEX IF NOT EXISTS "idx_cj_buffer_claim" ON "campaign_journalists" ("campaign_id", "outlet_id", "status", "relevance_score");
 
 -- Idempotency cache table
 CREATE TABLE IF NOT EXISTS "idempotency_cache" (
