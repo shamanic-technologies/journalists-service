@@ -69,11 +69,11 @@ router.post("/journalists/resolve", async (req, res) => {
     }
 
     // Slow path: discover + score
-    const { run: childRun } = await createChildRun(
+    const childRun = await createChildRun(
       {
         parentRunId: runId,
-        service: "journalists-service",
-        operation: "resolve-journalists",
+        serviceName: "journalists-service",
+        taskName: "resolve-journalists",
       },
       orgId,
       userId,
