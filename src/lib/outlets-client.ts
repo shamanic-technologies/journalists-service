@@ -1,3 +1,5 @@
+import { type ServiceContext, buildServiceHeaders } from "./service-context.js";
+
 const OUTLETS_SERVICE_URL = process.env.OUTLETS_SERVICE_URL;
 const OUTLETS_SERVICE_API_KEY = process.env.OUTLETS_SERVICE_API_KEY;
 
@@ -16,22 +18,11 @@ export interface OutletInfo {
 
 export async function fetchOutlet(
   outletId: string,
-  orgId: string,
-  userId: string,
-  runId: string,
-  featureSlug: string | null = null,
-  campaignId: string | null = null
+  ctx: ServiceContext
 ): Promise<OutletInfo> {
   const { url, apiKey } = getConfig();
 
-  const headers: Record<string, string> = {
-    "x-api-key": apiKey,
-    "x-org-id": orgId,
-    "x-user-id": userId,
-    "x-run-id": runId,
-  };
-  if (featureSlug) headers["x-feature-slug"] = featureSlug;
-  if (campaignId) headers["x-campaign-id"] = campaignId;
+  const headers = buildServiceHeaders(ctx, apiKey);
 
   const response = await fetch(`${url}/outlets/${outletId}`, { headers });
 

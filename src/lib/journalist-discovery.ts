@@ -6,6 +6,7 @@ import {
   type DiscoveredArticle,
 } from "./articles-client.js";
 import { chatComplete } from "./chat-client.js";
+import type { ServiceContext } from "./service-context.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -101,11 +102,7 @@ export async function scoreJournalists(
   brandName: string,
   brandDescription: string,
   featureInputs: Record<string, string>,
-  orgId: string,
-  userId: string,
-  runId: string,
-  featureSlug: string | null,
-  campaignId: string | null = null
+  ctx: ServiceContext
 ): Promise<LlmJournalist[]> {
   if (authors.length === 0) return [];
 
@@ -160,11 +157,7 @@ Return JSON:
       temperature: 0.2,
       maxTokens: 8000,
     },
-    orgId,
-    userId,
-    runId,
-    featureSlug,
-    campaignId
+    ctx
   );
 
   const parsed = response.json as
@@ -287,18 +280,12 @@ export async function discoverAndScoreJournalists(opts: {
   maxArticles: number;
   orgId: string;
   brandId: string;
-  userId: string;
-  runId: string;
-  featureSlug: string | null;
+  ctx: ServiceContext;
 }): Promise<StoredJournalist[]> {
   const articlesResponse = await discoverOutletArticles(
     opts.outletDomain,
     opts.maxArticles,
-    opts.orgId,
-    opts.userId,
-    opts.runId,
-    opts.featureSlug,
-    opts.campaignId
+    opts.ctx
   );
 
   const authors = groupArticlesByAuthor(articlesResponse.articles);
@@ -308,11 +295,7 @@ export async function discoverAndScoreJournalists(opts: {
     opts.brandName,
     opts.brandDescription,
     opts.featureInputs,
-    opts.orgId,
-    opts.userId,
-    opts.runId,
-    opts.featureSlug,
-    opts.campaignId
+    opts.ctx
   );
 
   const stored = await storeJournalists(
@@ -321,7 +304,7 @@ export async function discoverAndScoreJournalists(opts: {
     opts.campaignId,
     opts.orgId,
     opts.brandId,
-    opts.featureSlug
+    opts.ctx.featureSlug
   );
 
   stored.sort((a, b) => b.relevanceScore - a.relevanceScore);

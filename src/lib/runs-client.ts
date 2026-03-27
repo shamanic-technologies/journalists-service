@@ -1,3 +1,5 @@
+import { type ServiceContext, buildServiceHeaders } from "./service-context.js";
+
 const RUNS_SERVICE_URL = process.env.RUNS_SERVICE_URL;
 const RUNS_SERVICE_API_KEY = process.env.RUNS_SERVICE_API_KEY;
 
@@ -16,22 +18,14 @@ export interface CreateRunResponse {
 
 export async function createChildRun(
   request: { parentRunId: string; serviceName: string; taskName: string },
-  orgId: string,
-  userId: string,
-  featureSlug: string | null = null,
-  campaignId: string | null = null
+  ctx: ServiceContext
 ): Promise<CreateRunResponse> {
   const { url, apiKey } = getRunsConfig();
 
-  const headers: Record<string, string> = {
+  const headers = {
+    ...buildServiceHeaders({ ...ctx, runId: request.parentRunId }, apiKey),
     "Content-Type": "application/json",
-    "x-api-key": apiKey,
-    "x-org-id": orgId,
-    "x-user-id": userId,
-    "x-run-id": request.parentRunId,
   };
-  if (featureSlug) headers["x-feature-slug"] = featureSlug;
-  if (campaignId) headers["x-campaign-id"] = campaignId;
 
   const response = await fetch(`${url}/v1/runs`, {
     method: "POST",

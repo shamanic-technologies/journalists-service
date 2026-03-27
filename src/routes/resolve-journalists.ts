@@ -14,10 +14,23 @@ import {
   discoverAndScoreJournalists,
 } from "../lib/journalist-discovery.js";
 import { ResolveJournalistsSchema } from "../schemas.js";
+import type { ServiceContext } from "../lib/service-context.js";
 
 const router = Router();
 
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function getCtx(locals: Record<string, unknown>): ServiceContext {
+  return {
+    orgId: locals.orgId as string,
+    userId: locals.userId as string,
+    runId: locals.runId as string,
+    featureSlug: locals.featureSlug as string | null,
+    campaignId: locals.campaignId as string | null,
+    brandId: locals.brandId as string | null,
+    workflowName: locals.workflowName as string | null,
+  };
+}
 
 router.post("/journalists/resolve", async (req, res) => {
   const parsed = ResolveJournalistsSchema.safeParse(req.body);
@@ -27,22 +40,19 @@ router.post("/journalists/resolve", async (req, res) => {
   }
 
   const { outletId, maxArticles } = parsed.data;
+  const ctx = getCtx(res.locals);
 
-  const orgId = res.locals.orgId as string;
-  const userId = res.locals.userId as string;
-  const runId = res.locals.runId as string;
-  const featureSlug = res.locals.featureSlug as string | null;
-  const campaignId = res.locals.campaignId as string | null;
-  const brandId = res.locals.brandId as string | null;
-
-  if (!campaignId) {
+  if (!ctx.campaignId) {
     res.status(400).json({ error: "x-campaign-id header is required" });
     return;
   }
-  if (!brandId) {
+  if (!ctx.brandId) {
     res.status(400).json({ error: "x-brand-id header is required" });
     return;
   }
+
+  const campaignId = ctx.campaignId;
+  const brandId = ctx.brandId;
 
   try {
     // Check discovery cache
@@ -51,7 +61,7 @@ router.post("/journalists/resolve", async (req, res) => {
       .from(discoveryCache)
       .where(
         and(
-          eq(discoveryCache.orgId, orgId),
+          eq(discoveryCache.orgId, ctx.orgId),
           eq(discoveryCache.brandId, brandId),
           eq(discoveryCache.campaignId, campaignId),
           eq(discoveryCache.outletId, outletId)
@@ -71,16 +81,13 @@ router.post("/journalists/resolve", async (req, res) => {
     // Slow path: discover + score
     const childRun = await createChildRun(
       {
-        parentRunId: runId,
+        parentRunId: ctx.runId,
         serviceName: "journalists-service",
         taskName: "resolve-journalists",
       },
-      orgId,
-      userId,
-      featureSlug,
-      campaignId
+      ctx
     );
-    const childRunId = childRun.id;
+    const childCtx: ServiceContext = { ...ctx, runId: childRun.id };
 
     const [brandFields, campaign, outlet] = await Promise.all([
       extractBrandFields(
@@ -93,14 +100,10 @@ router.post("/journalists/resolve", async (req, res) => {
               "A concise description of what the brand does, its products, and market positioning",
           },
         ],
-        orgId,
-        userId,
-        childRunId,
-        campaignId,
-        featureSlug
+        childCtx
       ),
-      fetchCampaign(campaignId, orgId, userId, childRunId, featureSlug),
-      fetchOutlet(outletId, orgId, userId, childRunId, featureSlug, campaignId),
+      fetchCampaign(campaignId, childCtx),
+      fetchOutlet(outletId, childCtx),
     ]);
 
     const brandName = getFieldValue(brandFields.results, "brand_name") || "Unknown Brand";
@@ -116,23 +119,21 @@ router.post("/journalists/resolve", async (req, res) => {
       brandDescription,
       featureInputs,
       maxArticles,
-      orgId,
+      orgId: ctx.orgId,
       brandId,
-      userId,
-      runId: childRunId,
-      featureSlug,
+      ctx: childCtx,
     });
 
     // Upsert discovery cache
     await db
       .insert(discoveryCache)
       .values({
-        orgId,
+        orgId: ctx.orgId,
         brandId,
         campaignId,
         outletId,
         discoveredAt: new Date(),
-        runId: childRunId,
+        runId: childRun.id,
       })
       .onConflictDoUpdate({
         target: [
@@ -143,7 +144,7 @@ router.post("/journalists/resolve", async (req, res) => {
         ],
         set: {
           discoveredAt: new Date(),
-          runId: childRunId,
+          runId: childRun.id,
         },
       });
 
