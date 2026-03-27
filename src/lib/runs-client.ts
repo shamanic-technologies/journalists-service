@@ -8,16 +8,14 @@ function getRunsConfig() {
 }
 
 export interface CreateRunResponse {
-  run: {
-    id: string;
-    parentRunId: string;
-    service: string;
-    operation: string;
-  };
+  id: string;
+  parentRunId: string | null;
+  serviceName: string;
+  taskName: string;
 }
 
 export async function createChildRun(
-  request: { parentRunId: string; service: string; operation: string },
+  request: { parentRunId: string; serviceName: string; taskName: string },
   orgId: string,
   userId: string,
   featureSlug: string | null = null
@@ -29,6 +27,7 @@ export async function createChildRun(
     "x-api-key": apiKey,
     "x-org-id": orgId,
     "x-user-id": userId,
+    "x-run-id": request.parentRunId,
   };
   if (featureSlug) {
     headers["x-feature-slug"] = featureSlug;
@@ -37,7 +36,10 @@ export async function createChildRun(
   const response = await fetch(`${url}/v1/runs`, {
     method: "POST",
     headers,
-    body: JSON.stringify(request),
+    body: JSON.stringify({
+      serviceName: request.serviceName,
+      taskName: request.taskName,
+    }),
   });
 
   if (!response.ok) {
@@ -47,5 +49,5 @@ export async function createChildRun(
     );
   }
 
-  return response.json() as Promise<CreateRunResponse>;
+  return (await response.json()) as CreateRunResponse;
 }

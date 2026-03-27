@@ -40,11 +40,11 @@ router.post("/journalists/discover", async (req, res) => {
   }
 
   try {
-    const { run: childRun } = await createChildRun(
+    const childRun = await createChildRun(
       {
         parentRunId: runId,
-        service: "journalists-service",
-        operation: "discover-journalists",
+        serviceName: "journalists-service",
+        taskName: "discover-journalists",
       },
       orgId,
       userId,
