@@ -10,6 +10,7 @@ import healthRoutes from "./routes/health.js";
 import internalRoutes from "./routes/internal.js";
 import bufferNextRoutes from "./routes/buffer-next.js";
 import campaignOutletJournalistsRoutes from "./routes/campaign-outlet-journalists.js";
+import statsRoutes from "./routes/stats.js";
 import { requireApiKey, requireIdentityHeaders } from "./middleware/auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -36,9 +37,15 @@ app.get("/openapi.json", (_req, res) => {
 // Public
 app.use(healthRoutes);
 
-// Protected routes
+// Protected routes (API key required)
 app.use(requireApiKey);
+
+// Public stats — API key only, no identity headers needed
+app.get("/stats/public", statsRoutes);
+
+// Private routes — require identity headers
 app.use(requireIdentityHeaders);
+app.use(statsRoutes);
 app.use(bufferNextRoutes);
 app.use(campaignOutletJournalistsRoutes);
 app.use(internalRoutes);

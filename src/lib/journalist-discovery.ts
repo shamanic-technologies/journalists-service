@@ -185,7 +185,8 @@ export async function storeJournalists(
   campaignId: string,
   orgId: string,
   brandId: string,
-  featureSlug: string | null
+  featureSlug: string | null,
+  workflowSlug: string | null = null
 ): Promise<StoredJournalist[]> {
   const stored: StoredJournalist[] = [];
 
@@ -242,6 +243,7 @@ export async function storeJournalists(
         orgId,
         brandId,
         featureSlug,
+        workflowSlug,
         campaignId,
         outletId,
         relevanceScore: String(j.relevanceScore),
@@ -304,7 +306,8 @@ export async function refillBuffer(opts: {
     opts.campaignId,
     opts.orgId,
     opts.brandId,
-    opts.ctx.featureSlug
+    opts.ctx.featureSlug,
+    opts.ctx.workflowSlug
   );
 
   return stored.length;

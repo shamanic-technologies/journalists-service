@@ -100,6 +100,46 @@ export const CampaignOutletJournalistsResponseSchema = z
   })
   .openapi("CampaignOutletJournalistsResponse");
 
+// ==================== Stats Schemas ====================
+
+export const StatsGroupByEnum = z
+  .enum([
+    "featureSlug",
+    "workflowSlug",
+    "featureDynastySlug",
+    "workflowDynastySlug",
+  ])
+  .openapi("StatsGroupBy");
+
+export const StatsQuerySchema = z
+  .object({
+    orgId: z.string().uuid().optional(),
+    campaignId: z.string().uuid().optional(),
+    outletId: z.string().uuid().optional(),
+    brandId: z.string().uuid().optional(),
+    featureSlug: z.string().optional(),
+    workflowSlug: z.string().optional(),
+    featureDynastySlug: z.string().optional(),
+    workflowDynastySlug: z.string().optional(),
+    groupBy: StatsGroupByEnum.optional(),
+  })
+  .openapi("StatsQuery");
+
+const StatusCountSchema = z.record(z.string(), z.number());
+
+const GroupedEntrySchema = z.object({
+  totalJournalists: z.number(),
+  byStatus: StatusCountSchema,
+});
+
+export const StatsResponseSchema = z
+  .object({
+    totalJournalists: z.number(),
+    byStatus: StatusCountSchema,
+    groupedBy: z.record(z.string(), GroupedEntrySchema).optional(),
+  })
+  .openapi("StatsResponse");
+
 // ==================== Path Registrations ====================
 
 // Health
@@ -110,6 +150,12 @@ registry.registerPath({ method: "post", path: "/buffer/next", summary: "Pull nex
 
 // Campaign Outlet Journalists
 registry.registerPath({ method: "get", path: "/campaign-outlet-journalists", summary: "Get journalists associated with a campaign, optionally filtered by outlet", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ campaign_id: z.string().uuid(), outlet_id: z.string().uuid().optional() }) }, responses: { 200: { description: "Campaign journalists with journalist details", content: { "application/json": { schema: CampaignOutletJournalistsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+
+// Stats (private — requires identity headers)
+registry.registerPath({ method: "get", path: "/stats", summary: "Get journalist stats with optional dynasty-aware filtering and grouping", security: [{ [apiKeyAuth.name]: [] }], request: { query: StatsQuerySchema }, responses: { 200: { description: "Journalist stats", content: { "application/json": { schema: StatsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+
+// Stats (public — API key only)
+registry.registerPath({ method: "get", path: "/stats/public", summary: "Get journalist stats (public). Same filters as /stats but does not require identity headers.", security: [{ [apiKeyAuth.name]: [] }], request: { query: StatsQuerySchema }, responses: { 200: { description: "Journalist stats", content: { "application/json": { schema: StatsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Internal
 registry.registerPath({ method: "get", path: "/internal/journalists/by-ids", summary: "Batch lookup journalists by IDs", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ ids: z.string() }) }, responses: { 200: { description: "Journalists", content: { "application/json": { schema: z.object({ journalists: z.array(JournalistSchema) }) } } } } });

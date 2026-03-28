@@ -4,6 +4,7 @@ import healthRoutes from "../../src/routes/health.js";
 import internalRoutes from "../../src/routes/internal.js";
 import bufferNextRoutes from "../../src/routes/buffer-next.js";
 import campaignOutletJournalistsRoutes from "../../src/routes/campaign-outlet-journalists.js";
+import statsRoutes from "../../src/routes/stats.js";
 import { requireApiKey, requireIdentityHeaders } from "../../src/middleware/auth.js";
 
 export function createTestApp() {
@@ -12,7 +13,11 @@ export function createTestApp() {
   app.use(express.json({ limit: "10mb" }));
   app.use(healthRoutes);
   app.use(requireApiKey);
+  // Public stats — API key only
+  app.get("/stats/public", statsRoutes);
+  // Private routes — require identity headers
   app.use(requireIdentityHeaders);
+  app.use(statsRoutes);
   app.use(bufferNextRoutes);
   app.use(campaignOutletJournalistsRoutes);
   app.use(internalRoutes);
