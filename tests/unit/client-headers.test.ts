@@ -26,7 +26,7 @@ const FULL_CTX: ServiceContext = {
   featureSlug: "test-feature",
   campaignId: "camp-1234",
   brandId: "brand-1",
-  workflowName: "discover-journalists-wf",
+  workflowSlug: "discover-journalists-wf",
 };
 
 const ALL_7_HEADERS = [
@@ -36,7 +36,7 @@ const ALL_7_HEADERS = [
   "x-feature-slug",
   "x-campaign-id",
   "x-brand-id",
-  "x-workflow-name",
+  "x-workflow-slug",
 ] as const;
 
 function mockOkResponse(body: unknown = {}) {
@@ -61,7 +61,7 @@ function expectAll7Headers(headers: Record<string, string>) {
   expect(headers["x-feature-slug"]).toBe(FULL_CTX.featureSlug);
   expect(headers["x-campaign-id"]).toBe(FULL_CTX.campaignId);
   expect(headers["x-brand-id"]).toBe(FULL_CTX.brandId);
-  expect(headers["x-workflow-name"]).toBe(FULL_CTX.workflowName);
+  expect(headers["x-workflow-slug"]).toBe(FULL_CTX.workflowSlug);
 }
 
 describe("all 7 headers forwarded by every client", () => {
@@ -169,7 +169,7 @@ describe("all 7 headers forwarded by every client", () => {
       featureSlug: null,
       campaignId: null,
       brandId: null,
-      workflowName: null,
+      workflowSlug: null,
     };
 
     const { chatComplete } = await import("../../src/lib/chat-client.js");
@@ -182,6 +182,6 @@ describe("all 7 headers forwarded by every client", () => {
     expect(headers["x-feature-slug"]).toBeUndefined();
     expect(headers["x-campaign-id"]).toBeUndefined();
     expect(headers["x-brand-id"]).toBeUndefined();
-    expect(headers["x-workflow-name"]).toBeUndefined();
+    expect(headers["x-workflow-slug"]).toBeUndefined();
   });
 });

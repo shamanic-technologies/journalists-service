@@ -6,7 +6,7 @@ export interface ServiceContext {
   featureSlug: string | null;
   campaignId: string | null;
   brandId: string | null;
-  workflowName: string | null;
+  workflowSlug: string | null;
 }
 
 /** Build standard headers from a ServiceContext */
@@ -23,6 +23,6 @@ export function buildServiceHeaders(
   if (ctx.featureSlug) headers["x-feature-slug"] = ctx.featureSlug;
   if (ctx.campaignId) headers["x-campaign-id"] = ctx.campaignId;
   if (ctx.brandId) headers["x-brand-id"] = ctx.brandId;
-  if (ctx.workflowName) headers["x-workflow-name"] = ctx.workflowName;
+  if (ctx.workflowSlug) headers["x-workflow-slug"] = ctx.workflowSlug;
   return headers;
 }

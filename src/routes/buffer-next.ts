@@ -33,7 +33,7 @@ function getCtx(locals: Record<string, unknown>): ServiceContext {
     featureSlug: locals.featureSlug as string | null,
     campaignId: locals.campaignId as string | null,
     brandId: locals.brandId as string | null,
-    workflowName: locals.workflowName as string | null,
+    workflowSlug: locals.workflowSlug as string | null,
   };
 }
 
