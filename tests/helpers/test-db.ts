@@ -47,6 +47,7 @@ export async function insertTestCampaignJournalist(data: {
   whyNotRelevant?: string;
   articleUrls?: string[];
   featureSlug?: string;
+  workflowSlug?: string;
   status?: "buffered" | "claimed" | "served" | "skipped";
 }) {
   const [row] = await db
@@ -62,6 +63,7 @@ export async function insertTestCampaignJournalist(data: {
       whyNotRelevant: data.whyNotRelevant ?? "Test not relevant",
       articleUrls: data.articleUrls ?? [],
       featureSlug: data.featureSlug ?? null,
+      workflowSlug: data.workflowSlug ?? null,
       status: data.status ?? "buffered",
     })
     .returning();

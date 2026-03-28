@@ -230,6 +230,54 @@
           "campaignJournalists"
         ]
       },
+      "StatsResponse": {
+        "type": "object",
+        "properties": {
+          "totalJournalists": {
+            "type": "number"
+          },
+          "byStatus": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "groupedBy": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "totalJournalists": {
+                  "type": "number"
+                },
+                "byStatus": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                }
+              },
+              "required": [
+                "totalJournalists",
+                "byStatus"
+              ]
+            }
+          }
+        },
+        "required": [
+          "totalJournalists",
+          "byStatus"
+        ]
+      },
+      "StatsGroupBy": {
+        "type": "string",
+        "enum": [
+          "featureSlug",
+          "workflowSlug",
+          "featureDynastySlug",
+          "workflowDynastySlug"
+        ]
+      },
       "Journalist": {
         "type": "object",
         "properties": {
@@ -400,6 +448,226 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CampaignOutletJournalistsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats": {
+      "get": {
+        "summary": "Get journalist stats with optional dynasty-aware filtering and grouping",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "orgId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "campaignId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "outletId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "brandId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "featureSlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "workflowSlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "featureDynastySlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "workflowDynastySlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "$ref": "#/components/schemas/StatsGroupBy"
+            },
+            "required": false,
+            "name": "groupBy",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journalist stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats/public": {
+      "get": {
+        "summary": "Get journalist stats (public). Same filters as /stats but does not require identity headers.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "orgId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "campaignId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "outletId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "brandId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "featureSlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "workflowSlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "featureDynastySlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "workflowDynastySlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "$ref": "#/components/schemas/StatsGroupBy"
+            },
+            "required": false,
+            "name": "groupBy",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journalist stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponse"
                 }
               }
             }
