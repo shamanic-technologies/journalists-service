@@ -96,9 +96,77 @@ describe("GET /campaign-outlet-journalists", () => {
     expect(res.body.campaignJournalists).toEqual([]);
   });
 
-  it("returns 400 without campaign_id", async () => {
+  it("returns journalists for a brand across all campaigns", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Brand Reporter 1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Brand Reporter 2" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandId: BRAND_ID,
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "90.00",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id,
+      orgId: ORG_ID,
+      brandId: BRAND_ID,
+      campaignId: CAMPAIGN_ID_2,
+      outletId: OUTLET_ID,
+      relevanceScore: "70.00",
+    });
+
+    const res = await request(app)
+      .get(`/campaign-outlet-journalists?brand_id=${BRAND_ID}`)
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.campaignJournalists).toHaveLength(2);
+    const names = res.body.campaignJournalists.map((j: any) => j.journalistName);
+    expect(names).toContain("Brand Reporter 1");
+    expect(names).toContain("Brand Reporter 2");
+  });
+
+  it("filters by brand_id and outlet_id", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Brand Outlet1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID_2, journalistName: "Brand Outlet2" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandId: BRAND_ID,
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id,
+      orgId: ORG_ID,
+      brandId: BRAND_ID,
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID_2,
+    });
+
+    const res = await request(app)
+      .get(`/campaign-outlet-journalists?brand_id=${BRAND_ID}&outlet_id=${OUTLET_ID}`)
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.campaignJournalists).toHaveLength(1);
+    expect(res.body.campaignJournalists[0].outletId).toBe(OUTLET_ID);
+  });
+
+  it("returns 400 without campaign_id or brand_id", async () => {
     const res = await request(app)
       .get("/campaign-outlet-journalists")
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 with only outlet_id (no campaign_id or brand_id)", async () => {
+    const res = await request(app)
+      .get(`/campaign-outlet-journalists?outlet_id=${OUTLET_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(400);
@@ -107,6 +175,14 @@ describe("GET /campaign-outlet-journalists", () => {
   it("returns 400 with invalid campaign_id", async () => {
     const res = await request(app)
       .get("/campaign-outlet-journalists?campaign_id=not-a-uuid")
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 with invalid brand_id", async () => {
+    const res = await request(app)
+      .get("/campaign-outlet-journalists?brand_id=not-a-uuid")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(400);

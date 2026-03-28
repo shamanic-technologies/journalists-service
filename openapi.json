@@ -415,7 +415,7 @@
     },
     "/campaign-outlet-journalists": {
       "get": {
-        "summary": "Get journalists associated with a campaign, optionally filtered by outlet",
+        "summary": "Get journalists associated with a campaign or brand, optionally filtered by outlet. Provide campaign_id, brand_id, or both.",
         "security": [
           {
             "ApiKeyAuth": []
@@ -425,10 +425,21 @@
           {
             "schema": {
               "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "description": "Filter by campaign. At least one of campaign_id or brand_id is required."
             },
-            "required": true,
+            "required": false,
             "name": "campaign_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Filter by brand (returns journalists across all campaigns for that brand). At least one of campaign_id or brand_id is required."
+            },
+            "required": false,
+            "name": "brand_id",
             "in": "query"
           },
           {
@@ -453,7 +464,7 @@
             }
           },
           "400": {
-            "description": "Validation error",
+            "description": "Validation error — at least one of campaign_id or brand_id is required",
             "content": {
               "application/json": {
                 "schema": {
