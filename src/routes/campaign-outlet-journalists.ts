@@ -7,21 +7,34 @@ import { campaignJournalists, journalists } from "../db/schema.js";
 const router = Router();
 
 const querySchema = z.object({
-  campaign_id: z.string().uuid(),
+  campaign_id: z.string().uuid().optional(),
+  brand_id: z.string().uuid().optional(),
   outlet_id: z.string().uuid().optional(),
 });
 
 // GET /campaign-outlet-journalists?campaign_id=...&outlet_id=...
+// GET /campaign-outlet-journalists?brand_id=...&outlet_id=...
 router.get("/campaign-outlet-journalists", async (req, res) => {
   const parsed = querySchema.safeParse(req.query);
   if (!parsed.success) {
-    res.status(400).json({ error: "campaign_id (uuid) is required" });
+    res.status(400).json({ error: "campaign_id or brand_id (uuid) is required" });
     return;
   }
 
-  const { campaign_id, outlet_id } = parsed.data;
+  const { campaign_id, brand_id, outlet_id } = parsed.data;
 
-  const conditions = [eq(campaignJournalists.campaignId, campaign_id)];
+  if (!campaign_id && !brand_id) {
+    res.status(400).json({ error: "campaign_id or brand_id (uuid) is required" });
+    return;
+  }
+
+  const conditions: ReturnType<typeof eq>[] = [];
+  if (campaign_id) {
+    conditions.push(eq(campaignJournalists.campaignId, campaign_id));
+  }
+  if (brand_id) {
+    conditions.push(eq(campaignJournalists.brandId, brand_id));
+  }
   if (outlet_id) {
     conditions.push(eq(campaignJournalists.outletId, outlet_id));
   }
