@@ -92,11 +92,11 @@ function validateEnvVars(): void {
   const missing = required.filter((k) => !process.env[k]);
   if (missing.length > 0) {
     console.error(
-      `[journalists-service] MISSING ENV VARS (${missing.length}): ${missing.join(", ")}`
+      `[journalists-service] FATAL: missing required env vars (${missing.length}): ${missing.join(", ")}`
     );
-  } else {
-    console.log("[journalists-service] All required env vars present");
+    process.exit(1);
   }
+  console.log("[journalists-service] All required env vars present");
 }
 
 // Start server (not in test)
