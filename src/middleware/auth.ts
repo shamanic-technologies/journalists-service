@@ -7,6 +7,10 @@ export function requireApiKey(
 ): void {
   const apiKey = req.headers["x-api-key"] as string;
   if (!apiKey || apiKey !== process.env.JOURNALISTS_SERVICE_API_KEY) {
+    console.warn(
+      `[journalists-service] Auth rejected ${req.method} ${req.path} — ` +
+        (apiKey ? "api key mismatch" : "no x-api-key header")
+    );
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
@@ -22,16 +26,18 @@ export function requireIdentityHeaders(
   const userId = req.headers["x-user-id"] as string | undefined;
   const runId = req.headers["x-run-id"] as string | undefined;
 
-  if (!orgId) {
-    res.status(400).json({ error: "x-org-id header is required" });
-    return;
-  }
-  if (!userId) {
-    res.status(400).json({ error: "x-user-id header is required" });
-    return;
-  }
-  if (!runId) {
-    res.status(400).json({ error: "x-run-id header is required" });
+  if (!orgId || !userId || !runId) {
+    const missing = [
+      !orgId && "x-org-id",
+      !userId && "x-user-id",
+      !runId && "x-run-id",
+    ].filter(Boolean);
+    console.warn(
+      `[journalists-service] Missing identity headers on ${req.method} ${req.path}: ${missing.join(", ")}`
+    );
+    res
+      .status(400)
+      .json({ error: `Missing required headers: ${missing.join(", ")}` });
     return;
   }
 

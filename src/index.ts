@@ -71,13 +71,42 @@ app.use(
   }
 );
 
+// Startup env var validation
+function validateEnvVars(): void {
+  const required = [
+    "JOURNALISTS_SERVICE_API_KEY",
+    "JOURNALISTS_SERVICE_DATABASE_URL",
+    "RUNS_SERVICE_URL",
+    "RUNS_SERVICE_API_KEY",
+    "BRAND_SERVICE_URL",
+    "BRAND_SERVICE_API_KEY",
+    "CAMPAIGN_SERVICE_URL",
+    "CAMPAIGN_SERVICE_API_KEY",
+    "OUTLETS_SERVICE_URL",
+    "OUTLETS_SERVICE_API_KEY",
+    "ARTICLES_SERVICE_URL",
+    "ARTICLES_SERVICE_API_KEY",
+    "CHAT_SERVICE_URL",
+    "CHAT_SERVICE_API_KEY",
+  ];
+  const missing = required.filter((k) => !process.env[k]);
+  if (missing.length > 0) {
+    console.error(
+      `[journalists-service] MISSING ENV VARS (${missing.length}): ${missing.join(", ")}`
+    );
+  } else {
+    console.log("[journalists-service] All required env vars present");
+  }
+}
+
 // Start server (not in test)
 if (process.env.NODE_ENV !== "test") {
+  validateEnvVars();
   migrate(db, { migrationsFolder: "./drizzle" })
     .then(() => {
-      console.log("Migrations complete");
+      console.log("[journalists-service] Migrations complete");
       app.listen(Number(PORT), "::", () => {
-        console.log(`Journalists service running on port ${PORT}`);
+        console.log(`[journalists-service] Running on port ${PORT}`);
       });
     })
     .catch((err) => {
