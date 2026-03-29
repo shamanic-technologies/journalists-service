@@ -85,7 +85,7 @@ export const CampaignOutletJournalistSchema = z
     whyRelevant: z.string(),
     whyNotRelevant: z.string(),
     articleUrls: z.array(z.string()).nullable(),
-    status: z.enum(["buffered", "claimed", "served", "skipped"]),
+    status: z.enum(["buffered", "claimed", "served", "contacted", "skipped"]),
     createdAt: z.string(),
     journalistName: z.string(),
     firstName: z.string().nullable(),
@@ -159,3 +159,5 @@ registry.registerPath({ method: "get", path: "/stats/public", summary: "Get jour
 
 // Internal
 registry.registerPath({ method: "get", path: "/internal/journalists/by-ids", summary: "Batch lookup journalists by IDs", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ ids: z.string() }) }, responses: { 200: { description: "Journalists", content: { "application/json": { schema: z.object({ journalists: z.array(JournalistSchema) }) } } } } });
+
+registry.registerPath({ method: "patch", path: "/internal/campaign-journalists/{id}/contacted", summary: "Mark a campaign journalist as contacted (email sent successfully)", security: [{ [apiKeyAuth.name]: [] }], request: { params: z.object({ id: z.string().uuid() }) }, responses: { 200: { description: "Successfully marked as contacted", content: { "application/json": { schema: z.object({ success: z.boolean() }) } } }, 404: { description: "Campaign journalist not found", content: { "application/json": { schema: ErrorResponseSchema } } }, 409: { description: "Invalid status transition (not in served state)", content: { "application/json": { schema: ErrorResponseSchema } } } } });

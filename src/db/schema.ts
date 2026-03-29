@@ -21,6 +21,7 @@ export const bufferStatusEnum = pgEnum("buffer_status", [
   "buffered",
   "claimed",
   "served",
+  "contacted",
   "skipped",
 ]);
 
