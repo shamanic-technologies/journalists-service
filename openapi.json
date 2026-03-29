@@ -78,6 +78,10 @@
           "found": {
             "type": "boolean"
           },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "journalist": {
             "$ref": "#/components/schemas/BufferNextJournalist"
           }
@@ -112,6 +116,40 @@
           },
           "idempotencyKey": {
             "type": "string"
+          }
+        },
+        "required": [
+          "outletId"
+        ]
+      },
+      "DiscoverResponse": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "discovered": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "runId",
+          "discovered"
+        ]
+      },
+      "DiscoverRequest": {
+        "type": "object",
+        "properties": {
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "maxArticles": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30,
+            "default": 15
           }
         },
         "required": [
@@ -175,6 +213,11 @@
               "skipped"
             ]
           },
+          "runId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
           "createdAt": {
             "type": "string"
           },
@@ -210,6 +253,7 @@
           "whyNotRelevant",
           "articleUrls",
           "status",
+          "runId",
           "createdAt",
           "journalistName",
           "firstName",
@@ -414,9 +458,60 @@
         }
       }
     },
+    "/discover": {
+      "post": {
+        "summary": "Discover new journalists for a campaign+outlet. Creates a run, scrapes articles, scores journalists via LLM, and stores them as buffered.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Discovery results with run ID and count of journalists found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/campaign-outlet-journalists": {
       "get": {
-        "summary": "Get journalists associated with a campaign or brand, optionally filtered by outlet. Provide campaign_id, brand_id, or both.",
+        "summary": "Get journalists associated with a campaign or brand, optionally filtered by outlet and/or run. Provide campaign_id, brand_id, or both.",
         "security": [
           {
             "ApiKeyAuth": []
@@ -450,6 +545,16 @@
             },
             "required": false,
             "name": "outlet_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Filter by the run that created the journalist entries."
+            },
+            "required": false,
+            "name": "run_id",
             "in": "query"
           }
         ],

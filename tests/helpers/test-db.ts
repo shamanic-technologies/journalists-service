@@ -48,6 +48,7 @@ export async function insertTestCampaignJournalist(data: {
   articleUrls?: string[];
   featureSlug?: string;
   workflowSlug?: string;
+  runId?: string;
   status?: "buffered" | "claimed" | "served" | "contacted" | "skipped";
 }) {
   const [row] = await db
@@ -64,6 +65,7 @@ export async function insertTestCampaignJournalist(data: {
       articleUrls: data.articleUrls ?? [],
       featureSlug: data.featureSlug ?? null,
       workflowSlug: data.workflowSlug ?? null,
+      runId: data.runId ?? null,
       status: data.status ?? "buffered",
     })
     .returning();

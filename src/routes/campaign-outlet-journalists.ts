@@ -10,9 +10,10 @@ const querySchema = z.object({
   campaign_id: z.string().uuid().optional(),
   brand_id: z.string().uuid().optional(),
   outlet_id: z.string().uuid().optional(),
+  run_id: z.string().uuid().optional(),
 });
 
-// GET /campaign-outlet-journalists?campaign_id=...&outlet_id=...
+// GET /campaign-outlet-journalists?campaign_id=...&outlet_id=...&run_id=...
 // GET /campaign-outlet-journalists?brand_id=...&outlet_id=...
 router.get("/campaign-outlet-journalists", async (req, res) => {
   const parsed = querySchema.safeParse(req.query);
@@ -21,7 +22,7 @@ router.get("/campaign-outlet-journalists", async (req, res) => {
     return;
   }
 
-  const { campaign_id, brand_id, outlet_id } = parsed.data;
+  const { campaign_id, brand_id, outlet_id, run_id } = parsed.data;
 
   if (!campaign_id && !brand_id) {
     res.status(400).json({ error: "campaign_id or brand_id (uuid) is required" });
@@ -38,6 +39,9 @@ router.get("/campaign-outlet-journalists", async (req, res) => {
   if (outlet_id) {
     conditions.push(eq(campaignJournalists.outletId, outlet_id));
   }
+  if (run_id) {
+    conditions.push(eq(campaignJournalists.runId, run_id));
+  }
 
   const rows = await db
     .select({
@@ -53,6 +57,7 @@ router.get("/campaign-outlet-journalists", async (req, res) => {
       whyNotRelevant: campaignJournalists.whyNotRelevant,
       articleUrls: campaignJournalists.articleUrls,
       status: campaignJournalists.status,
+      runId: campaignJournalists.runId,
       createdAt: campaignJournalists.createdAt,
       journalistName: journalists.journalistName,
       firstName: journalists.firstName,

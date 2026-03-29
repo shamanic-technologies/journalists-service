@@ -3,6 +3,7 @@ import cors from "cors";
 import healthRoutes from "../../src/routes/health.js";
 import internalRoutes from "../../src/routes/internal.js";
 import bufferNextRoutes from "../../src/routes/buffer-next.js";
+import discoverRoutes from "../../src/routes/discover.js";
 import campaignOutletJournalistsRoutes from "../../src/routes/campaign-outlet-journalists.js";
 import statsRoutes from "../../src/routes/stats.js";
 import { requireApiKey, requireIdentityHeaders } from "../../src/middleware/auth.js";
@@ -19,6 +20,7 @@ export function createTestApp() {
   app.use(requireIdentityHeaders);
   app.use(statsRoutes);
   app.use(bufferNextRoutes);
+  app.use(discoverRoutes);
   app.use(campaignOutletJournalistsRoutes);
   app.use(internalRoutes);
   app.use((_req: express.Request, res: express.Response) => {

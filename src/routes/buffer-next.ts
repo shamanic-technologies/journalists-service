@@ -39,6 +39,7 @@ function getCtx(locals: Record<string, unknown>): ServiceContext {
 
 interface BufferNextResponse {
   found: boolean;
+  runId?: string;
   journalist?: {
     id: string;
     journalistName: string;
@@ -120,7 +121,7 @@ router.post("/buffer/next", async (req, res) => {
     );
     const childCtx: ServiceContext = { ...ctx, runId: childRun.id };
 
-    let response: BufferNextResponse = { found: false };
+    let response: BufferNextResponse = { found: false, runId: childRun.id };
     let hasAttemptedRefill = false;
 
     for (let i = 0; i < MAX_PULL_ITERATIONS; i++) {
@@ -221,6 +222,7 @@ router.post("/buffer/next", async (req, res) => {
         orgId: ctx.orgId,
         brandId,
         ctx: childCtx,
+        runId: childRun.id,
       });
 
       // Update discovery cache

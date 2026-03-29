@@ -186,7 +186,8 @@ export async function storeJournalists(
   orgId: string,
   brandId: string,
   featureSlug: string | null,
-  workflowSlug: string | null = null
+  workflowSlug: string | null = null,
+  runId: string | null = null
 ): Promise<StoredJournalist[]> {
   const stored: StoredJournalist[] = [];
 
@@ -250,6 +251,7 @@ export async function storeJournalists(
         whyRelevant: j.whyRelevant,
         whyNotRelevant: j.whyNotRelevant,
         articleUrls: j.articleUrls || [],
+        runId,
       })
       .onConflictDoNothing();
 
@@ -283,6 +285,7 @@ export async function refillBuffer(opts: {
   orgId: string;
   brandId: string;
   ctx: ServiceContext;
+  runId?: string | null;
 }): Promise<number> {
   const articlesResponse = await discoverOutletArticles(
     opts.outletDomain,
@@ -307,7 +310,8 @@ export async function refillBuffer(opts: {
     opts.orgId,
     opts.brandId,
     opts.ctx.featureSlug,
-    opts.ctx.workflowSlug
+    opts.ctx.workflowSlug,
+    opts.runId ?? null
   );
 
   return stored.length;
