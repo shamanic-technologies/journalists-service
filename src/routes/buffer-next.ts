@@ -75,11 +75,17 @@ router.post("/buffer/next", async (req, res) => {
   const { outletId, maxArticles, idempotencyKey } = parsed.data;
   const ctx = getCtx(res.locals);
 
+  console.log(
+    `[journalists-service] POST /buffer/next — outletId=${outletId} campaignId=${ctx.campaignId ?? "MISSING"} brandId=${ctx.brandId ?? "MISSING"} orgId=${ctx.orgId}`
+  );
+
   if (!ctx.campaignId) {
+    console.warn("[journalists-service] POST /buffer/next rejected: missing x-campaign-id");
     res.status(400).json({ error: "x-campaign-id header is required" });
     return;
   }
   if (!ctx.brandId) {
+    console.warn("[journalists-service] POST /buffer/next rejected: missing x-brand-id");
     res.status(400).json({ error: "x-brand-id header is required" });
     return;
   }
