@@ -15,4 +15,6 @@ process.env.FEATURES_SERVICE_URL = "http://localhost:9991";
 process.env.FEATURES_SERVICE_API_KEY = "test-features-key";
 process.env.WORKFLOW_SERVICE_URL = "http://localhost:9990";
 process.env.WORKFLOW_SERVICE_API_KEY = "test-workflow-key";
+process.env.LEAD_SERVICE_URL = "http://localhost:9989";
+process.env.LEAD_SERVICE_API_KEY = "test-lead-key";
 process.env.NODE_ENV = "test";
