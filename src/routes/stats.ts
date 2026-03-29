@@ -10,6 +10,8 @@ import {
   fetchWorkflowDynasties,
   buildSlugToDynastyMap,
 } from "../lib/dynasty-client.js";
+import { fetchLeadStats, fetchLeadStatsGrouped } from "../lib/lead-client.js";
+import type { LeadStatsParams } from "../lib/lead-client.js";
 
 const router = Router();
 
@@ -93,6 +95,21 @@ async function resolveFiltersAndQuery(
     total += row.count;
   }
 
+  // Enrich with contacted count from lead-service (fail-open)
+  const leadParams: LeadStatsParams = {
+    campaignId: query.campaignId,
+    brandId: query.brandId,
+    orgId: query.orgId,
+    featureSlug: query.featureSlug,
+    workflowSlug: query.workflowSlug,
+    featureDynastySlug: query.featureDynastySlug,
+    workflowDynastySlug: query.workflowDynastySlug,
+  };
+  const leadStats = await fetchLeadStats(leadParams, passthroughHeaders);
+  if (leadStats && leadStats.contacted > 0) {
+    byStatus.contacted = leadStats.contacted;
+  }
+
   const result: StatsResult = { totalJournalists: total, byStatus };
 
   // GroupBy dynasty logic
@@ -136,6 +153,17 @@ async function resolveFiltersAndQuery(
       entry.totalJournalists += row.count;
     }
 
+    // Enrich grouped results with contacted from lead-service
+    const leadGrouped = await fetchLeadStatsGrouped(leadParams, groupBy, passthroughHeaders);
+    if (leadGrouped) {
+      for (const group of leadGrouped.groups) {
+        const entry = dynastyMap.get(group.key);
+        if (entry && group.contacted > 0) {
+          entry.byStatus.contacted = group.contacted;
+        }
+      }
+    }
+
     result.groupedBy = Object.fromEntries(dynastyMap);
   } else if (groupBy === "featureSlug" || groupBy === "workflowSlug") {
     const slugColumn = groupBy === "featureSlug" ? table.featureSlug : table.workflowSlug;
@@ -160,6 +188,17 @@ async function resolveFiltersAndQuery(
       }
       entry.byStatus[row.status] = (entry.byStatus[row.status] ?? 0) + row.count;
       entry.totalJournalists += row.count;
+    }
+
+    // Enrich grouped results with contacted from lead-service
+    const leadGrouped = await fetchLeadStatsGrouped(leadParams, groupBy, passthroughHeaders);
+    if (leadGrouped) {
+      for (const group of leadGrouped.groups) {
+        const entry = slugMap.get(group.key);
+        if (entry && group.contacted > 0) {
+          entry.byStatus.contacted = group.contacted;
+        }
+      }
     }
 
     result.groupedBy = Object.fromEntries(slugMap);
