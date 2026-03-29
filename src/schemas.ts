@@ -158,6 +158,32 @@ export const StatsResponseSchema = z
   })
   .openapi("StatsResponse");
 
+// ==================== Cost Stats Schemas ====================
+
+export const CostStatsQuerySchema = z
+  .object({
+    brandId: z.string().uuid(),
+    campaignId: z.string().uuid().optional(),
+    groupBy: z.enum(["journalistId"]).optional(),
+  })
+  .openapi("CostStatsQuery");
+
+const CostGroupSchema = z
+  .object({
+    dimensions: z.record(z.string(), z.string().nullable()),
+    totalCostInUsdCents: z.number(),
+    actualCostInUsdCents: z.number(),
+    provisionedCostInUsdCents: z.number(),
+    runCount: z.number(),
+  })
+  .openapi("CostGroup");
+
+export const CostStatsResponseSchema = z
+  .object({
+    groups: z.array(CostGroupSchema),
+  })
+  .openapi("CostStatsResponse");
+
 // ==================== Path Registrations ====================
 
 // Health
@@ -177,6 +203,9 @@ registry.registerPath({ method: "get", path: "/stats", summary: "Get journalist 
 
 // Stats (public — API key only)
 registry.registerPath({ method: "get", path: "/stats/public", summary: "Get journalist stats (public). Same filters as /stats but does not require identity headers.", security: [{ [apiKeyAuth.name]: [] }], request: { query: StatsQuerySchema }, responses: { 200: { description: "Journalist stats", content: { "application/json": { schema: StatsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+
+// Cost Stats
+registry.registerPath({ method: "get", path: "/journalists/stats/costs", summary: "Get cost stats for journalist discovery runs. Returns aggregated costs from runs-service, distributed per journalist. Requires x-org-id to scope costs to the requesting org.", security: [{ [apiKeyAuth.name]: [] }], request: { query: CostStatsQuerySchema }, responses: { 200: { description: "Cost stats (flat or grouped by journalistId)", content: { "application/json": { schema: CostStatsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Internal
 registry.registerPath({ method: "get", path: "/internal/journalists/by-ids", summary: "Batch lookup journalists by IDs", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ ids: z.string() }) }, responses: { 200: { description: "Journalists", content: { "application/json": { schema: z.object({ journalists: z.array(JournalistSchema) }) } } } } });

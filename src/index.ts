@@ -12,6 +12,7 @@ import bufferNextRoutes from "./routes/buffer-next.js";
 import discoverRoutes from "./routes/discover.js";
 import campaignOutletJournalistsRoutes from "./routes/campaign-outlet-journalists.js";
 import statsRoutes from "./routes/stats.js";
+import statsCostsRoutes from "./routes/stats-costs.js";
 import { requireApiKey, requireIdentityHeaders } from "./middleware/auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -47,6 +48,7 @@ app.get("/stats/public", statsRoutes);
 // Private routes — require identity headers
 app.use(requireIdentityHeaders);
 app.use(statsRoutes);
+app.use(statsCostsRoutes);
 app.use(bufferNextRoutes);
 app.use(discoverRoutes);
 app.use(campaignOutletJournalistsRoutes);
