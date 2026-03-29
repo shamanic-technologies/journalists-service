@@ -65,7 +65,7 @@ export const campaignJournalists = pgTable(
     brandId: uuid("brand_id").notNull(),
     featureSlug: text("feature_slug"),
     workflowSlug: text("workflow_slug"),
-    campaignId: uuid("campaign_id"),
+    campaignId: uuid("campaign_id").notNull(),
     outletId: uuid("outlet_id").notNull(),
     relevanceScore: numeric("relevance_score", {
       precision: 5,
@@ -106,7 +106,7 @@ export const discoveryCache = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     orgId: uuid("org_id").notNull(),
     brandId: uuid("brand_id").notNull(),
-    campaignId: uuid("campaign_id"),
+    campaignId: uuid("campaign_id").notNull(),
     outletId: uuid("outlet_id").notNull(),
     discoveredAt: timestamp("discovered_at", { withTimezone: true }).notNull(),
     runId: uuid("run_id"),
