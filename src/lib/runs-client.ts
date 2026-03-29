@@ -99,3 +99,40 @@ export async function fetchRunWithCosts(
 
   return (await response.json()) as RunWithCosts;
 }
+
+export interface BatchRunCost {
+  runId: string;
+  totalCostInUsdCents: string;
+  actualCostInUsdCents: string;
+  provisionedCostInUsdCents: string;
+}
+
+export async function fetchBatchRunCosts(
+  runIds: string[],
+  ctx: ServiceContext
+): Promise<BatchRunCost[]> {
+  if (runIds.length === 0) return [];
+
+  const { url, apiKey } = getRunsConfig();
+
+  const headers = {
+    ...buildServiceHeaders(ctx, apiKey),
+    "Content-Type": "application/json",
+  };
+
+  const response = await fetch(`${url}/v1/runs/costs/batch`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ runIds }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(
+      `Runs-service POST /v1/runs/costs/batch failed (${response.status}): ${body}`
+    );
+  }
+
+  const data = (await response.json()) as { costs: BatchRunCost[] };
+  return data.costs;
+}

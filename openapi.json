@@ -323,6 +323,51 @@
           "workflowDynastySlug"
         ]
       },
+      "CostGroup": {
+        "type": "object",
+        "properties": {
+          "dimensions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "totalCostInUsdCents": {
+            "type": "number"
+          },
+          "actualCostInUsdCents": {
+            "type": "number"
+          },
+          "provisionedCostInUsdCents": {
+            "type": "number"
+          },
+          "runCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "dimensions",
+          "totalCostInUsdCents",
+          "actualCostInUsdCents",
+          "provisionedCostInUsdCents",
+          "runCount"
+        ]
+      },
+      "CostStatsResponse": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CostGroup"
+            }
+          }
+        },
+        "required": [
+          "groups"
+        ]
+      },
       "Journalist": {
         "type": "object",
         "properties": {
@@ -785,6 +830,69 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StatsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists/stats/costs": {
+      "get": {
+        "summary": "Get cost stats for journalist discovery runs. Returns aggregated costs from runs-service, distributed per journalist. Requires x-org-id to scope costs to the requesting org.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "brandId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "campaignId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "journalistId"
+              ]
+            },
+            "required": false,
+            "name": "groupBy",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cost stats (flat or grouped by journalistId)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostStatsResponse"
                 }
               }
             }
