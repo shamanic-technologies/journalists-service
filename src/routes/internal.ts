@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { eq, and, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { journalists, campaignJournalists } from "../db/schema.js";
+import { journalists } from "../db/schema.js";
 
 const router = Router();
 
@@ -25,38 +25,6 @@ router.get("/internal/journalists/by-ids", async (req, res) => {
     .where(inArray(journalists.id, ids));
 
   res.json({ journalists: rows });
-});
-
-// PATCH /internal/campaign-journalists/:id/contacted
-// Transitions a campaign journalist from "served" to "contacted"
-// Called by email-gateway when an email is successfully sent to the journalist
-router.patch("/internal/campaign-journalists/:id/contacted", async (req, res) => {
-  const { id } = req.params;
-
-  const rows = await db
-    .select({ id: campaignJournalists.id, status: campaignJournalists.status })
-    .from(campaignJournalists)
-    .where(eq(campaignJournalists.id, id));
-
-  if (rows.length === 0) {
-    res.status(404).json({ error: "Campaign journalist not found" });
-    return;
-  }
-
-  if (rows[0].status !== "served") {
-    res.status(409).json({
-      error: `Cannot transition to contacted: current status is "${rows[0].status}", expected "served"`,
-    });
-    return;
-  }
-
-  await db
-    .update(campaignJournalists)
-    .set({ status: "contacted" })
-    .where(eq(campaignJournalists.id, id));
-
-  console.log(`[journalists-service] Campaign journalist ${id} marked as contacted`);
-  res.json({ success: true });
 });
 
 export default router;
