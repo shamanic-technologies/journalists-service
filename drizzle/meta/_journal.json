@@ -36,6 +36,20 @@
       "when": 1774854000000,
       "tag": "0004_buffer_next",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774940400000,
+      "tag": "0005_add_workflow_slug",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775026800000,
+      "tag": "0006_add_contacted_status",
+      "breakpoints": true
     }
   ]
 }

@@ -48,7 +48,7 @@ export async function insertTestCampaignJournalist(data: {
   articleUrls?: string[];
   featureSlug?: string;
   workflowSlug?: string;
-  status?: "buffered" | "claimed" | "served" | "skipped";
+  status?: "buffered" | "claimed" | "served" | "contacted" | "skipped";
 }) {
   const [row] = await db
     .insert(campaignJournalists)

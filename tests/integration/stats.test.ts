@@ -72,6 +72,34 @@ describe("GET /stats", () => {
     expect(res.body.byStatus.served).toBe(2);
   });
 
+  it("includes contacted in byStatus counts", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Contacted Writer 1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Contacted Writer 2" });
+    const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Contacted Writer 3" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "served",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "contacted",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j3.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "contacted",
+    });
+
+    const res = await request(app)
+      .get("/stats")
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.totalJournalists).toBe(3);
+    expect(res.body.byStatus.served).toBe(1);
+    expect(res.body.byStatus.contacted).toBe(2);
+  });
+
   it("filters by featureSlug", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Slug Filter 1" });
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Slug Filter 2" });
