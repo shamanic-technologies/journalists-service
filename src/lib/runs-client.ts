@@ -45,3 +45,57 @@ export async function createChildRun(
 
   return (await response.json()) as CreateRunResponse;
 }
+
+export async function closeRun(
+  runId: string,
+  status: "completed" | "failed",
+  ctx: ServiceContext
+): Promise<void> {
+  const { url, apiKey } = getRunsConfig();
+
+  const headers = {
+    ...buildServiceHeaders({ ...ctx, runId }, apiKey),
+    "Content-Type": "application/json",
+  };
+
+  const response = await fetch(`${url}/v1/runs/${runId}`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({ status }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    console.warn(
+      `[journalists-service] Failed to close run ${runId} (${response.status}): ${body}`
+    );
+  }
+}
+
+export interface RunWithCosts {
+  id: string;
+  totalCostInUsdCents: string;
+  actualCostInUsdCents: string;
+  provisionedCostInUsdCents: string;
+  status: string;
+}
+
+export async function fetchRunWithCosts(
+  runId: string,
+  ctx: ServiceContext
+): Promise<RunWithCosts> {
+  const { url, apiKey } = getRunsConfig();
+
+  const headers = buildServiceHeaders({ ...ctx, runId }, apiKey);
+
+  const response = await fetch(`${url}/v1/runs/${runId}`, { headers });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(
+      `Runs-service GET /v1/runs/${runId} failed (${response.status}): ${body}`
+    );
+  }
+
+  return (await response.json()) as RunWithCosts;
+}

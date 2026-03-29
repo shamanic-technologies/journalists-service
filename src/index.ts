@@ -9,6 +9,7 @@ import { db } from "./db/index.js";
 import healthRoutes from "./routes/health.js";
 import internalRoutes from "./routes/internal.js";
 import bufferNextRoutes from "./routes/buffer-next.js";
+import discoverRoutes from "./routes/discover.js";
 import campaignOutletJournalistsRoutes from "./routes/campaign-outlet-journalists.js";
 import statsRoutes from "./routes/stats.js";
 import { requireApiKey, requireIdentityHeaders } from "./middleware/auth.js";
@@ -47,6 +48,7 @@ app.get("/stats/public", statsRoutes);
 app.use(requireIdentityHeaders);
 app.use(statsRoutes);
 app.use(bufferNextRoutes);
+app.use(discoverRoutes);
 app.use(campaignOutletJournalistsRoutes);
 app.use(internalRoutes);
 

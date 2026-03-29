@@ -50,6 +50,13 @@
       "when": 1775026800000,
       "tag": "0006_add_contacted_status",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775113200000,
+      "tag": "0007_add_run_id_to_campaign_journalists",
+      "breakpoints": true
     }
   ]
 }

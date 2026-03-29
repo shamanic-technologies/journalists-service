@@ -1,0 +1,164 @@
+import { Router } from "express";
+import { db } from "../db/index.js";
+import { discoveryCache } from "../db/schema.js";
+import { eq, and } from "drizzle-orm";
+import { createChildRun, closeRun } from "../lib/runs-client.js";
+import {
+  extractBrandFields,
+  getFieldValue,
+} from "../lib/brand-client.js";
+import { fetchCampaign } from "../lib/campaign-client.js";
+import { fetchOutlet } from "../lib/outlets-client.js";
+import {
+  extractDomain,
+  refillBuffer,
+  type StoredJournalist,
+} from "../lib/journalist-discovery.js";
+import { DiscoverRequestSchema } from "../schemas.js";
+import type { ServiceContext } from "../lib/service-context.js";
+
+const router = Router();
+
+function getCtx(locals: Record<string, unknown>): ServiceContext {
+  return {
+    orgId: locals.orgId as string,
+    userId: locals.userId as string,
+    runId: locals.runId as string,
+    featureSlug: locals.featureSlug as string | null,
+    campaignId: locals.campaignId as string | null,
+    brandId: locals.brandId as string | null,
+    workflowSlug: locals.workflowSlug as string | null,
+  };
+}
+
+router.post("/discover", async (req, res) => {
+  const parsed = DiscoverRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const { outletId, maxArticles } = parsed.data;
+  const ctx = getCtx(res.locals);
+
+  if (!ctx.campaignId) {
+    res.status(400).json({ error: "x-campaign-id header is required" });
+    return;
+  }
+  if (!ctx.brandId) {
+    res.status(400).json({ error: "x-brand-id header is required" });
+    return;
+  }
+
+  const campaignId = ctx.campaignId;
+  const brandId = ctx.brandId;
+
+  let childRun: { id: string };
+  try {
+    childRun = await createChildRun(
+      {
+        parentRunId: ctx.runId,
+        serviceName: "journalists-service",
+        taskName: "discover",
+      },
+      ctx
+    );
+  } catch (err) {
+    console.error("[journalists-service] Discover: failed to create run:", err);
+    const message =
+      err instanceof Error ? err.message : "Internal server error";
+    res.status(502).json({ error: message });
+    return;
+  }
+
+  const childCtx: ServiceContext = { ...ctx, runId: childRun.id };
+
+  try {
+    // Fetch brand info, campaign, and outlet in parallel
+    const [brandFields, campaign, outlet] = await Promise.all([
+      extractBrandFields(
+        brandId,
+        [
+          { key: "brand_name", description: "The brand's name" },
+          {
+            key: "brand_description",
+            description:
+              "A concise description of what the brand does, its products, and market positioning",
+          },
+        ],
+        childCtx
+      ),
+      fetchCampaign(campaignId, childCtx),
+      fetchOutlet(outletId, childCtx),
+    ]);
+
+    const brandName =
+      getFieldValue(brandFields.results, "brand_name") || "Unknown Brand";
+    const brandDescription = getFieldValue(
+      brandFields.results,
+      "brand_description"
+    );
+    const featureInputs = campaign.featureInputs ?? {};
+    const outletDomain = extractDomain(outlet.outletUrl);
+
+    const filled = await refillBuffer({
+      outletDomain,
+      outletId,
+      campaignId,
+      brandName,
+      brandDescription,
+      featureInputs,
+      maxArticles,
+      orgId: ctx.orgId,
+      brandId,
+      ctx: childCtx,
+      runId: childRun.id,
+    });
+
+    // Update discovery cache
+    await db
+      .insert(discoveryCache)
+      .values({
+        orgId: ctx.orgId,
+        brandId,
+        campaignId,
+        outletId,
+        discoveredAt: new Date(),
+        runId: childRun.id,
+      })
+      .onConflictDoUpdate({
+        target: [
+          discoveryCache.orgId,
+          discoveryCache.brandId,
+          discoveryCache.campaignId,
+          discoveryCache.outletId,
+        ],
+        set: {
+          discoveredAt: new Date(),
+          runId: childRun.id,
+        },
+      });
+
+    // Close run as completed
+    await closeRun(childRun.id, "completed", childCtx);
+
+    console.log(
+      `[journalists-service] POST /discover completed — outletId=${outletId} found=${filled} runId=${childRun.id}`
+    );
+
+    res.json({
+      runId: childRun.id,
+      discovered: filled,
+    });
+  } catch (err) {
+    // Close run as failed
+    await closeRun(childRun.id, "failed", childCtx);
+
+    console.error("[journalists-service] Discover error:", err);
+    const message =
+      err instanceof Error ? err.message : "Internal server error";
+    res.status(502).json({ error: message });
+  }
+});
+
+export default router;

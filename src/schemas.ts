@@ -66,9 +66,26 @@ export const BufferNextJournalistSchema = z
 export const BufferNextResponseSchema = z
   .object({
     found: z.boolean(),
+    runId: z.string().uuid().optional(),
     journalist: BufferNextJournalistSchema.optional(),
   })
   .openapi("BufferNextResponse");
+
+// ==================== Discover Schemas ====================
+
+export const DiscoverRequestSchema = z
+  .object({
+    outletId: z.string().uuid(),
+    maxArticles: z.number().int().min(1).max(30).default(15),
+  })
+  .openapi("DiscoverRequest");
+
+export const DiscoverResponseSchema = z
+  .object({
+    runId: z.string().uuid(),
+    discovered: z.number().int(),
+  })
+  .openapi("DiscoverResponse");
 
 // ==================== Campaign Outlet Journalists Schemas ====================
 
@@ -86,6 +103,7 @@ export const CampaignOutletJournalistSchema = z
     whyNotRelevant: z.string(),
     articleUrls: z.array(z.string()).nullable(),
     status: z.enum(["buffered", "claimed", "served", "contacted", "skipped"]),
+    runId: z.string().uuid().nullable(),
     createdAt: z.string(),
     journalistName: z.string(),
     firstName: z.string().nullable(),
@@ -148,8 +166,11 @@ registry.registerPath({ method: "get", path: "/health", summary: "Health check",
 // Buffer/Next
 registry.registerPath({ method: "post", path: "/buffer/next", summary: "Pull next best journalist from buffer for a campaign+outlet. Refills buffer automatically on first call.", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: BufferNextSchema } } } }, responses: { 200: { description: "Next journalist or { found: false } if buffer exhausted", content: { "application/json": { schema: BufferNextResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
+// Discover
+registry.registerPath({ method: "post", path: "/discover", summary: "Discover new journalists for a campaign+outlet. Creates a run, scrapes articles, scores journalists via LLM, and stores them as buffered.", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: DiscoverRequestSchema } } } }, responses: { 200: { description: "Discovery results with run ID and count of journalists found", content: { "application/json": { schema: DiscoverResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+
 // Campaign Outlet Journalists
-registry.registerPath({ method: "get", path: "/campaign-outlet-journalists", summary: "Get journalists associated with a campaign or brand, optionally filtered by outlet. Provide campaign_id, brand_id, or both.", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ campaign_id: z.string().uuid().optional().openapi({ description: "Filter by campaign. At least one of campaign_id or brand_id is required." }), brand_id: z.string().uuid().optional().openapi({ description: "Filter by brand (returns journalists across all campaigns for that brand). At least one of campaign_id or brand_id is required." }), outlet_id: z.string().uuid().optional() }) }, responses: { 200: { description: "Campaign journalists with journalist details", content: { "application/json": { schema: CampaignOutletJournalistsResponseSchema } } }, 400: { description: "Validation error — at least one of campaign_id or brand_id is required", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+registry.registerPath({ method: "get", path: "/campaign-outlet-journalists", summary: "Get journalists associated with a campaign or brand, optionally filtered by outlet and/or run. Provide campaign_id, brand_id, or both.", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ campaign_id: z.string().uuid().optional().openapi({ description: "Filter by campaign. At least one of campaign_id or brand_id is required." }), brand_id: z.string().uuid().optional().openapi({ description: "Filter by brand (returns journalists across all campaigns for that brand). At least one of campaign_id or brand_id is required." }), outlet_id: z.string().uuid().optional(), run_id: z.string().uuid().optional().openapi({ description: "Filter by the run that created the journalist entries." }) }) }, responses: { 200: { description: "Campaign journalists with journalist details", content: { "application/json": { schema: CampaignOutletJournalistsResponseSchema } } }, 400: { description: "Validation error — at least one of campaign_id or brand_id is required", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Stats (private — requires identity headers)
 registry.registerPath({ method: "get", path: "/stats", summary: "Get journalist stats with optional dynasty-aware filtering and grouping", security: [{ [apiKeyAuth.name]: [] }], request: { query: StatsQuerySchema }, responses: { 200: { description: "Journalist stats", content: { "application/json": { schema: StatsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });

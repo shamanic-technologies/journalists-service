@@ -187,4 +187,59 @@ describe("GET /campaign-outlet-journalists", () => {
 
     expect(res.status).toBe(400);
   });
+
+  it("filters by run_id", async () => {
+    const RUN_ID_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    const RUN_ID_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Run A Reporter" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Run B Reporter" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandId: BRAND_ID,
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      runId: RUN_ID_A,
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id,
+      orgId: ORG_ID,
+      brandId: BRAND_ID,
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      runId: RUN_ID_B,
+    });
+
+    const res = await request(app)
+      .get(`/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}&run_id=${RUN_ID_A}`)
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.campaignJournalists).toHaveLength(1);
+    expect(res.body.campaignJournalists[0].journalistName).toBe("Run A Reporter");
+    expect(res.body.campaignJournalists[0].runId).toBe(RUN_ID_A);
+  });
+
+  it("returns runId field in response", async () => {
+    const RUN_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "RunId Reporter" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandId: BRAND_ID,
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      runId: RUN_ID,
+    });
+
+    const res = await request(app)
+      .get(`/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}`)
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.campaignJournalists[0]).toHaveProperty("runId", RUN_ID);
+  });
 });

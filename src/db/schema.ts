@@ -75,6 +75,7 @@ export const campaignJournalists = pgTable(
     whyNotRelevant: text("why_not_relevant").notNull(),
     articleUrls: jsonb("article_urls").$type<string[]>(),
     status: bufferStatusEnum("status").notNull().default("buffered"),
+    runId: uuid("run_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -88,6 +89,7 @@ export const campaignJournalists = pgTable(
     index("idx_cj_campaign").on(table.campaignId),
     index("idx_cj_journalist").on(table.journalistId),
     index("idx_cj_org").on(table.orgId),
+    index("idx_cj_run_id").on(table.runId),
     index("idx_cj_buffer_claim").on(
       table.campaignId,
       table.outletId,
