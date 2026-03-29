@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "../db/index.js";
 import { discoveryCache } from "../db/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { createChildRun, closeRun } from "../lib/runs-client.js";
 import {
   extractBrandFields,
@@ -41,10 +41,6 @@ router.post("/discover", async (req, res) => {
   const { outletId, maxArticles } = parsed.data;
   const ctx = getCtx(res.locals);
 
-  if (!ctx.campaignId) {
-    res.status(400).json({ error: "x-campaign-id header is required" });
-    return;
-  }
   if (!ctx.brandId) {
     res.status(400).json({ error: "x-brand-id header is required" });
     return;
@@ -74,7 +70,7 @@ router.post("/discover", async (req, res) => {
   const childCtx: ServiceContext = { ...ctx, runId: childRun.id };
 
   try {
-    // Fetch brand info, campaign, and outlet in parallel
+    // Fetch brand info, campaign (if provided), and outlet in parallel
     const [brandFields, campaign, outlet] = await Promise.all([
       extractBrandFields(
         brandId,
@@ -88,7 +84,7 @@ router.post("/discover", async (req, res) => {
         ],
         childCtx
       ),
-      fetchCampaign(campaignId, childCtx),
+      campaignId ? fetchCampaign(campaignId, childCtx) : null,
       fetchOutlet(outletId, childCtx),
     ]);
 
@@ -98,7 +94,7 @@ router.post("/discover", async (req, res) => {
       brandFields.results,
       "brand_description"
     );
-    const featureInputs = campaign.featureInputs ?? {};
+    const featureInputs = campaign?.featureInputs ?? {};
     const outletDomain = extractDomain(outlet.outletUrl);
 
     const filled = await refillBuffer({
@@ -116,28 +112,58 @@ router.post("/discover", async (req, res) => {
     });
 
     // Update discovery cache
-    await db
-      .insert(discoveryCache)
-      .values({
-        orgId: ctx.orgId,
-        brandId,
-        campaignId,
-        outletId,
-        discoveredAt: new Date(),
-        runId: childRun.id,
-      })
-      .onConflictDoUpdate({
-        target: [
-          discoveryCache.orgId,
-          discoveryCache.brandId,
-          discoveryCache.campaignId,
-          discoveryCache.outletId,
-        ],
-        set: {
+    if (campaignId) {
+      await db
+        .insert(discoveryCache)
+        .values({
+          orgId: ctx.orgId,
+          brandId,
+          campaignId,
+          outletId,
           discoveredAt: new Date(),
           runId: childRun.id,
-        },
-      });
+        })
+        .onConflictDoUpdate({
+          target: [
+            discoveryCache.orgId,
+            discoveryCache.brandId,
+            discoveryCache.campaignId,
+            discoveryCache.outletId,
+          ],
+          set: {
+            discoveredAt: new Date(),
+            runId: childRun.id,
+          },
+        });
+    } else {
+      // No campaign — upsert by (orgId, brandId, outletId) where campaign_id IS NULL
+      const existing = await db
+        .select()
+        .from(discoveryCache)
+        .where(
+          and(
+            eq(discoveryCache.orgId, ctx.orgId),
+            eq(discoveryCache.brandId, brandId),
+            isNull(discoveryCache.campaignId),
+            eq(discoveryCache.outletId, outletId)
+          )
+        );
+      if (existing.length > 0) {
+        await db
+          .update(discoveryCache)
+          .set({ discoveredAt: new Date(), runId: childRun.id })
+          .where(eq(discoveryCache.id, existing[0].id));
+      } else {
+        await db.insert(discoveryCache).values({
+          orgId: ctx.orgId,
+          brandId,
+          campaignId: null,
+          outletId,
+          discoveredAt: new Date(),
+          runId: childRun.id,
+        });
+      }
+    }
 
     // Close run as completed
     await closeRun(childRun.id, "completed", childCtx);

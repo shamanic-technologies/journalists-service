@@ -169,6 +169,7 @@
           },
           "campaignId": {
             "type": "string",
+            "nullable": true,
             "format": "uuid"
           },
           "outletId": {
@@ -505,7 +506,7 @@
     },
     "/discover": {
       "post": {
-        "summary": "Discover new journalists for a campaign+outlet. Creates a run, scrapes articles, scores journalists via LLM, and stores them as buffered.",
+        "summary": "Discover new journalists for an outlet. x-brand-id is required; x-campaign-id is optional (used for campaign-specific relevance scoring when provided).",
         "security": [
           {
             "ApiKeyAuth": []

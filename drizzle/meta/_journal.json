@@ -57,6 +57,13 @@
       "when": 1775113200000,
       "tag": "0007_add_run_id_to_campaign_journalists",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1775199600000,
+      "tag": "0008_optional_campaign_id",
+      "breakpoints": true
     }
   ]
 }

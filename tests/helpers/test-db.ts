@@ -40,7 +40,7 @@ export async function insertTestCampaignJournalist(data: {
   journalistId: string;
   orgId: string;
   brandId: string;
-  campaignId: string;
+  campaignId?: string | null;
   outletId: string;
   relevanceScore?: string;
   whyRelevant?: string;
@@ -57,7 +57,7 @@ export async function insertTestCampaignJournalist(data: {
       journalistId: data.journalistId,
       orgId: data.orgId,
       brandId: data.brandId,
-      campaignId: data.campaignId,
+      campaignId: data.campaignId ?? null,
       outletId: data.outletId,
       relevanceScore: data.relevanceScore ?? "75.00",
       whyRelevant: data.whyRelevant ?? "Test relevance",
