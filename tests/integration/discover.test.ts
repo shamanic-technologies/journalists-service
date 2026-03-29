@@ -68,11 +68,6 @@ const DISCOVER_HEADERS = {
   "x-brand-id": BRAND_ID,
 };
 
-const DISCOVER_HEADERS_NO_CAMPAIGN = {
-  ...AUTH_HEADERS,
-  "x-brand-id": BRAND_ID,
-};
-
 function setupDiscoverMocks() {
   mockedCreateChildRun.mockResolvedValue({
     id: CHILD_RUN_ID,
@@ -178,10 +173,20 @@ describe("POST /discover", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns 400 without x-brand-id header", async () => {
+  it("returns 400 without x-campaign-id header", async () => {
     const res = await request(app)
       .post("/discover")
       .set(AUTH_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("x-campaign-id");
+  });
+
+  it("returns 400 without x-brand-id header", async () => {
+    const res = await request(app)
+      .post("/discover")
+      .set({ ...AUTH_HEADERS, "x-campaign-id": CAMPAIGN_ID })
       .send({ outletId: OUTLET_ID });
 
     expect(res.status).toBe(400);
@@ -319,60 +324,5 @@ describe("POST /discover", () => {
 
     expect(res.status).toBe(502);
     expect(res.body.error).toContain("Runs-service unavailable");
-  });
-
-  // ── Discovery without campaign ──────────────────────────────────────
-
-  it("discovers journalists without x-campaign-id (brand-level discovery)", async () => {
-    setupDiscoverMocks();
-
-    const res = await request(app)
-      .post("/discover")
-      .set(DISCOVER_HEADERS_NO_CAMPAIGN)
-      .send({ outletId: OUTLET_ID });
-
-    expect(res.status).toBe(200);
-    expect(res.body.runId).toBe(CHILD_RUN_ID);
-    expect(res.body.discovered).toBe(2);
-
-    // fetchCampaign should NOT have been called
-    expect(mockedFetchCampaign).not.toHaveBeenCalled();
-
-    // Verify journalists were stored with null campaignId
-    const cjs = await db
-      .select()
-      .from(campaignJournalists)
-      .where(eq(campaignJournalists.brandId, BRAND_ID));
-
-    expect(cjs).toHaveLength(2);
-    expect(cjs[0].campaignId).toBeNull();
-    expect(cjs[1].campaignId).toBeNull();
-    expect(cjs[0].runId).toBe(CHILD_RUN_ID);
-  });
-
-  it("deduplicates brand-level discovery (no campaign) on re-run", async () => {
-    setupDiscoverMocks();
-
-    // First discovery — brand-level
-    await request(app)
-      .post("/discover")
-      .set(DISCOVER_HEADERS_NO_CAMPAIGN)
-      .send({ outletId: OUTLET_ID });
-
-    // Second discovery — same outlet, same brand, no campaign
-    const res = await request(app)
-      .post("/discover")
-      .set(DISCOVER_HEADERS_NO_CAMPAIGN)
-      .send({ outletId: OUTLET_ID });
-
-    expect(res.status).toBe(200);
-
-    // Should still only have 2 campaign_journalist rows (not 4)
-    const cjs = await db
-      .select()
-      .from(campaignJournalists)
-      .where(eq(campaignJournalists.brandId, BRAND_ID));
-
-    expect(cjs).toHaveLength(2);
   });
 });
