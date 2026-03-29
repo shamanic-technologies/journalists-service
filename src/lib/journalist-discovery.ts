@@ -1,6 +1,6 @@
 import { db } from "../db/index.js";
 import { journalists, campaignJournalists } from "../db/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import {
   discoverOutletArticles,
   type DiscoveredArticle,
@@ -182,7 +182,7 @@ Return JSON:
 export async function storeJournalists(
   llmJournalists: LlmJournalist[],
   outletId: string,
-  campaignId: string,
+  campaignId: string | null,
   orgId: string,
   brandId: string,
   featureSlug: string | null,
@@ -237,23 +237,55 @@ export async function storeJournalists(
     }
 
     // Campaign scoring — status defaults to 'buffered'
-    await db
-      .insert(campaignJournalists)
-      .values({
-        journalistId,
-        orgId,
-        brandId,
-        featureSlug,
-        workflowSlug,
-        campaignId,
-        outletId,
-        relevanceScore: String(j.relevanceScore),
-        whyRelevant: j.whyRelevant,
-        whyNotRelevant: j.whyNotRelevant,
-        articleUrls: j.articleUrls || [],
-        runId,
-      })
-      .onConflictDoNothing();
+    // When campaignId is null, the unique index (campaign_id, outlet_id, journalist_id)
+    // won't prevent duplicates (NULLs are distinct in Postgres), so check manually.
+    if (!campaignId) {
+      const existingCj = await db
+        .select({ id: campaignJournalists.id })
+        .from(campaignJournalists)
+        .where(
+          and(
+            eq(campaignJournalists.journalistId, journalistId),
+            eq(campaignJournalists.outletId, outletId),
+            eq(campaignJournalists.brandId, brandId),
+            isNull(campaignJournalists.campaignId)
+          )
+        );
+      if (existingCj.length === 0) {
+        await db.insert(campaignJournalists).values({
+          journalistId,
+          orgId,
+          brandId,
+          featureSlug,
+          workflowSlug,
+          campaignId: null,
+          outletId,
+          relevanceScore: String(j.relevanceScore),
+          whyRelevant: j.whyRelevant,
+          whyNotRelevant: j.whyNotRelevant,
+          articleUrls: j.articleUrls || [],
+          runId,
+        });
+      }
+    } else {
+      await db
+        .insert(campaignJournalists)
+        .values({
+          journalistId,
+          orgId,
+          brandId,
+          featureSlug,
+          workflowSlug,
+          campaignId,
+          outletId,
+          relevanceScore: String(j.relevanceScore),
+          whyRelevant: j.whyRelevant,
+          whyNotRelevant: j.whyNotRelevant,
+          articleUrls: j.articleUrls || [],
+          runId,
+        })
+        .onConflictDoNothing();
+    }
 
     stored.push({
       id: journalistId,
@@ -277,7 +309,7 @@ export async function storeJournalists(
 export async function refillBuffer(opts: {
   outletDomain: string;
   outletId: string;
-  campaignId: string;
+  campaignId: string | null;
   brandName: string;
   brandDescription: string;
   featureInputs: Record<string, string>;
