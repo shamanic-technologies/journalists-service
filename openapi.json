@@ -275,38 +275,45 @@
           "campaignJournalists"
         ]
       },
+      "StatusCount": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number"
+        },
+        "description": "Map of buffer status to journalist count. Possible keys: buffered, claimed, served, contacted, skipped. The 'contacted' key is enriched from lead-service."
+      },
+      "GroupedEntry": {
+        "type": "object",
+        "properties": {
+          "totalJournalists": {
+            "type": "number",
+            "description": "Total journalists found for this group"
+          },
+          "byStatus": {
+            "$ref": "#/components/schemas/StatusCount"
+          }
+        },
+        "required": [
+          "totalJournalists",
+          "byStatus"
+        ]
+      },
       "StatsResponse": {
         "type": "object",
         "properties": {
           "totalJournalists": {
-            "type": "number"
+            "type": "number",
+            "description": "Total journalists found matching the filters"
           },
           "byStatus": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "number"
-            }
+            "$ref": "#/components/schemas/StatusCount"
           },
           "groupedBy": {
             "type": "object",
             "additionalProperties": {
-              "type": "object",
-              "properties": {
-                "totalJournalists": {
-                  "type": "number"
-                },
-                "byStatus": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "number"
-                  }
-                }
-              },
-              "required": [
-                "totalJournalists",
-                "byStatus"
-              ]
-            }
+              "$ref": "#/components/schemas/GroupedEntry"
+            },
+            "description": "Per-slug breakdown when groupBy is specified. Keys are slug values (or dynasty slugs for dynasty grouping)."
           }
         },
         "required": [
@@ -321,7 +328,8 @@
           "workflowSlug",
           "featureDynastySlug",
           "workflowDynastySlug"
-        ]
+        ],
+        "description": "Dimension to group results by. When set, the response includes a groupedBy map keyed by slug."
       },
       "CostGroup": {
         "type": "object",
@@ -331,19 +339,24 @@
             "additionalProperties": {
               "type": "string",
               "nullable": true
-            }
+            },
+            "description": "Dimension values for this group (e.g. { journalistId: '...' }). Empty when no groupBy."
           },
           "totalCostInUsdCents": {
-            "type": "number"
+            "type": "number",
+            "description": "Total cost in USD cents (actual + provisioned)"
           },
           "actualCostInUsdCents": {
-            "type": "number"
+            "type": "number",
+            "description": "Actual metered cost in USD cents"
           },
           "provisionedCostInUsdCents": {
-            "type": "number"
+            "type": "number",
+            "description": "Provisioned (reserved) cost in USD cents"
           },
           "runCount": {
-            "type": "number"
+            "type": "number",
+            "description": "Number of distinct runs contributing to this cost"
           }
         },
         "required": [
@@ -361,7 +374,8 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CostGroup"
-            }
+            },
+            "description": "Cost groups. One entry per journalist when groupBy=journalistId, otherwise a single entry with totals."
           }
         },
         "required": [
@@ -639,7 +653,8 @@
           {
             "schema": {
               "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "description": "Filter by organization ID"
             },
             "required": false,
             "name": "orgId",
@@ -648,7 +663,8 @@
           {
             "schema": {
               "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "description": "Filter by campaign ID"
             },
             "required": false,
             "name": "campaignId",
@@ -657,7 +673,8 @@
           {
             "schema": {
               "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "description": "Filter by outlet ID"
             },
             "required": false,
             "name": "outletId",
@@ -666,7 +683,8 @@
           {
             "schema": {
               "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "description": "Filter by brand ID"
             },
             "required": false,
             "name": "brandId",
@@ -674,7 +692,8 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "Filter by exact feature slug"
             },
             "required": false,
             "name": "featureSlug",
@@ -682,7 +701,8 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "Filter by exact workflow slug"
             },
             "required": false,
             "name": "workflowSlug",
@@ -691,7 +711,8 @@
           {
             "schema": {
               "type": "string",
-              "description": "Comma-separated list of workflow slugs to filter by"
+              "description": "Comma-separated list of workflow slugs to filter by. Use with groupBy=workflowSlug for per-workflow stats.",
+              "example": "pr-pitch,cold-email,warm-intro"
             },
             "required": false,
             "name": "workflowSlugs",
@@ -699,7 +720,8 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "Filter by feature dynasty slug — resolves to all versioned slugs in the dynasty"
             },
             "required": false,
             "name": "featureDynastySlug",
@@ -707,7 +729,8 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "Filter by workflow dynasty slug — resolves to all versioned slugs in the dynasty"
             },
             "required": false,
             "name": "workflowDynastySlug",
@@ -758,7 +781,8 @@
           {
             "schema": {
               "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "description": "Filter by organization ID"
             },
             "required": false,
             "name": "orgId",
@@ -767,7 +791,8 @@
           {
             "schema": {
               "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "description": "Filter by campaign ID"
             },
             "required": false,
             "name": "campaignId",
@@ -776,7 +801,8 @@
           {
             "schema": {
               "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "description": "Filter by outlet ID"
             },
             "required": false,
             "name": "outletId",
@@ -785,7 +811,8 @@
           {
             "schema": {
               "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "description": "Filter by brand ID"
             },
             "required": false,
             "name": "brandId",
@@ -793,7 +820,8 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "Filter by exact feature slug"
             },
             "required": false,
             "name": "featureSlug",
@@ -801,7 +829,8 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "Filter by exact workflow slug"
             },
             "required": false,
             "name": "workflowSlug",
@@ -810,7 +839,8 @@
           {
             "schema": {
               "type": "string",
-              "description": "Comma-separated list of workflow slugs to filter by"
+              "description": "Comma-separated list of workflow slugs to filter by. Use with groupBy=workflowSlug for per-workflow stats.",
+              "example": "pr-pitch,cold-email,warm-intro"
             },
             "required": false,
             "name": "workflowSlugs",
@@ -818,7 +848,8 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "Filter by feature dynasty slug — resolves to all versioned slugs in the dynasty"
             },
             "required": false,
             "name": "featureDynastySlug",
@@ -826,7 +857,8 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "Filter by workflow dynasty slug — resolves to all versioned slugs in the dynasty"
             },
             "required": false,
             "name": "workflowDynastySlug",
@@ -877,7 +909,8 @@
           {
             "schema": {
               "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "description": "Brand ID to scope costs to"
             },
             "required": true,
             "name": "brandId",
@@ -886,7 +919,8 @@
           {
             "schema": {
               "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "description": "Optionally narrow costs to a single campaign"
             },
             "required": false,
             "name": "campaignId",
@@ -897,7 +931,8 @@
               "type": "string",
               "enum": [
                 "journalistId"
-              ]
+              ],
+              "description": "Group costs by journalist. Each journalist's share is the run cost divided evenly across journalists in that run."
             },
             "required": false,
             "name": "groupBy",
