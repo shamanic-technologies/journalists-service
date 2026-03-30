@@ -137,6 +137,11 @@ export const StatsQuerySchema = z
     brandId: z.string().uuid().optional(),
     featureSlug: z.string().optional(),
     workflowSlug: z.string().optional(),
+    workflowSlugs: z
+      .string()
+      .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean))
+      .optional()
+      .openapi({ description: "Comma-separated list of workflow slugs to filter by" }),
     featureDynastySlug: z.string().optional(),
     workflowDynastySlug: z.string().optional(),
     groupBy: StatsGroupByEnum.optional(),

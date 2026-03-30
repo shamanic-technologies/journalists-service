@@ -72,6 +72,8 @@ async function resolveFiltersAndQuery(
 
   if (workflowSlugs && workflowSlugs.length > 0) {
     conditions.push(inArray(table.workflowSlug, workflowSlugs));
+  } else if (query.workflowSlugs && query.workflowSlugs.length > 0) {
+    conditions.push(inArray(table.workflowSlug, query.workflowSlugs));
   } else if (query.workflowSlug) {
     conditions.push(eq(table.workflowSlug, query.workflowSlug));
   }

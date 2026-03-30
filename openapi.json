@@ -690,6 +690,15 @@
           },
           {
             "schema": {
+              "type": "string",
+              "description": "Comma-separated list of workflow slugs to filter by"
+            },
+            "required": false,
+            "name": "workflowSlugs",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "string"
             },
             "required": false,
@@ -796,6 +805,15 @@
             },
             "required": false,
             "name": "workflowSlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated list of workflow slugs to filter by"
+            },
+            "required": false,
+            "name": "workflowSlugs",
             "in": "query"
           },
           {
