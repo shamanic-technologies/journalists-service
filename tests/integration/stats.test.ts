@@ -432,6 +432,75 @@ describe("GET /stats", () => {
     expect(res.body.groupedBy["warm-intro"].totalJournalists).toBe(1);
   });
 
+  it("filters by workflowSlugs (comma-separated list)", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "WfSlugs 1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "WfSlugs 2" });
+    const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "WfSlugs 3" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, workflowSlug: "wf-a", status: "buffered",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, workflowSlug: "wf-b", status: "served",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j3.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, workflowSlug: "wf-c", status: "served",
+    });
+
+    mockLeadStats(1);
+
+    const res = await request(app)
+      .get("/stats?workflowSlugs=wf-a,wf-b")
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.totalJournalists).toBe(2);
+    expect(res.body.byStatus.buffered).toBe(1);
+    expect(res.body.byStatus.served).toBe(1);
+    expect(res.body.byStatus.contacted).toBe(1);
+  });
+
+  it("filters by workflowSlugs with groupBy=workflowSlug", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "WfSlugsG 1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "WfSlugsG 2" });
+    const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "WfSlugsG 3" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, workflowSlug: "wf-a", status: "buffered",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, workflowSlug: "wf-b", status: "served",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j3.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, workflowSlug: "wf-c", status: "served",
+    });
+
+    mockLeadStats(0);
+    mockLeadStatsGrouped([
+      { key: "wf-a", contacted: 0 },
+      { key: "wf-b", contacted: 3 },
+    ]);
+
+    const res = await request(app)
+      .get("/stats?workflowSlugs=wf-a,wf-b&groupBy=workflowSlug")
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.totalJournalists).toBe(2);
+    expect(res.body.groupedBy["wf-a"].totalJournalists).toBe(1);
+    expect(res.body.groupedBy["wf-a"].byStatus.buffered).toBe(1);
+    expect(res.body.groupedBy["wf-b"].totalJournalists).toBe(1);
+    expect(res.body.groupedBy["wf-b"].byStatus.served).toBe(1);
+    expect(res.body.groupedBy["wf-b"].byStatus.contacted).toBe(3);
+    expect(res.body.groupedBy["wf-c"]).toBeUndefined();
+  });
+
   it("orphan slugs (not in any dynasty) fall back to raw slug value", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Orphan 1" });
 
