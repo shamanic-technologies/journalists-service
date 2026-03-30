@@ -127,39 +127,43 @@ export const StatsGroupByEnum = z
     "featureDynastySlug",
     "workflowDynastySlug",
   ])
-  .openapi("StatsGroupBy");
+  .openapi("StatsGroupBy", {
+    description: "Dimension to group results by. Dynasty variants aggregate all versioned slugs under the dynasty slug.",
+  });
 
 export const StatsQuerySchema = z
   .object({
-    orgId: z.string().uuid().optional(),
-    campaignId: z.string().uuid().optional(),
-    outletId: z.string().uuid().optional(),
-    brandId: z.string().uuid().optional(),
-    featureSlug: z.string().optional(),
-    workflowSlug: z.string().optional(),
+    orgId: z.string().uuid().optional().openapi({ description: "Filter by organization ID" }),
+    campaignId: z.string().uuid().optional().openapi({ description: "Filter by campaign ID" }),
+    outletId: z.string().uuid().optional().openapi({ description: "Filter by outlet ID" }),
+    brandId: z.string().uuid().optional().openapi({ description: "Filter by brand ID" }),
+    featureSlug: z.string().optional().openapi({ description: "Filter by exact feature slug" }),
+    workflowSlug: z.string().optional().openapi({ description: "Filter by exact workflow slug" }),
     workflowSlugs: z
       .string()
       .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean))
       .optional()
-      .openapi({ description: "Comma-separated list of workflow slugs to filter by" }),
-    featureDynastySlug: z.string().optional(),
-    workflowDynastySlug: z.string().optional(),
-    groupBy: StatsGroupByEnum.optional(),
+      .openapi({ description: "Comma-separated list of workflow slugs to filter by. Use with groupBy=workflowSlug for per-workflow stats.", example: "pr-pitch,cold-email,warm-intro" }),
+    featureDynastySlug: z.string().optional().openapi({ description: "Filter by feature dynasty slug — resolves to all versioned slugs in the dynasty" }),
+    workflowDynastySlug: z.string().optional().openapi({ description: "Filter by workflow dynasty slug — resolves to all versioned slugs in the dynasty" }),
+    groupBy: StatsGroupByEnum.optional().openapi({ description: "Dimension to group results by. When set, the response includes a groupedBy map keyed by slug." }),
   })
   .openapi("StatsQuery");
 
-const StatusCountSchema = z.record(z.string(), z.number());
+const StatusCountSchema = z.record(z.string(), z.number()).openapi("StatusCount", {
+  description: "Map of buffer status to journalist count. Possible keys: buffered, claimed, served, contacted, skipped. The 'contacted' key is enriched from lead-service.",
+});
 
 const GroupedEntrySchema = z.object({
-  totalJournalists: z.number(),
+  totalJournalists: z.number().openapi({ description: "Total journalists found for this group" }),
   byStatus: StatusCountSchema,
-});
+}).openapi("GroupedEntry");
 
 export const StatsResponseSchema = z
   .object({
-    totalJournalists: z.number(),
+    totalJournalists: z.number().openapi({ description: "Total journalists found matching the filters" }),
     byStatus: StatusCountSchema,
-    groupedBy: z.record(z.string(), GroupedEntrySchema).optional(),
+    groupedBy: z.record(z.string(), GroupedEntrySchema).optional().openapi({ description: "Per-slug breakdown when groupBy is specified. Keys are slug values (or dynasty slugs for dynasty grouping)." }),
   })
   .openapi("StatsResponse");
 
@@ -167,25 +171,25 @@ export const StatsResponseSchema = z
 
 export const CostStatsQuerySchema = z
   .object({
-    brandId: z.string().uuid(),
-    campaignId: z.string().uuid().optional(),
-    groupBy: z.enum(["journalistId"]).optional(),
+    brandId: z.string().uuid().openapi({ description: "Brand ID to scope costs to" }),
+    campaignId: z.string().uuid().optional().openapi({ description: "Optionally narrow costs to a single campaign" }),
+    groupBy: z.enum(["journalistId"]).optional().openapi({ description: "Group costs by journalist. Each journalist's share is the run cost divided evenly across journalists in that run." }),
   })
   .openapi("CostStatsQuery");
 
 const CostGroupSchema = z
   .object({
-    dimensions: z.record(z.string(), z.string().nullable()),
-    totalCostInUsdCents: z.number(),
-    actualCostInUsdCents: z.number(),
-    provisionedCostInUsdCents: z.number(),
-    runCount: z.number(),
+    dimensions: z.record(z.string(), z.string().nullable()).openapi({ description: "Dimension values for this group (e.g. { journalistId: '...' }). Empty when no groupBy." }),
+    totalCostInUsdCents: z.number().openapi({ description: "Total cost in USD cents (actual + provisioned)" }),
+    actualCostInUsdCents: z.number().openapi({ description: "Actual metered cost in USD cents" }),
+    provisionedCostInUsdCents: z.number().openapi({ description: "Provisioned (reserved) cost in USD cents" }),
+    runCount: z.number().openapi({ description: "Number of distinct runs contributing to this cost" }),
   })
   .openapi("CostGroup");
 
 export const CostStatsResponseSchema = z
   .object({
-    groups: z.array(CostGroupSchema),
+    groups: z.array(CostGroupSchema).openapi({ description: "Cost groups. One entry per journalist when groupBy=journalistId, otherwise a single entry with totals." }),
   })
   .openapi("CostStatsResponse");
 
