@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { db } from "../db/index.js";
 import { discoveryCache } from "../db/schema.js";
-import { eq, and } from "drizzle-orm";
 import { createChildRun, closeRun } from "../lib/runs-client.js";
 import {
   extractBrandFields,
@@ -12,7 +11,6 @@ import { fetchOutlet } from "../lib/outlets-client.js";
 import {
   extractDomain,
   refillBuffer,
-  type StoredJournalist,
 } from "../lib/journalist-discovery.js";
 import { DiscoverRequestSchema } from "../schemas.js";
 import type { ServiceContext } from "../lib/service-context.js";
@@ -26,7 +24,7 @@ function getCtx(locals: Record<string, unknown>): ServiceContext {
     runId: locals.runId as string,
     featureSlug: locals.featureSlug as string | null,
     campaignId: locals.campaignId as string | null,
-    brandId: locals.brandId as string | null,
+    brandIds: locals.brandIds as string[],
     workflowSlug: locals.workflowSlug as string | null,
   };
 }
@@ -45,13 +43,13 @@ router.post("/discover", async (req, res) => {
     res.status(400).json({ error: "x-campaign-id header is required" });
     return;
   }
-  if (!ctx.brandId) {
+  if (ctx.brandIds.length === 0) {
     res.status(400).json({ error: "x-brand-id header is required" });
     return;
   }
 
   const campaignId = ctx.campaignId;
-  const brandId = ctx.brandId;
+  const brandIds = ctx.brandIds;
 
   let childRun: { id: string };
   try {
@@ -77,7 +75,6 @@ router.post("/discover", async (req, res) => {
     // Fetch brand info, campaign, and outlet in parallel
     const [brandFields, campaign, outlet] = await Promise.all([
       extractBrandFields(
-        brandId,
         [
           { key: "brand_name", description: "The brand's name" },
           {
@@ -110,7 +107,7 @@ router.post("/discover", async (req, res) => {
       featureInputs,
       maxArticles,
       orgId: ctx.orgId,
-      brandId,
+      brandIds,
       ctx: childCtx,
       runId: childRun.id,
     });
@@ -120,7 +117,7 @@ router.post("/discover", async (req, res) => {
       .insert(discoveryCache)
       .values({
         orgId: ctx.orgId,
-        brandId,
+        brandIds,
         campaignId,
         outletId,
         discoveredAt: new Date(),
@@ -129,11 +126,11 @@ router.post("/discover", async (req, res) => {
       .onConflictDoUpdate({
         target: [
           discoveryCache.orgId,
-          discoveryCache.brandId,
           discoveryCache.campaignId,
           discoveryCache.outletId,
         ],
         set: {
+          brandIds,
           discoveredAt: new Date(),
           runId: childRun.id,
         },

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, arrayContains } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import { campaignJournalists, journalists } from "../db/schema.js";
@@ -34,7 +34,7 @@ router.get("/campaign-outlet-journalists", async (req, res) => {
     conditions.push(eq(campaignJournalists.campaignId, campaign_id));
   }
   if (brand_id) {
-    conditions.push(eq(campaignJournalists.brandId, brand_id));
+    conditions.push(arrayContains(campaignJournalists.brandIds, [brand_id]));
   }
   if (outlet_id) {
     conditions.push(eq(campaignJournalists.outletId, outlet_id));
@@ -50,7 +50,7 @@ router.get("/campaign-outlet-journalists", async (req, res) => {
       campaignId: campaignJournalists.campaignId,
       outletId: campaignJournalists.outletId,
       orgId: campaignJournalists.orgId,
-      brandId: campaignJournalists.brandId,
+      brandIds: campaignJournalists.brandIds,
       featureSlug: campaignJournalists.featureSlug,
       relevanceScore: campaignJournalists.relevanceScore,
       whyRelevant: campaignJournalists.whyRelevant,

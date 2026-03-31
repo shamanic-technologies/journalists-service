@@ -34,7 +34,7 @@ describe("GET /campaign-outlet-journalists", () => {
     await insertTestCampaignJournalist({
       journalistId: j1.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
       relevanceScore: "85.00",
@@ -42,7 +42,7 @@ describe("GET /campaign-outlet-journalists", () => {
     await insertTestCampaignJournalist({
       journalistId: j2.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
       relevanceScore: "60.00",
@@ -57,6 +57,9 @@ describe("GET /campaign-outlet-journalists", () => {
     expect(res.body.campaignJournalists[0]).toHaveProperty("journalistName");
     expect(res.body.campaignJournalists[0]).toHaveProperty("relevanceScore");
     expect(res.body.campaignJournalists[0]).toHaveProperty("journalistId");
+    // Should return brandIds as array
+    expect(res.body.campaignJournalists[0]).toHaveProperty("brandIds");
+    expect(Array.isArray(res.body.campaignJournalists[0].brandIds)).toBe(true);
   });
 
   it("filters by outlet_id when provided", async () => {
@@ -66,14 +69,14 @@ describe("GET /campaign-outlet-journalists", () => {
     await insertTestCampaignJournalist({
       journalistId: j1.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
     });
     await insertTestCampaignJournalist({
       journalistId: j2.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID_2,
     });
@@ -103,7 +106,7 @@ describe("GET /campaign-outlet-journalists", () => {
     await insertTestCampaignJournalist({
       journalistId: j1.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
       relevanceScore: "90.00",
@@ -111,7 +114,7 @@ describe("GET /campaign-outlet-journalists", () => {
     await insertTestCampaignJournalist({
       journalistId: j2.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID_2,
       outletId: OUTLET_ID,
       relevanceScore: "70.00",
@@ -128,6 +131,27 @@ describe("GET /campaign-outlet-journalists", () => {
     expect(names).toContain("Brand Reporter 2");
   });
 
+  it("filters by brand_id matches multi-brand rows", async () => {
+    const BRAND_ID_2 = "44444444-4444-4444-4444-555555555555";
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Multi Brand Reporter" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID, BRAND_ID_2],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+    });
+
+    const res = await request(app)
+      .get(`/campaign-outlet-journalists?brand_id=${BRAND_ID_2}`)
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.campaignJournalists).toHaveLength(1);
+    expect(res.body.campaignJournalists[0].brandIds).toEqual([BRAND_ID, BRAND_ID_2]);
+  });
+
   it("filters by brand_id and outlet_id", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Brand Outlet1" });
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID_2, journalistName: "Brand Outlet2" });
@@ -135,14 +159,14 @@ describe("GET /campaign-outlet-journalists", () => {
     await insertTestCampaignJournalist({
       journalistId: j1.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
     });
     await insertTestCampaignJournalist({
       journalistId: j2.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID_2,
     });
@@ -198,7 +222,7 @@ describe("GET /campaign-outlet-journalists", () => {
     await insertTestCampaignJournalist({
       journalistId: j1.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
       runId: RUN_ID_A,
@@ -206,7 +230,7 @@ describe("GET /campaign-outlet-journalists", () => {
     await insertTestCampaignJournalist({
       journalistId: j2.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
       runId: RUN_ID_B,
@@ -229,7 +253,7 @@ describe("GET /campaign-outlet-journalists", () => {
     await insertTestCampaignJournalist({
       journalistId: j1.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
       runId: RUN_ID,

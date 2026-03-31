@@ -227,7 +227,7 @@ describe("POST /buffer/next", () => {
     await insertTestCampaignJournalist({
       journalistId: sarah.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
       relevanceScore: "92.00",
@@ -238,7 +238,7 @@ describe("POST /buffer/next", () => {
     await insertTestCampaignJournalist({
       journalistId: mike.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
       relevanceScore: "78.00",
@@ -301,7 +301,7 @@ describe("POST /buffer/next", () => {
     await insertTestCampaignJournalist({
       journalistId: sarah.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
       relevanceScore: "92.00",
@@ -310,7 +310,7 @@ describe("POST /buffer/next", () => {
     await insertTestCampaignJournalist({
       journalistId: mike.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
       relevanceScore: "78.00",
@@ -421,7 +421,7 @@ describe("POST /buffer/next", () => {
     await insertTestCampaignJournalist({
       journalistId: sarah.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
       relevanceScore: "92.00",

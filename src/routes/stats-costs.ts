@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and, isNotNull } from "drizzle-orm";
+import { eq, and, isNotNull, arrayContains } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { campaignJournalists } from "../db/schema.js";
 import { fetchBatchRunCosts, type BatchRunCost } from "../lib/runs-client.js";
@@ -23,7 +23,7 @@ function buildCtx(locals: Record<string, unknown>): ServiceContext {
     runId: locals.runId as string,
     featureSlug: locals.featureSlug as string | null,
     campaignId: locals.campaignId as string | null,
-    brandId: locals.brandId as string | null,
+    brandIds: locals.brandIds as string[],
     workflowSlug: locals.workflowSlug as string | null,
   };
 }
@@ -43,7 +43,7 @@ router.get("/journalists/stats/costs", async (req, res) => {
     // Query campaign_journalists for this org + brand, only rows with a runId
     const conditions = [
       eq(campaignJournalists.orgId, orgId),
-      eq(campaignJournalists.brandId, brandId),
+      arrayContains(campaignJournalists.brandIds, [brandId]),
       isNotNull(campaignJournalists.runId),
     ];
     if (campaignId) {

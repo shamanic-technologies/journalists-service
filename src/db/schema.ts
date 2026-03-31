@@ -62,7 +62,7 @@ export const campaignJournalists = pgTable(
       .notNull()
       .references(() => journalists.id, { onDelete: "cascade" }),
     orgId: uuid("org_id").notNull(),
-    brandId: uuid("brand_id").notNull(),
+    brandIds: uuid("brand_ids").array().notNull(),
     featureSlug: text("feature_slug"),
     workflowSlug: text("workflow_slug"),
     campaignId: uuid("campaign_id").notNull(),
@@ -96,6 +96,7 @@ export const campaignJournalists = pgTable(
       table.status,
       table.relevanceScore
     ),
+    index("idx_cj_brand_ids").using("gin", table.brandIds),
   ]
 );
 
@@ -105,16 +106,15 @@ export const discoveryCache = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     orgId: uuid("org_id").notNull(),
-    brandId: uuid("brand_id").notNull(),
+    brandIds: uuid("brand_ids").array().notNull(),
     campaignId: uuid("campaign_id").notNull(),
     outletId: uuid("outlet_id").notNull(),
     discoveredAt: timestamp("discovered_at", { withTimezone: true }).notNull(),
     runId: uuid("run_id"),
   },
   (table) => [
-    uniqueIndex("idx_dc_org_brand_campaign_outlet").on(
+    uniqueIndex("idx_dc_org_campaign_outlet").on(
       table.orgId,
-      table.brandId,
       table.campaignId,
       table.outletId
     ),

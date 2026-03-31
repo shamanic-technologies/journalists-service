@@ -73,11 +73,11 @@ describe("GET /journalists/stats/costs", () => {
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Cost J2" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, runId: RUN_ID_A,
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, runId: RUN_ID_A,
     });
 
@@ -97,16 +97,38 @@ describe("GET /journalists/stats/costs", () => {
     expect(res.body.groups[0].runCount).toBe(1);
   });
 
+  it("matches multi-brand rows when filtering by brandId", async () => {
+    const BRAND_ID_2 = "44444444-4444-4444-4444-555555555555";
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Multi Brand Cost" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID, BRAND_ID_2], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, runId: RUN_ID_A,
+    });
+
+    mockBatchRunCosts([
+      { runId: RUN_ID_A, totalCostInUsdCents: "500", actualCostInUsdCents: "500", provisionedCostInUsdCents: "0" },
+    ]);
+
+    const res = await request(app)
+      .get(`/journalists/stats/costs?brandId=${BRAND_ID_2}`)
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.groups).toHaveLength(1);
+    expect(res.body.groups[0].totalCostInUsdCents).toBe(500);
+  });
+
   it("aggregates costs across multiple runs without groupBy", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Multi Run J1" });
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Multi Run J2" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, runId: RUN_ID_A,
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, runId: RUN_ID_B,
     });
 
@@ -130,11 +152,11 @@ describe("GET /journalists/stats/costs", () => {
 
     // Both created by the same run — cost should be split 50/50
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, runId: RUN_ID_A,
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, runId: RUN_ID_A,
     });
 
@@ -167,11 +189,11 @@ describe("GET /journalists/stats/costs", () => {
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Campaign Filter J2" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, runId: RUN_ID_A,
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: OTHER_CAMPAIGN,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: OTHER_CAMPAIGN,
       outletId: OUTLET_ID, runId: RUN_ID_B,
     });
 
@@ -195,12 +217,12 @@ describe("GET /journalists/stats/costs", () => {
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Org Scope J2" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, runId: RUN_ID_A,
     });
     // Different org — same brand, same journalist entity but different campaign_journalist row
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: OTHER_ORG, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: OTHER_ORG, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, runId: RUN_ID_B,
     });
 
@@ -224,11 +246,11 @@ describe("GET /journalists/stats/costs", () => {
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "No Run" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, runId: RUN_ID_A,
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
       // no runId
     });
@@ -250,7 +272,7 @@ describe("GET /journalists/stats/costs", () => {
   it("returns 500 when runs-service fails", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Fail J1" });
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, runId: RUN_ID_A,
     });
 
@@ -266,7 +288,7 @@ describe("GET /journalists/stats/costs", () => {
   it("handles run not returned by batch endpoint (omitted)", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Missing Run J1" });
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, runId: RUN_ID_A,
     });
 

@@ -184,7 +184,7 @@ export async function storeJournalists(
   outletId: string,
   campaignId: string,
   orgId: string,
-  brandId: string,
+  brandIds: string[],
   featureSlug: string | null,
   workflowSlug: string | null = null,
   runId: string | null = null
@@ -242,7 +242,7 @@ export async function storeJournalists(
       .values({
         journalistId,
         orgId,
-        brandId,
+        brandIds,
         featureSlug,
         workflowSlug,
         campaignId,
@@ -283,7 +283,7 @@ export async function refillBuffer(opts: {
   featureInputs: Record<string, string>;
   maxArticles: number;
   orgId: string;
-  brandId: string;
+  brandIds: string[];
   ctx: ServiceContext;
   runId?: string | null;
 }): Promise<number> {
@@ -308,7 +308,7 @@ export async function refillBuffer(opts: {
     opts.outletId,
     opts.campaignId,
     opts.orgId,
-    opts.brandId,
+    opts.brandIds,
     opts.ctx.featureSlug,
     opts.ctx.workflowSlug,
     opts.runId ?? null

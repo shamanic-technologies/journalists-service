@@ -70,15 +70,15 @@ describe("GET /stats", () => {
     const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Stats Writer 3" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-a", status: "buffered",
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-a", status: "served",
     });
     await insertTestCampaignJournalist({
-      journalistId: j3.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j3.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-b", status: "served",
     });
 
@@ -100,15 +100,15 @@ describe("GET /stats", () => {
     const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Contacted Writer 3" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, status: "served",
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, status: "served",
     });
     await insertTestCampaignJournalist({
-      journalistId: j3.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j3.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, status: "buffered",
     });
 
@@ -129,7 +129,7 @@ describe("GET /stats", () => {
   it("omits contacted when lead-service returns 0", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "No Contact" });
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, status: "served",
     });
 
@@ -146,7 +146,7 @@ describe("GET /stats", () => {
   it("fails open when lead-service is unavailable", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Fail Open" });
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, status: "served",
     });
 
@@ -162,16 +162,66 @@ describe("GET /stats", () => {
     expect(res.body.byStatus.contacted).toBeUndefined();
   });
 
+  it("filters by brandId (matches rows containing that brand in brand_ids array)", async () => {
+    const BRAND_ID_2 = "44444444-4444-4444-4444-555555555555";
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Brand Filter 1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Brand Filter 2" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID_2], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+    });
+
+    mockLeadStats(0);
+
+    const res = await request(app)
+      .get(`/stats?brandId=${BRAND_ID}`)
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.totalJournalists).toBe(1);
+  });
+
+  it("filters by brandId matches multi-brand rows", async () => {
+    const BRAND_ID_2 = "44444444-4444-4444-4444-555555555555";
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Multi Brand" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID, BRAND_ID_2], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+    });
+
+    mockLeadStats(0);
+
+    // Filter by first brand
+    const res1 = await request(app)
+      .get(`/stats?brandId=${BRAND_ID}`)
+      .set(AUTH_HEADERS);
+    expect(res1.body.totalJournalists).toBe(1);
+
+    mockLeadStats(0);
+
+    // Filter by second brand
+    const res2 = await request(app)
+      .get(`/stats?brandId=${BRAND_ID_2}`)
+      .set(AUTH_HEADERS);
+    expect(res2.body.totalJournalists).toBe(1);
+  });
+
   it("filters by featureSlug", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Slug Filter 1" });
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Slug Filter 2" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-a",
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-b",
     });
 
@@ -190,11 +240,11 @@ describe("GET /stats", () => {
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "WF Filter 2" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, workflowSlug: "wf-a",
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, workflowSlug: "wf-b",
     });
 
@@ -214,15 +264,15 @@ describe("GET /stats", () => {
     const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dynasty F3" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-alpha",
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-alpha-v2",
     });
     await insertTestCampaignJournalist({
-      journalistId: j3.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j3.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "other-feat",
     });
 
@@ -242,11 +292,11 @@ describe("GET /stats", () => {
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dynasty W2" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, workflowSlug: "cold-email",
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, workflowSlug: "cold-email-v2",
     });
 
@@ -264,7 +314,7 @@ describe("GET /stats", () => {
   it("returns zero stats when dynasty resolves to empty list", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Empty Dynasty" });
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-a",
     });
 
@@ -285,11 +335,11 @@ describe("GET /stats", () => {
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Combo 2" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-alpha", status: "served",
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: "66666666-6666-6666-6666-666666666666",
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: "66666666-6666-6666-6666-666666666666",
       outletId: OUTLET_ID, featureSlug: "feat-alpha-v2", status: "buffered",
     });
 
@@ -311,15 +361,15 @@ describe("GET /stats", () => {
     const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Group F3" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-a", status: "buffered",
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-a", status: "served",
     });
     await insertTestCampaignJournalist({
-      journalistId: j3.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j3.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-b", status: "served",
     });
 
@@ -342,11 +392,11 @@ describe("GET /stats", () => {
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Group W2" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, workflowSlug: "wf-a", status: "buffered",
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, workflowSlug: "wf-b", status: "served",
     });
 
@@ -368,15 +418,15 @@ describe("GET /stats", () => {
     const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "DG F3" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-alpha", status: "buffered",
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-alpha-v2", status: "served",
     });
     await insertTestCampaignJournalist({
-      journalistId: j3.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j3.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-beta", status: "served",
     });
 
@@ -404,15 +454,15 @@ describe("GET /stats", () => {
     const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "DG W3" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, workflowSlug: "cold-email", status: "buffered",
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, workflowSlug: "cold-email-v2", status: "served",
     });
     await insertTestCampaignJournalist({
-      journalistId: j3.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j3.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, workflowSlug: "warm-intro", status: "served",
     });
 
@@ -438,15 +488,15 @@ describe("GET /stats", () => {
     const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "WfSlugs 3" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, workflowSlug: "wf-a", status: "buffered",
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, workflowSlug: "wf-b", status: "served",
     });
     await insertTestCampaignJournalist({
-      journalistId: j3.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j3.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, workflowSlug: "wf-c", status: "served",
     });
 
@@ -469,15 +519,15 @@ describe("GET /stats", () => {
     const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "WfSlugsG 3" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, workflowSlug: "wf-a", status: "buffered",
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, workflowSlug: "wf-b", status: "served",
     });
     await insertTestCampaignJournalist({
-      journalistId: j3.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j3.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, workflowSlug: "wf-c", status: "served",
     });
 
@@ -505,7 +555,7 @@ describe("GET /stats", () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Orphan 1" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "orphan-slug", status: "served",
     });
 
@@ -534,7 +584,7 @@ describe("GET /stats/public", () => {
   it("works with API key only (no identity headers)", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Public Stats" });
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, status: "served",
     });
 
@@ -553,11 +603,11 @@ describe("GET /stats/public", () => {
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Public Filter 2" });
 
     await insertTestCampaignJournalist({
-      journalistId: j1.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-a",
     });
     await insertTestCampaignJournalist({
-      journalistId: j2.id, orgId: ORG_ID, brandId: BRAND_ID, campaignId: CAMPAIGN_ID,
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, featureSlug: "feat-b",
     });
 
