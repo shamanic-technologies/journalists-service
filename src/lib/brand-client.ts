@@ -14,15 +14,31 @@ export interface FieldRequest {
   description: string;
 }
 
-export interface ExtractedField {
-  key: string;
-  value: string | string[] | Record<string, unknown> | null;
-  cached: boolean;
+type FieldValue = string | unknown[] | Record<string, unknown> | null;
+
+export interface BrandFieldEntry {
+  value: FieldValue;
+  byBrand: Record<
+    string,
+    {
+      value: FieldValue;
+      cached: boolean;
+      extractedAt: string;
+      expiresAt: string | null;
+      sourceUrls: string[] | null;
+    }
+  >;
+}
+
+export interface BrandMeta {
+  brandId: string;
+  domain: string;
+  name: string;
 }
 
 export interface ExtractFieldsResponse {
-  brandId: string;
-  results: ExtractedField[];
+  brands: BrandMeta[];
+  fields: Record<string, BrandFieldEntry>;
 }
 
 /**
@@ -56,14 +72,14 @@ export async function extractBrandFields(
   return response.json() as Promise<ExtractFieldsResponse>;
 }
 
-/** Helper to pull a string value from extract-fields results */
+/** Helper to pull a string value from the consolidated fields response */
 export function getFieldValue(
-  results: ExtractedField[],
+  fields: Record<string, BrandFieldEntry>,
   key: string
 ): string {
-  const field = results.find((r) => r.key === key);
-  if (!field || field.value === null) return "";
-  if (typeof field.value === "string") return field.value;
-  if (Array.isArray(field.value)) return field.value.join(", ");
-  return JSON.stringify(field.value);
+  const entry = fields[key];
+  if (!entry || entry.value === null || entry.value === undefined) return "";
+  if (typeof entry.value === "string") return entry.value;
+  if (Array.isArray(entry.value)) return entry.value.join(", ");
+  return JSON.stringify(entry.value);
 }

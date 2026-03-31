@@ -85,7 +85,7 @@ describe("all 7 headers forwarded by every client", () => {
   });
 
   it("brand-client forwards all 7 headers", async () => {
-    fetchSpy.mockResolvedValueOnce(mockOkResponse({ brandId: "b1", results: [] }));
+    fetchSpy.mockResolvedValueOnce(mockOkResponse({ brands: [], fields: {} }));
 
     const { extractBrandFields } = await import("../../src/lib/brand-client.js");
     await extractBrandFields([], FULL_CTX);

@@ -90,9 +90,9 @@ router.post("/discover", async (req, res) => {
     ]);
 
     const brandName =
-      getFieldValue(brandFields.results, "brand_name") || "Unknown Brand";
+      getFieldValue(brandFields.fields, "brand_name") || "Unknown Brand";
     const brandDescription = getFieldValue(
-      brandFields.results,
+      brandFields.fields,
       "brand_description"
     );
     const featureInputs = campaign.featureInputs ?? {};
