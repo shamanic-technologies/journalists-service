@@ -63,9 +63,11 @@ async function resolveFiltersAndQuery(
   if (query.outletId) conditions.push(eq(table.outletId, query.outletId));
   if (query.brandId) conditions.push(arrayContains(table.brandIds, [query.brandId]));
 
-  // Dynasty slug (resolved list) takes priority over exact slug
+  // Dynasty slug (resolved list) takes priority, then explicit list, then exact slug
   if (featureSlugs && featureSlugs.length > 0) {
     conditions.push(inArray(table.featureSlug, featureSlugs));
+  } else if (query.featureSlugs && query.featureSlugs.length > 0) {
+    conditions.push(inArray(table.featureSlug, query.featureSlugs));
   } else if (query.featureSlug) {
     conditions.push(eq(table.featureSlug, query.featureSlug));
   }
@@ -103,6 +105,7 @@ async function resolveFiltersAndQuery(
     brandId: query.brandId,
     orgId: query.orgId,
     featureSlug: query.featureSlug,
+    featureSlugs: query.featureSlugs,
     workflowSlug: query.workflowSlug,
     featureDynastySlug: query.featureDynastySlug,
     workflowDynastySlug: query.workflowDynastySlug,

@@ -709,6 +709,16 @@
           {
             "schema": {
               "type": "string",
+              "description": "Comma-separated list of feature slugs to filter by. Use with groupBy=featureSlug for per-feature stats.",
+              "example": "pr-journalist-outreach,pr-journalist-outreach-v2"
+            },
+            "required": false,
+            "name": "featureSlugs",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "description": "Filter by exact workflow slug"
             },
             "required": false,
@@ -832,6 +842,16 @@
             },
             "required": false,
             "name": "featureSlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated list of feature slugs to filter by. Use with groupBy=featureSlug for per-feature stats.",
+              "example": "pr-journalist-outreach,pr-journalist-outreach-v2"
+            },
+            "required": false,
+            "name": "featureSlugs",
             "in": "query"
           },
           {
