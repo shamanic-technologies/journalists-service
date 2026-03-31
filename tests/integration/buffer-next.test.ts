@@ -75,14 +75,14 @@ function setupRefillMocks() {
   });
 
   mockedExtractBrandFields.mockResolvedValue({
-    brandId: BRAND_ID,
-    results: [
-      { key: "brand_name", value: "TechCorp", cached: false },
-      { key: "brand_description", value: "Enterprise SaaS platform", cached: false },
-    ],
+    brands: [{ brandId: BRAND_ID, domain: "techcorp.com", name: "TechCorp" }],
+    fields: {
+      brand_name: { value: "TechCorp", byBrand: { "techcorp.com": { value: "TechCorp", cached: false, extractedAt: "2026-03-01T00:00:00Z", expiresAt: null, sourceUrls: [] } } },
+      brand_description: { value: "Enterprise SaaS platform", byBrand: { "techcorp.com": { value: "Enterprise SaaS platform", cached: false, extractedAt: "2026-03-01T00:00:00Z", expiresAt: null, sourceUrls: [] } } },
+    },
   });
 
-  mockedGetFieldValue.mockImplementation((_results, key) => {
+  mockedGetFieldValue.mockImplementation((_fields, key) => {
     if (key === "brand_name") return "TechCorp";
     if (key === "brand_description") return "Enterprise SaaS platform";
     return "";
@@ -375,13 +375,13 @@ describe("POST /buffer/next", () => {
     });
 
     mockedExtractBrandFields.mockResolvedValue({
-      brandId: BRAND_ID,
-      results: [
-        { key: "brand_name", value: "TechCorp", cached: false },
-        { key: "brand_description", value: "SaaS platform", cached: false },
-      ],
+      brands: [{ brandId: BRAND_ID, domain: "techcorp.com", name: "TechCorp" }],
+      fields: {
+        brand_name: { value: "TechCorp", byBrand: { "techcorp.com": { value: "TechCorp", cached: false, extractedAt: "2026-03-01T00:00:00Z", expiresAt: null, sourceUrls: [] } } },
+        brand_description: { value: "SaaS platform", byBrand: { "techcorp.com": { value: "SaaS platform", cached: false, extractedAt: "2026-03-01T00:00:00Z", expiresAt: null, sourceUrls: [] } } },
+      },
     });
-    mockedGetFieldValue.mockImplementation((_results, key) => {
+    mockedGetFieldValue.mockImplementation((_fields, key) => {
       if (key === "brand_name") return "TechCorp";
       if (key === "brand_description") return "SaaS platform";
       return "";
