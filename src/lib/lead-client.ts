@@ -12,6 +12,7 @@ export interface LeadStatsParams {
   brandId?: string;
   orgId?: string;
   featureSlug?: string;
+  featureSlugs?: string[];
   workflowSlug?: string;
   featureDynastySlug?: string;
   workflowDynastySlug?: string;
@@ -49,6 +50,7 @@ export async function fetchLeadStats(
     if (params.brandId) qs.set("brandId", params.brandId);
     if (params.orgId) qs.set("orgId", params.orgId);
     if (params.featureSlug) qs.set("featureSlug", params.featureSlug);
+    if (params.featureSlugs && params.featureSlugs.length > 0) qs.set("featureSlugs", params.featureSlugs.join(","));
     if (params.workflowSlug) qs.set("workflowSlug", params.workflowSlug);
     if (params.featureDynastySlug) qs.set("featureDynastySlug", params.featureDynastySlug);
     if (params.workflowDynastySlug) qs.set("workflowDynastySlug", params.workflowDynastySlug);
@@ -85,6 +87,7 @@ export async function fetchLeadStatsGrouped(
     if (params.brandId) qs.set("brandId", params.brandId);
     if (params.orgId) qs.set("orgId", params.orgId);
     if (params.featureSlug) qs.set("featureSlug", params.featureSlug);
+    if (params.featureSlugs && params.featureSlugs.length > 0) qs.set("featureSlugs", params.featureSlugs.join(","));
     if (params.workflowSlug) qs.set("workflowSlug", params.workflowSlug);
     if (params.featureDynastySlug) qs.set("featureDynastySlug", params.featureDynastySlug);
     if (params.workflowDynastySlug) qs.set("workflowDynastySlug", params.workflowDynastySlug);

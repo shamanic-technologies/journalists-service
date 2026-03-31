@@ -551,6 +551,75 @@ describe("GET /stats", () => {
     expect(res.body.groupedBy["wf-c"]).toBeUndefined();
   });
 
+  it("filters by featureSlugs (comma-separated list)", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "FeatSlugs 1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "FeatSlugs 2" });
+    const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "FeatSlugs 3" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, featureSlug: "pr-journalist-outreach", status: "buffered",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, featureSlug: "pr-journalist-outreach-v2", status: "served",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j3.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, featureSlug: "unrelated-feature", status: "served",
+    });
+
+    mockLeadStats(1);
+
+    const res = await request(app)
+      .get("/stats?featureSlugs=pr-journalist-outreach,pr-journalist-outreach-v2")
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.totalJournalists).toBe(2);
+    expect(res.body.byStatus.buffered).toBe(1);
+    expect(res.body.byStatus.served).toBe(1);
+    expect(res.body.byStatus.contacted).toBe(1);
+  });
+
+  it("filters by featureSlugs with groupBy=featureSlug", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "FeatSlugsG 1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "FeatSlugsG 2" });
+    const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "FeatSlugsG 3" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, featureSlug: "pr-journalist-outreach", status: "buffered",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, featureSlug: "pr-journalist-outreach-v2", status: "served",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j3.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, featureSlug: "unrelated-feature", status: "served",
+    });
+
+    mockLeadStats(0);
+    mockLeadStatsGrouped([
+      { key: "pr-journalist-outreach", contacted: 0 },
+      { key: "pr-journalist-outreach-v2", contacted: 2 },
+    ]);
+
+    const res = await request(app)
+      .get("/stats?featureSlugs=pr-journalist-outreach,pr-journalist-outreach-v2&groupBy=featureSlug")
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.totalJournalists).toBe(2);
+    expect(res.body.groupedBy["pr-journalist-outreach"].totalJournalists).toBe(1);
+    expect(res.body.groupedBy["pr-journalist-outreach"].byStatus.buffered).toBe(1);
+    expect(res.body.groupedBy["pr-journalist-outreach-v2"].totalJournalists).toBe(1);
+    expect(res.body.groupedBy["pr-journalist-outreach-v2"].byStatus.served).toBe(1);
+    expect(res.body.groupedBy["pr-journalist-outreach-v2"].byStatus.contacted).toBe(2);
+    expect(res.body.groupedBy["unrelated-feature"]).toBeUndefined();
+  });
+
   it("orphan slugs (not in any dynasty) fall back to raw slug value", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Orphan 1" });
 

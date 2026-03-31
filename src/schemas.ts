@@ -141,6 +141,11 @@ export const StatsQuerySchema = z
     outletId: z.string().uuid().optional().openapi({ description: "Filter by outlet ID" }),
     brandId: z.string().uuid().optional().openapi({ description: "Filter by brand ID (matches rows where this brand is in the brand_ids array)" }),
     featureSlug: z.string().optional().openapi({ description: "Filter by exact feature slug" }),
+    featureSlugs: z
+      .string()
+      .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean))
+      .optional()
+      .openapi({ description: "Comma-separated list of feature slugs to filter by. Use with groupBy=featureSlug for per-feature stats.", example: "pr-journalist-outreach,pr-journalist-outreach-v2" }),
     workflowSlug: z.string().optional().openapi({ description: "Filter by exact workflow slug" }),
     workflowSlugs: z
       .string()
