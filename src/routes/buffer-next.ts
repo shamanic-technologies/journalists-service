@@ -32,7 +32,7 @@ function getCtx(locals: Record<string, unknown>): ServiceContext {
     runId: locals.runId as string,
     featureSlug: locals.featureSlug as string | null,
     campaignId: locals.campaignId as string | null,
-    brandId: locals.brandId as string | null,
+    brandIds: locals.brandIds as string[],
     workflowSlug: locals.workflowSlug as string | null,
   };
 }
@@ -77,7 +77,7 @@ router.post("/buffer/next", async (req, res) => {
   const ctx = getCtx(res.locals);
 
   console.log(
-    `[journalists-service] POST /buffer/next — outletId=${outletId} campaignId=${ctx.campaignId ?? "MISSING"} brandId=${ctx.brandId ?? "MISSING"} orgId=${ctx.orgId}`
+    `[journalists-service] POST /buffer/next — outletId=${outletId} campaignId=${ctx.campaignId ?? "MISSING"} brandIds=${ctx.brandIds.length > 0 ? ctx.brandIds.join(",") : "MISSING"} orgId=${ctx.orgId}`
   );
 
   if (!ctx.campaignId) {
@@ -85,14 +85,14 @@ router.post("/buffer/next", async (req, res) => {
     res.status(400).json({ error: "x-campaign-id header is required" });
     return;
   }
-  if (!ctx.brandId) {
+  if (ctx.brandIds.length === 0) {
     console.warn("[journalists-service] POST /buffer/next rejected: missing x-brand-id");
     res.status(400).json({ error: "x-brand-id header is required" });
     return;
   }
 
   const campaignId = ctx.campaignId;
-  const brandId = ctx.brandId;
+  const brandIds = ctx.brandIds;
 
   try {
     // Probabilistic cleanup
@@ -167,7 +167,6 @@ router.post("/buffer/next", async (req, res) => {
         .where(
           and(
             eq(discoveryCache.orgId, ctx.orgId),
-            eq(discoveryCache.brandId, brandId),
             eq(discoveryCache.campaignId, campaignId),
             eq(discoveryCache.outletId, outletId)
           )
@@ -187,7 +186,6 @@ router.post("/buffer/next", async (req, res) => {
       // Refill buffer
       const [brandFields, campaign, outlet] = await Promise.all([
         extractBrandFields(
-          brandId,
           [
             { key: "brand_name", description: "The brand's name" },
             {
@@ -220,7 +218,7 @@ router.post("/buffer/next", async (req, res) => {
         featureInputs,
         maxArticles,
         orgId: ctx.orgId,
-        brandId,
+        brandIds,
         ctx: childCtx,
         runId: childRun.id,
       });
@@ -230,7 +228,7 @@ router.post("/buffer/next", async (req, res) => {
         .insert(discoveryCache)
         .values({
           orgId: ctx.orgId,
-          brandId,
+          brandIds,
           campaignId,
           outletId,
           discoveredAt: new Date(),
@@ -239,11 +237,11 @@ router.post("/buffer/next", async (req, res) => {
         .onConflictDoUpdate({
           target: [
             discoveryCache.orgId,
-            discoveryCache.brandId,
             discoveryCache.campaignId,
             discoveryCache.outletId,
           ],
           set: {
+            brandIds,
             discoveredAt: new Date(),
             runId: childRun.id,
           },

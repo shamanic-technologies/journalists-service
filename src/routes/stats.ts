@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and, inArray, sql, count } from "drizzle-orm";
+import { eq, and, inArray, arrayContains, count } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { campaignJournalists } from "../db/schema.js";
 import { StatsQuerySchema } from "../schemas.js";
@@ -61,7 +61,7 @@ async function resolveFiltersAndQuery(
   if (query.orgId) conditions.push(eq(table.orgId, query.orgId));
   if (query.campaignId) conditions.push(eq(table.campaignId, query.campaignId));
   if (query.outletId) conditions.push(eq(table.outletId, query.outletId));
-  if (query.brandId) conditions.push(eq(table.brandId, query.brandId));
+  if (query.brandId) conditions.push(arrayContains(table.brandIds, [query.brandId]));
 
   // Dynasty slug (resolved list) takes priority over exact slug
   if (featureSlugs && featureSlugs.length > 0) {

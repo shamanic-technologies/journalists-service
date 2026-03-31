@@ -25,8 +25,11 @@ export interface ExtractFieldsResponse {
   results: ExtractedField[];
 }
 
+/**
+ * Extract brand fields via POST /brands/extract-fields.
+ * Brand-service reads x-brand-id from the forwarded headers (CSV-safe).
+ */
 export async function extractBrandFields(
-  brandId: string,
   fields: FieldRequest[],
   ctx: ServiceContext
 ): Promise<ExtractFieldsResponse> {
@@ -37,7 +40,7 @@ export async function extractBrandFields(
     "Content-Type": "application/json",
   };
 
-  const response = await fetch(`${url}/brands/${brandId}/extract-fields`, {
+  const response = await fetch(`${url}/brands/extract-fields`, {
     method: "POST",
     headers,
     body: JSON.stringify({ fields }),
@@ -46,7 +49,7 @@ export async function extractBrandFields(
   if (!response.ok) {
     const body = await response.text();
     throw new Error(
-      `Brand service POST /brands/${brandId}/extract-fields failed (${response.status}): ${body}`
+      `Brand service POST /brands/extract-fields failed (${response.status}): ${body}`
     );
   }
 

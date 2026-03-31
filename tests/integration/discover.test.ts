@@ -215,7 +215,7 @@ describe("POST /discover", () => {
     expect(res.body.runId).toBe(CHILD_RUN_ID);
     expect(res.body.discovered).toBe(2);
 
-    // Verify journalists were stored with runId
+    // Verify journalists were stored with runId and brandIds
     const cjs = await db
       .select()
       .from(campaignJournalists)
@@ -225,6 +225,7 @@ describe("POST /discover", () => {
     expect(cjs[0].runId).toBe(CHILD_RUN_ID);
     expect(cjs[1].runId).toBe(CHILD_RUN_ID);
     expect(cjs[0].status).toBe("buffered");
+    expect(cjs[0].brandIds).toEqual([BRAND_ID]);
 
     // Run was closed as completed
     expect(mockedCloseRun).toHaveBeenCalledWith(
@@ -232,6 +233,26 @@ describe("POST /discover", () => {
       "completed",
       expect.any(Object)
     );
+  });
+
+  it("stores multiple brand IDs from CSV header", async () => {
+    setupDiscoverMocks();
+    const BRAND_ID_2 = "44444444-4444-4444-4444-555555555555";
+
+    const res = await request(app)
+      .post("/discover")
+      .set({ ...DISCOVER_HEADERS, "x-brand-id": `${BRAND_ID},${BRAND_ID_2}` })
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.discovered).toBe(2);
+
+    const cjs = await db
+      .select()
+      .from(campaignJournalists)
+      .where(eq(campaignJournalists.campaignId, CAMPAIGN_ID));
+
+    expect(cjs[0].brandIds).toEqual([BRAND_ID, BRAND_ID_2]);
   });
 
   it("returns 0 discovered when no articles found", async () => {
@@ -267,7 +288,7 @@ describe("POST /discover", () => {
     await insertTestCampaignJournalist({
       journalistId: sarah.id,
       orgId: ORG_ID,
-      brandId: BRAND_ID,
+      brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
       relevanceScore: "85.00",

@@ -25,7 +25,7 @@ const FULL_CTX: ServiceContext = {
   runId: "run-1",
   featureSlug: "test-feature",
   campaignId: "camp-1234",
-  brandId: "brand-1",
+  brandIds: ["brand-1"],
   workflowSlug: "discover-journalists-wf",
 };
 
@@ -60,7 +60,7 @@ function expectAll7Headers(headers: Record<string, string>) {
   expect(headers["x-run-id"]).toBe(FULL_CTX.runId);
   expect(headers["x-feature-slug"]).toBe(FULL_CTX.featureSlug);
   expect(headers["x-campaign-id"]).toBe(FULL_CTX.campaignId);
-  expect(headers["x-brand-id"]).toBe(FULL_CTX.brandId);
+  expect(headers["x-brand-id"]).toBe(FULL_CTX.brandIds.join(","));
   expect(headers["x-workflow-slug"]).toBe(FULL_CTX.workflowSlug);
 }
 
@@ -88,7 +88,7 @@ describe("all 7 headers forwarded by every client", () => {
     fetchSpy.mockResolvedValueOnce(mockOkResponse({ brandId: "b1", results: [] }));
 
     const { extractBrandFields } = await import("../../src/lib/brand-client.js");
-    await extractBrandFields("brand-1", [], FULL_CTX);
+    await extractBrandFields([], FULL_CTX);
 
     const headers = getHeaders();
     expectAll7Headers(headers);
@@ -157,7 +157,7 @@ describe("all 7 headers forwarded by every client", () => {
     });
   });
 
-  it("omits optional headers when null", async () => {
+  it("omits optional headers when empty/null", async () => {
     fetchSpy.mockResolvedValueOnce(
       mockOkResponse({ content: "ok", tokensInput: 1, tokensOutput: 1, model: "test" })
     );
@@ -168,7 +168,7 @@ describe("all 7 headers forwarded by every client", () => {
       runId: "run-1",
       featureSlug: null,
       campaignId: null,
-      brandId: null,
+      brandIds: [],
       workflowSlug: null,
     };
 
@@ -183,5 +183,27 @@ describe("all 7 headers forwarded by every client", () => {
     expect(headers["x-campaign-id"]).toBeUndefined();
     expect(headers["x-brand-id"]).toBeUndefined();
     expect(headers["x-workflow-slug"]).toBeUndefined();
+  });
+
+  it("sends CSV x-brand-id for multiple brand IDs", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockOkResponse({ content: "ok", tokensInput: 1, tokensOutput: 1, model: "test" })
+    );
+
+    const multiBrandCtx: ServiceContext = {
+      orgId: "org-1",
+      userId: "user-1",
+      runId: "run-1",
+      featureSlug: null,
+      campaignId: null,
+      brandIds: ["brand-1", "brand-2", "brand-3"],
+      workflowSlug: null,
+    };
+
+    const { chatComplete } = await import("../../src/lib/chat-client.js");
+    await chatComplete({ message: "hi", systemPrompt: "test" }, multiBrandCtx);
+
+    const headers = getHeaders();
+    expect(headers["x-brand-id"]).toBe("brand-1,brand-2,brand-3");
   });
 });

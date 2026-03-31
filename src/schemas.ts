@@ -96,7 +96,10 @@ export const CampaignOutletJournalistSchema = z
     campaignId: z.string().uuid(),
     outletId: z.string().uuid(),
     orgId: z.string().uuid(),
-    brandId: z.string().uuid(),
+    brandIds: z.array(z.string().uuid()).openapi({
+      description: "Brand UUIDs associated with this campaign journalist",
+      example: ["550e8400-e29b-41d4-a716-446655440000"],
+    }),
     featureSlug: z.string().nullable(),
     relevanceScore: z.string(),
     whyRelevant: z.string(),
@@ -136,7 +139,7 @@ export const StatsQuerySchema = z
     orgId: z.string().uuid().optional().openapi({ description: "Filter by organization ID" }),
     campaignId: z.string().uuid().optional().openapi({ description: "Filter by campaign ID" }),
     outletId: z.string().uuid().optional().openapi({ description: "Filter by outlet ID" }),
-    brandId: z.string().uuid().optional().openapi({ description: "Filter by brand ID" }),
+    brandId: z.string().uuid().optional().openapi({ description: "Filter by brand ID (matches rows where this brand is in the brand_ids array)" }),
     featureSlug: z.string().optional().openapi({ description: "Filter by exact feature slug" }),
     workflowSlug: z.string().optional().openapi({ description: "Filter by exact workflow slug" }),
     workflowSlugs: z
@@ -171,7 +174,7 @@ export const StatsResponseSchema = z
 
 export const CostStatsQuerySchema = z
   .object({
-    brandId: z.string().uuid().openapi({ description: "Brand ID to scope costs to" }),
+    brandId: z.string().uuid().openapi({ description: "Brand ID to scope costs to (matches rows where this brand is in the brand_ids array)" }),
     campaignId: z.string().uuid().optional().openapi({ description: "Optionally narrow costs to a single campaign" }),
     groupBy: z.enum(["journalistId"]).optional().openapi({ description: "Group costs by journalist. Each journalist's share is the run cost divided evenly across journalists in that run." }),
   })
@@ -199,13 +202,13 @@ export const CostStatsResponseSchema = z
 registry.registerPath({ method: "get", path: "/health", summary: "Health check", responses: { 200: { description: "Service is healthy", content: { "application/json": { schema: z.object({ status: z.string(), timestamp: z.string(), service: z.string() }) } } } } });
 
 // Buffer/Next
-registry.registerPath({ method: "post", path: "/buffer/next", summary: "Pull next best journalist from buffer for a campaign+outlet. Refills buffer automatically on first call.", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: BufferNextSchema } } } }, responses: { 200: { description: "Next journalist or { found: false } if buffer exhausted", content: { "application/json": { schema: BufferNextResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+registry.registerPath({ method: "post", path: "/buffer/next", summary: "Pull next best journalist from buffer for a campaign+outlet. Refills buffer automatically on first call. The x-brand-id header supports CSV format (e.g. uuid1,uuid2).", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: BufferNextSchema } } } }, responses: { 200: { description: "Next journalist or { found: false } if buffer exhausted", content: { "application/json": { schema: BufferNextResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Discover
-registry.registerPath({ method: "post", path: "/discover", summary: "Discover new journalists for a campaign+outlet. Creates a run, scrapes articles, scores journalists via LLM, and stores them as buffered.", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: DiscoverRequestSchema } } } }, responses: { 200: { description: "Discovery results with run ID and count of journalists found", content: { "application/json": { schema: DiscoverResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+registry.registerPath({ method: "post", path: "/discover", summary: "Discover new journalists for a campaign+outlet. Creates a run, scrapes articles, scores journalists via LLM, and stores them as buffered. The x-brand-id header supports CSV format (e.g. uuid1,uuid2).", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: DiscoverRequestSchema } } } }, responses: { 200: { description: "Discovery results with run ID and count of journalists found", content: { "application/json": { schema: DiscoverResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Campaign Outlet Journalists
-registry.registerPath({ method: "get", path: "/campaign-outlet-journalists", summary: "Get journalists associated with a campaign or brand, optionally filtered by outlet and/or run. Provide campaign_id, brand_id, or both.", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ campaign_id: z.string().uuid().optional().openapi({ description: "Filter by campaign. At least one of campaign_id or brand_id is required." }), brand_id: z.string().uuid().optional().openapi({ description: "Filter by brand (returns journalists across all campaigns for that brand). At least one of campaign_id or brand_id is required." }), outlet_id: z.string().uuid().optional(), run_id: z.string().uuid().optional().openapi({ description: "Filter by the run that created the journalist entries." }) }) }, responses: { 200: { description: "Campaign journalists with journalist details", content: { "application/json": { schema: CampaignOutletJournalistsResponseSchema } } }, 400: { description: "Validation error — at least one of campaign_id or brand_id is required", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+registry.registerPath({ method: "get", path: "/campaign-outlet-journalists", summary: "Get journalists associated with a campaign or brand, optionally filtered by outlet and/or run. Provide campaign_id, brand_id, or both.", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ campaign_id: z.string().uuid().optional().openapi({ description: "Filter by campaign. At least one of campaign_id or brand_id is required." }), brand_id: z.string().uuid().optional().openapi({ description: "Filter by brand (returns journalists whose brand_ids array contains this brand). At least one of campaign_id or brand_id is required." }), outlet_id: z.string().uuid().optional(), run_id: z.string().uuid().optional().openapi({ description: "Filter by the run that created the journalist entries." }) }) }, responses: { 200: { description: "Campaign journalists with journalist details. The brandIds field is a UUID array.", content: { "application/json": { schema: CampaignOutletJournalistsResponseSchema } } }, 400: { description: "Validation error — at least one of campaign_id or brand_id is required", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Stats (private — requires identity headers)
 registry.registerPath({ method: "get", path: "/stats", summary: "Get journalist stats with optional dynasty-aware filtering and grouping", security: [{ [apiKeyAuth.name]: [] }], request: { query: StatsQuerySchema }, responses: { 200: { description: "Journalist stats", content: { "application/json": { schema: StatsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });

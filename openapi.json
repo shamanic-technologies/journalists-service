@@ -179,9 +179,16 @@
             "type": "string",
             "format": "uuid"
           },
-          "brandId": {
-            "type": "string",
-            "format": "uuid"
+          "brandIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Brand UUIDs associated with this campaign journalist",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440000"
+            ]
           },
           "featureSlug": {
             "type": "string",
@@ -246,7 +253,7 @@
           "campaignId",
           "outletId",
           "orgId",
-          "brandId",
+          "brandIds",
           "featureSlug",
           "relevanceScore",
           "whyRelevant",
@@ -468,7 +475,7 @@
     },
     "/buffer/next": {
       "post": {
-        "summary": "Pull next best journalist from buffer for a campaign+outlet. Refills buffer automatically on first call.",
+        "summary": "Pull next best journalist from buffer for a campaign+outlet. Refills buffer automatically on first call. The x-brand-id header supports CSV format (e.g. uuid1,uuid2).",
         "security": [
           {
             "ApiKeyAuth": []
@@ -519,7 +526,7 @@
     },
     "/discover": {
       "post": {
-        "summary": "Discover new journalists for a campaign+outlet. Creates a run, scrapes articles, scores journalists via LLM, and stores them as buffered.",
+        "summary": "Discover new journalists for a campaign+outlet. Creates a run, scrapes articles, scores journalists via LLM, and stores them as buffered. The x-brand-id header supports CSV format (e.g. uuid1,uuid2).",
         "security": [
           {
             "ApiKeyAuth": []
@@ -591,7 +598,7 @@
             "schema": {
               "type": "string",
               "format": "uuid",
-              "description": "Filter by brand (returns journalists across all campaigns for that brand). At least one of campaign_id or brand_id is required."
+              "description": "Filter by brand (returns journalists whose brand_ids array contains this brand). At least one of campaign_id or brand_id is required."
             },
             "required": false,
             "name": "brand_id",
@@ -619,7 +626,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Campaign journalists with journalist details",
+            "description": "Campaign journalists with journalist details. The brandIds field is a UUID array.",
             "content": {
               "application/json": {
                 "schema": {
@@ -684,7 +691,7 @@
             "schema": {
               "type": "string",
               "format": "uuid",
-              "description": "Filter by brand ID"
+              "description": "Filter by brand ID (matches rows where this brand is in the brand_ids array)"
             },
             "required": false,
             "name": "brandId",
@@ -812,7 +819,7 @@
             "schema": {
               "type": "string",
               "format": "uuid",
-              "description": "Filter by brand ID"
+              "description": "Filter by brand ID (matches rows where this brand is in the brand_ids array)"
             },
             "required": false,
             "name": "brandId",
@@ -910,7 +917,7 @@
             "schema": {
               "type": "string",
               "format": "uuid",
-              "description": "Brand ID to scope costs to"
+              "description": "Brand ID to scope costs to (matches rows where this brand is in the brand_ids array)"
             },
             "required": true,
             "name": "brandId",

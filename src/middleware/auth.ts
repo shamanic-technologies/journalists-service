@@ -17,6 +17,12 @@ export function requireApiKey(
   next();
 }
 
+/** Parse the x-brand-id header as CSV into a string[] of UUIDs */
+function parseBrandIds(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return String(raw).split(",").map((s) => s.trim()).filter(Boolean);
+}
+
 export function requireIdentityHeaders(
   req: Request,
   res: Response,
@@ -43,7 +49,7 @@ export function requireIdentityHeaders(
 
   const featureSlug = req.headers["x-feature-slug"] as string | undefined;
   const campaignId = req.headers["x-campaign-id"] as string | undefined;
-  const brandId = req.headers["x-brand-id"] as string | undefined;
+  const brandIds = parseBrandIds(req.headers["x-brand-id"] as string | undefined);
   const workflowSlug = req.headers["x-workflow-slug"] as string | undefined;
 
   res.locals.orgId = orgId;
@@ -51,7 +57,7 @@ export function requireIdentityHeaders(
   res.locals.runId = runId;
   res.locals.featureSlug = featureSlug ?? null;
   res.locals.campaignId = campaignId ?? null;
-  res.locals.brandId = brandId ?? null;
+  res.locals.brandIds = brandIds;
   res.locals.workflowSlug = workflowSlug ?? null;
   next();
 }
