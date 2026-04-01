@@ -389,6 +389,22 @@
           "groups"
         ]
       },
+      "OutletBlockedResponse": {
+        "type": "object",
+        "properties": {
+          "blocked": {
+            "type": "boolean",
+            "description": "Whether this outlet is blocked for the given brand+org"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Human-readable reason when blocked"
+          }
+        },
+        "required": [
+          "blocked"
+        ]
+      },
       "OutletContactedResponse": {
         "type": "object",
         "properties": {
@@ -1002,9 +1018,83 @@
         }
       }
     },
+    "/internal/outlets/blocked": {
+      "get": {
+        "summary": "Check if an outlet is blocked for a brand+org. Uses full dedup logic: checks lead-service for prior contacts, reply classification, 30-day no-reply cooldown, and 12-month expiry.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Organization ID"
+            },
+            "required": true,
+            "name": "org_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated brand UUIDs",
+              "example": "uuid1,uuid2"
+            },
+            "required": true,
+            "name": "brand_ids",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Outlet ID to check"
+            },
+            "required": true,
+            "name": "outlet_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Outlet blocked status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutletBlockedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/internal/outlets/contacted": {
       "get": {
-        "summary": "Check if any journalist at an outlet was contacted for a given org and overlapping brands",
+        "summary": "DEPRECATED — use /internal/outlets/blocked. Check if any journalist at an outlet was contacted for a given org and overlapping brands",
         "security": [
           {
             "ApiKeyAuth": []
