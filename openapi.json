@@ -389,6 +389,18 @@
           "groups"
         ]
       },
+      "OutletContactedResponse": {
+        "type": "object",
+        "properties": {
+          "contacted": {
+            "type": "boolean",
+            "description": "True if at least one campaign-journalist row exists with status=contacted for the given org, any overlapping brand, and outlet — excluding the specified campaign"
+          }
+        },
+        "required": [
+          "contacted"
+        ]
+      },
       "Journalist": {
         "type": "object",
         "properties": {
@@ -973,6 +985,80 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CostStatsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/outlets/contacted": {
+      "get": {
+        "summary": "Check if any journalist at an outlet was contacted for a given org and overlapping brands, excluding a specific campaign",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Organization ID"
+            },
+            "required": true,
+            "name": "org_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated brand UUIDs",
+              "example": "550e8400-e29b-41d4-a716-446655440000,660e8400-e29b-41d4-a716-446655440001"
+            },
+            "required": true,
+            "name": "brand_ids",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Outlet ID to check"
+            },
+            "required": true,
+            "name": "outlet_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Campaign ID to exclude from the check (prevents self-deduplication)"
+            },
+            "required": true,
+            "name": "exclude_campaign_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Whether any journalist at the outlet was contacted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutletContactedResponse"
                 }
               }
             }
