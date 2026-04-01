@@ -75,6 +75,51 @@ export async function fetchLeadStats(
  * Fetch contacted count from lead-service GET /stats with groupBy.
  * Fail-open: returns null if lead-service is unreachable.
  */
+// ── Outlet dedup: lead statuses scoped by brand + outlet ──────────────
+
+export interface LeadStatus {
+  leadId: string;
+  email: string;
+  journalistId: string | null;
+  outletId: string | null;
+  contacted: boolean;
+  delivered: boolean;
+  bounced: boolean;
+  replied: boolean;
+  replyClassification: "positive" | "negative" | "neutral" | null;
+  lastDeliveredAt: string | null;
+}
+
+/**
+ * Fetch per-lead delivery statuses from lead-service GET /leads/status.
+ * Used for outlet-level dedup: checks if any journalist from this outlet
+ * was already contacted for the given brand+org (cross-campaign).
+ *
+ * Requires x-org-id in passthroughHeaders (scopes by org automatically).
+ */
+export async function fetchLeadStatuses(
+  params: { brandId: string; outletId: string },
+  passthroughHeaders: Record<string, string>
+): Promise<LeadStatus[]> {
+  const { url, apiKey } = getConfig();
+  const qs = new URLSearchParams();
+  qs.set("brandId", params.brandId);
+  qs.set("outletId", params.outletId);
+
+  const res = await fetch(`${url}/leads/status?${qs.toString()}`, {
+    headers: { "x-api-key": apiKey, ...passthroughHeaders },
+  });
+
+  if (!res.ok) {
+    throw new Error(
+      `[journalists-service] lead-service GET /leads/status failed (${res.status})`
+    );
+  }
+
+  const body = (await res.json()) as { statuses: LeadStatus[] };
+  return body.statuses;
+}
+
 export async function fetchLeadStatsGrouped(
   params: LeadStatsParams,
   groupBy: string,

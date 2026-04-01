@@ -37,14 +37,22 @@ vi.mock("../../src/lib/chat-client.js", () => ({
   chatComplete: vi.fn(),
 }));
 
+vi.mock("../../src/lib/lead-client.js", () => ({
+  fetchLeadStats: vi.fn(),
+  fetchLeadStatsGrouped: vi.fn(),
+  fetchLeadStatuses: vi.fn(),
+}));
+
 import { createChildRun } from "../../src/lib/runs-client.js";
 import { extractBrandFields, getFieldValue } from "../../src/lib/brand-client.js";
 import { fetchCampaign } from "../../src/lib/campaign-client.js";
 import { fetchOutlet } from "../../src/lib/outlets-client.js";
 import { discoverOutletArticles } from "../../src/lib/articles-client.js";
 import { chatComplete } from "../../src/lib/chat-client.js";
+import { fetchLeadStatuses } from "../../src/lib/lead-client.js";
 
 const mockedCreateChildRun = vi.mocked(createChildRun);
+const mockedFetchLeadStatuses = vi.mocked(fetchLeadStatuses);
 const mockedExtractBrandFields = vi.mocked(extractBrandFields);
 const mockedGetFieldValue = vi.mocked(getFieldValue);
 const mockedFetchCampaign = vi.mocked(fetchCampaign);
@@ -161,6 +169,8 @@ describe("POST /buffer/next", () => {
   beforeEach(async () => {
     await cleanTestData();
     vi.resetAllMocks();
+    // Default: no prior contacts — outlet is not blocked
+    mockedFetchLeadStatuses.mockResolvedValue([]);
   });
 
   afterAll(async () => {
@@ -492,5 +502,220 @@ describe("POST /buffer/next", () => {
 
     expect(res.status).toBe(502);
     expect(res.body.error).toContain("Articles service failed");
+  });
+
+  // ── Outlet dedup gate ──────────────────────────────────────────────
+
+  describe("outlet dedup gate", () => {
+    it("blocks when a journalist from this outlet replied negatively < 12 months ago", async () => {
+      const sarah = await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: "Sarah Johnson",
+        firstName: "Sarah",
+        lastName: "Johnson",
+      });
+
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: CAMPAIGN_ID,
+        outletId: OUTLET_ID,
+        relevanceScore: "92.00",
+        status: "buffered",
+      });
+
+      mockedFetchLeadStatuses.mockResolvedValue([
+        {
+          leadId: "lead-1",
+          email: "prev@techcrunch.com",
+          journalistId: "prev-journalist-id",
+          outletId: OUTLET_ID,
+          contacted: true,
+          delivered: true,
+          bounced: false,
+          replied: true,
+          replyClassification: "negative",
+          lastDeliveredAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), // 10 days ago
+        },
+      ]);
+
+      const res = await request(app)
+        .post("/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(false);
+      expect(res.body.reason).toContain("replied negatively");
+      // Should NOT create a child run — gate fires before run creation
+      expect(mockedCreateChildRun).not.toHaveBeenCalled();
+    });
+
+    it("blocks when a journalist from this outlet replied positively", async () => {
+      mockedFetchLeadStatuses.mockResolvedValue([
+        {
+          leadId: "lead-1",
+          email: "prev@techcrunch.com",
+          journalistId: "prev-journalist-id",
+          outletId: OUTLET_ID,
+          contacted: true,
+          delivered: true,
+          bounced: false,
+          replied: true,
+          replyClassification: "positive",
+          lastDeliveredAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days ago
+        },
+      ]);
+
+      const res = await request(app)
+        .post("/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(false);
+      expect(res.body.reason).toContain("replied positively");
+    });
+
+    it("blocks when journalist contacted < 30 days ago with no reply", async () => {
+      mockedFetchLeadStatuses.mockResolvedValue([
+        {
+          leadId: "lead-1",
+          email: "prev@techcrunch.com",
+          journalistId: "prev-journalist-id",
+          outletId: OUTLET_ID,
+          contacted: true,
+          delivered: true,
+          bounced: false,
+          replied: false,
+          replyClassification: null,
+          lastDeliveredAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(), // 15 days ago
+        },
+      ]);
+
+      const res = await request(app)
+        .post("/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(false);
+      expect(res.body.reason).toContain("waiting for reply");
+    });
+
+    it("allows when journalist contacted >= 30 days ago with no reply", async () => {
+      const sarah = await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: "Sarah Johnson",
+        firstName: "Sarah",
+        lastName: "Johnson",
+      });
+
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: CAMPAIGN_ID,
+        outletId: OUTLET_ID,
+        relevanceScore: "92.00",
+        status: "buffered",
+      });
+
+      mockedCreateChildRun.mockResolvedValue({
+        id: CHILD_RUN_ID,
+        parentRunId: "99999999-9999-9999-9999-999999999999",
+        serviceName: "journalists-service",
+        taskName: "buffer-next",
+      });
+
+      mockedFetchLeadStatuses.mockResolvedValue([
+        {
+          leadId: "lead-1",
+          email: "prev@techcrunch.com",
+          journalistId: "prev-journalist-id",
+          outletId: OUTLET_ID,
+          contacted: true,
+          delivered: true,
+          bounced: false,
+          replied: false,
+          replyClassification: null,
+          lastDeliveredAt: new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString(), // 35 days ago
+        },
+      ]);
+
+      const res = await request(app)
+        .post("/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(true);
+      expect(res.body.journalist.firstName).toBe("Sarah");
+    });
+
+    it("allows when negative reply is older than 12 months", async () => {
+      const sarah = await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: "Sarah Johnson",
+        firstName: "Sarah",
+        lastName: "Johnson",
+      });
+
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: CAMPAIGN_ID,
+        outletId: OUTLET_ID,
+        relevanceScore: "92.00",
+        status: "buffered",
+      });
+
+      mockedCreateChildRun.mockResolvedValue({
+        id: CHILD_RUN_ID,
+        parentRunId: "99999999-9999-9999-9999-999999999999",
+        serviceName: "journalists-service",
+        taskName: "buffer-next",
+      });
+
+      mockedFetchLeadStatuses.mockResolvedValue([
+        {
+          leadId: "lead-1",
+          email: "prev@techcrunch.com",
+          journalistId: "prev-journalist-id",
+          outletId: OUTLET_ID,
+          contacted: true,
+          delivered: true,
+          bounced: false,
+          replied: true,
+          replyClassification: "negative",
+          lastDeliveredAt: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString(), // 400 days ago
+        },
+      ]);
+
+      const res = await request(app)
+        .post("/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(true);
+      expect(res.body.journalist.firstName).toBe("Sarah");
+    });
+
+    it("returns 502 when lead-service is unreachable for dedup check", async () => {
+      mockedFetchLeadStatuses.mockRejectedValue(
+        new Error("lead-service GET /leads/status failed (503)")
+      );
+
+      const res = await request(app)
+        .post("/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(502);
+      expect(res.body.error).toContain("lead-service");
+    });
   });
 });
