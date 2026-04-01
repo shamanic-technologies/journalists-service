@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { inArray, eq, and, ne, arrayOverlaps } from "drizzle-orm";
+import { inArray, eq, and, arrayOverlaps } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import { journalists, campaignJournalists } from "../db/schema.js";
@@ -11,7 +11,6 @@ const outletContactedQuerySchema = z.object({
   org_id: z.string().uuid(),
   brand_ids: z.string().transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)),
   outlet_id: z.string().uuid(),
-  exclude_campaign_id: z.string().uuid(),
 });
 
 router.get("/internal/outlets/contacted", async (req, res) => {
@@ -21,7 +20,7 @@ router.get("/internal/outlets/contacted", async (req, res) => {
     return;
   }
 
-  const { org_id, brand_ids, outlet_id, exclude_campaign_id } = parsed.data;
+  const { org_id, brand_ids, outlet_id } = parsed.data;
 
   if (brand_ids.length === 0) {
     res.status(400).json({ error: "brand_ids must contain at least one UUID" });
@@ -36,7 +35,6 @@ router.get("/internal/outlets/contacted", async (req, res) => {
         eq(campaignJournalists.orgId, org_id),
         eq(campaignJournalists.outletId, outlet_id),
         eq(campaignJournalists.status, "contacted"),
-        ne(campaignJournalists.campaignId, exclude_campaign_id),
         arrayOverlaps(campaignJournalists.brandIds, brand_ids)
       )
     )
