@@ -16,7 +16,6 @@ const BRAND_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const BRAND_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 const BRAND_C = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 const CAMPAIGN_1 = "11111111-0000-0000-0000-000000000001";
-const CAMPAIGN_2 = "11111111-0000-0000-0000-000000000002";
 
 describe("Internal Endpoints", () => {
   beforeEach(async () => {
@@ -41,7 +40,7 @@ describe("Internal Endpoints", () => {
       });
 
       const res = await request(app)
-        .get(`/internal/outlets/contacted?org_id=${ORG_ID}&brand_ids=${BRAND_B}&outlet_id=${OUTLET_ID}&exclude_campaign_id=${CAMPAIGN_2}`)
+        .get(`/internal/outlets/contacted?org_id=${ORG_ID}&brand_ids=${BRAND_B}&outlet_id=${OUTLET_ID}`)
         .set(AUTH_HEADERS);
 
       expect(res.status).toBe(200);
@@ -60,15 +59,15 @@ describe("Internal Endpoints", () => {
       });
 
       const res = await request(app)
-        .get(`/internal/outlets/contacted?org_id=${ORG_ID}&brand_ids=${BRAND_A}&outlet_id=${OUTLET_ID}&exclude_campaign_id=${CAMPAIGN_2}`)
+        .get(`/internal/outlets/contacted?org_id=${ORG_ID}&brand_ids=${BRAND_A}&outlet_id=${OUTLET_ID}`)
         .set(AUTH_HEADERS);
 
       expect(res.status).toBe(200);
       expect(res.body.contacted).toBe(false);
     });
 
-    it("excludes the specified campaign from the check", async () => {
-      const j = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "SelfJ" });
+    it("detects contacts from the same campaign (no self-exclusion)", async () => {
+      const j = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "SameJ" });
       await insertTestCampaignJournalist({
         journalistId: j.id,
         orgId: ORG_ID,
@@ -78,13 +77,12 @@ describe("Internal Endpoints", () => {
         status: "contacted",
       });
 
-      // Excluding CAMPAIGN_1 should return false since that's the only contacted row
       const res = await request(app)
-        .get(`/internal/outlets/contacted?org_id=${ORG_ID}&brand_ids=${BRAND_A}&outlet_id=${OUTLET_ID}&exclude_campaign_id=${CAMPAIGN_1}`)
+        .get(`/internal/outlets/contacted?org_id=${ORG_ID}&brand_ids=${BRAND_A}&outlet_id=${OUTLET_ID}`)
         .set(AUTH_HEADERS);
 
       expect(res.status).toBe(200);
-      expect(res.body.contacted).toBe(false);
+      expect(res.body.contacted).toBe(true);
     });
 
     it("returns contacted=false when brands do not overlap", async () => {
@@ -99,7 +97,7 @@ describe("Internal Endpoints", () => {
       });
 
       const res = await request(app)
-        .get(`/internal/outlets/contacted?org_id=${ORG_ID}&brand_ids=${BRAND_C}&outlet_id=${OUTLET_ID}&exclude_campaign_id=${CAMPAIGN_2}`)
+        .get(`/internal/outlets/contacted?org_id=${ORG_ID}&brand_ids=${BRAND_C}&outlet_id=${OUTLET_ID}`)
         .set(AUTH_HEADERS);
 
       expect(res.status).toBe(200);
@@ -119,7 +117,7 @@ describe("Internal Endpoints", () => {
       });
 
       const res = await request(app)
-        .get(`/internal/outlets/contacted?org_id=${OTHER_ORG}&brand_ids=${BRAND_A}&outlet_id=${OUTLET_ID}&exclude_campaign_id=${CAMPAIGN_2}`)
+        .get(`/internal/outlets/contacted?org_id=${OTHER_ORG}&brand_ids=${BRAND_A}&outlet_id=${OUTLET_ID}`)
         .set(AUTH_HEADERS);
 
       expect(res.status).toBe(200);
@@ -145,9 +143,8 @@ describe("Internal Endpoints", () => {
         status: "contacted",
       });
 
-      // Query with BRAND_A,BRAND_B — should overlap with BRAND_B
       const res = await request(app)
-        .get(`/internal/outlets/contacted?org_id=${ORG_ID}&brand_ids=${BRAND_A},${BRAND_B}&outlet_id=${OUTLET_ID}&exclude_campaign_id=${CAMPAIGN_2}`)
+        .get(`/internal/outlets/contacted?org_id=${ORG_ID}&brand_ids=${BRAND_A},${BRAND_B}&outlet_id=${OUTLET_ID}`)
         .set(AUTH_HEADERS);
 
       expect(res.status).toBe(200);
