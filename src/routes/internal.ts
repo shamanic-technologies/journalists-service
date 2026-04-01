@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { inArray, eq, and, arrayOverlaps } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { journalists, campaignJournalists } from "../db/schema.js";
+import { journalists } from "../db/schema.js";
 import { checkOutletDedup } from "../lib/outlet-dedup.js";
 import type { ServiceContext } from "../lib/service-context.js";
 
@@ -59,45 +59,6 @@ router.get("/internal/outlets/blocked", async (req, res) => {
     const message = err instanceof Error ? err.message : "Internal server error";
     res.status(502).json({ error: message });
   }
-});
-
-// GET /internal/outlets/contacted — DEPRECATED: use /internal/outlets/blocked instead
-const outletContactedQuerySchema = z.object({
-  org_id: z.string().uuid(),
-  brand_ids: z.string().transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)),
-  outlet_id: z.string().uuid(),
-});
-
-router.get("/internal/outlets/contacted", async (req, res) => {
-  const parsed = outletContactedQuerySchema.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues.map((i) => i.message).join(", ") });
-    return;
-  }
-
-  const { org_id, brand_ids, outlet_id } = parsed.data;
-
-  if (brand_ids.length === 0) {
-    res.status(400).json({ error: "brand_ids must contain at least one UUID" });
-    return;
-  }
-
-  console.warn("[journalists-service] DEPRECATED: GET /internal/outlets/contacted — use /internal/outlets/blocked instead");
-
-  const rows = await db
-    .select({ id: campaignJournalists.id })
-    .from(campaignJournalists)
-    .where(
-      and(
-        eq(campaignJournalists.orgId, org_id),
-        eq(campaignJournalists.outletId, outlet_id),
-        eq(campaignJournalists.status, "contacted"),
-        arrayOverlaps(campaignJournalists.brandIds, brand_ids)
-      )
-    )
-    .limit(1);
-
-  res.json({ contacted: rows.length > 0 });
 });
 
 // GET /internal/journalists/by-ids
