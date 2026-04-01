@@ -10,6 +10,8 @@ function getConfig() {
 }
 
 export interface CompleteRequest {
+  provider: "google" | "anthropic";
+  model: string;
   message: string;
   systemPrompt: string;
   responseFormat?: "json";

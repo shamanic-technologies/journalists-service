@@ -114,7 +114,7 @@ describe("all 7 headers forwarded by every client", () => {
     );
 
     const { chatComplete } = await import("../../src/lib/chat-client.js");
-    await chatComplete({ message: "hi", systemPrompt: "test" }, FULL_CTX);
+    await chatComplete({ provider: "google", model: "flash", message: "hi", systemPrompt: "test" }, FULL_CTX);
 
     const headers = getHeaders();
     expectAll7Headers(headers);
@@ -173,7 +173,7 @@ describe("all 7 headers forwarded by every client", () => {
     };
 
     const { chatComplete } = await import("../../src/lib/chat-client.js");
-    await chatComplete({ message: "hi", systemPrompt: "test" }, nullCtx);
+    await chatComplete({ provider: "google", model: "flash", message: "hi", systemPrompt: "test" }, nullCtx);
 
     const headers = getHeaders();
     expect(headers["x-org-id"]).toBe("org-1");
@@ -201,7 +201,7 @@ describe("all 7 headers forwarded by every client", () => {
     };
 
     const { chatComplete } = await import("../../src/lib/chat-client.js");
-    await chatComplete({ message: "hi", systemPrompt: "test" }, multiBrandCtx);
+    await chatComplete({ provider: "google", model: "flash", message: "hi", systemPrompt: "test" }, multiBrandCtx);
 
     const headers = getHeaders();
     expect(headers["x-brand-id"]).toBe("brand-1,brand-2,brand-3");

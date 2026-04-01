@@ -122,6 +122,8 @@ ${a.articles.map((art) => `  - "${art.title || "(untitled)"}" (${art.publishedAt
 
   const response = await chatComplete(
     {
+      provider: "google",
+      model: "flash",
       systemPrompt: `You are a PR research analyst. Score journalists' relevance to a brand based on their published articles.
 
 Rules:
