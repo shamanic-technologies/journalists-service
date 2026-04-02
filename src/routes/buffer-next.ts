@@ -271,6 +271,10 @@ router.post("/buffer/next", async (req, res) => {
       // Loop back to claim from the freshly-filled buffer
     }
 
+    console.log(
+      `[journalists-service] POST /buffer/next result — outletId=${outletId} campaignId=${campaignId} found=${response.found}${response.found ? ` journalistId=${response.journalist!.id}` : ""}`
+    );
+
     // Save to idempotency cache
     if (idempotencyKey) {
       await db
