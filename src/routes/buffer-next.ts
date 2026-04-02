@@ -137,6 +137,10 @@ router.post("/buffer/next", async (req, res) => {
     );
     const childCtx: ServiceContext = { ...ctx, runId: childRun.id };
 
+    // Fetch outlet info once — used for refill and for logging
+    const outlet = await fetchOutlet(outletId, childCtx);
+    const outletLabel = outlet.outletName || extractDomain(outlet.outletUrl);
+
     let response: BufferNextResponse = { found: false, runId: childRun.id };
     let hasAttemptedRefill = false;
 
@@ -199,8 +203,8 @@ router.post("/buffer/next", async (req, res) => {
         break;
       }
 
-      // Refill buffer
-      const [brandFields, campaign, outlet] = await Promise.all([
+      // Refill buffer (outlet already fetched above)
+      const [brandFields, campaign] = await Promise.all([
         extractBrandFields(
           [
             { key: "brand_name", description: "The brand's name" },
@@ -213,7 +217,6 @@ router.post("/buffer/next", async (req, res) => {
           childCtx
         ),
         fetchCampaign(campaignId, childCtx),
-        fetchOutlet(outletId, childCtx),
       ]);
 
       const brandName =
@@ -272,7 +275,7 @@ router.post("/buffer/next", async (req, res) => {
     }
 
     console.log(
-      `[journalists-service] POST /buffer/next result — outletId=${outletId} campaignId=${campaignId} found=${response.found}${response.found ? ` journalistId=${response.journalist!.id}` : ""}`
+      `[journalists-service] POST /buffer/next result — outlet="${outletLabel}" found=${response.found}${response.found ? ` journalist="${response.journalist!.firstName} ${response.journalist!.lastName}"` : ""}`
     );
 
     // Save to idempotency cache
