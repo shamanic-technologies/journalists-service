@@ -4,28 +4,15 @@ import { z } from "zod";
 import { db } from "../db/index.js";
 import { journalists } from "../db/schema.js";
 import { checkOutletBlocked } from "../lib/outlet-blocked.js";
-import type { ServiceContext } from "../lib/service-context.js";
 
 const router = Router();
 
-// GET /internal/outlets/blocked — full dedup + local + relevance check
+// GET /internal/outlets/blocked — relevance threshold check
 // All identity/context comes from headers (enforced by middleware).
 // Only outlet_id is a query param (it's the resource being queried).
 const outletBlockedQuerySchema = z.object({
   outlet_id: z.string().uuid(),
 });
-
-function getCtx(locals: Record<string, unknown>): ServiceContext {
-  return {
-    orgId: locals.orgId as string,
-    userId: locals.userId as string,
-    runId: locals.runId as string,
-    featureSlug: locals.featureSlug as string,
-    campaignId: locals.campaignId as string,
-    brandIds: locals.brandIds as string[],
-    workflowSlug: locals.workflowSlug as string,
-  };
-}
 
 router.get("/internal/outlets/blocked", async (req, res) => {
   const parsed = outletBlockedQuerySchema.safeParse(req.query);
@@ -35,13 +22,13 @@ router.get("/internal/outlets/blocked", async (req, res) => {
   }
 
   const { outlet_id } = parsed.data;
-  const ctx = getCtx(res.locals);
+  const campaignId = res.locals.campaignId as string;
 
   try {
-    const result = await checkOutletBlocked(outlet_id, ctx.campaignId, ctx.brandIds, ctx);
+    const result = await checkOutletBlocked(outlet_id, campaignId);
     if (result.blocked) {
       console.log(
-        `[journalists-service] GET /internal/outlets/blocked: ${result.reason} (outletId=${outlet_id} campaignId=${ctx.campaignId} orgId=${ctx.orgId})`
+        `[journalists-service] GET /internal/outlets/blocked: ${result.reason} (outletId=${outlet_id} campaignId=${campaignId})`
       );
       res.json({ blocked: true, reason: result.reason });
       return;

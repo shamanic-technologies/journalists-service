@@ -8,7 +8,7 @@ import {
   closeDb,
 } from "../helpers/test-db.js";
 import { db } from "../../src/db/index.js";
-import { campaignJournalists } from "../../src/db/schema.js";
+import { campaignJournalists, discoveryCache } from "../../src/db/schema.js";
 import { eq } from "drizzle-orm";
 
 // Mock all external service clients
@@ -72,9 +72,24 @@ const ORG_ID = "22222222-2222-2222-2222-222222222222";
 const OUTLET_ID = "11111111-1111-1111-1111-111111111111";
 const BRAND_ID = "44444444-4444-4444-4444-444444444444";
 const CAMPAIGN_ID = "55555555-5555-5555-5555-555555555555";
+const OTHER_CAMPAIGN = "66666666-6666-6666-6666-666666666666";
 const CHILD_RUN_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 
 const BUFFER_HEADERS = AUTH_HEADERS;
+
+/** Seed discovery cache so processOutlet won't try to refill when buffer is exhausted */
+async function seedDiscoveryCache(outletId = OUTLET_ID) {
+  await db.insert(discoveryCache).values({
+    orgId: ORG_ID,
+    brandIds: [BRAND_ID],
+    campaignId: CAMPAIGN_ID,
+    outletId,
+    discoveredAt: new Date(),
+  }).onConflictDoUpdate({
+    target: [discoveryCache.orgId, discoveryCache.campaignId, discoveryCache.outletId],
+    set: { discoveredAt: new Date() },
+  });
+}
 
 function setupBaseMocks() {
   mockedCreateChildRun.mockResolvedValue({
@@ -213,7 +228,6 @@ describe("POST /buffer/next", () => {
   beforeEach(async () => {
     await cleanTestData();
     vi.resetAllMocks();
-    // Default: email-gateway reports no prior contacts (for outlet dedup)
     mockedCheckEmailStatuses.mockResolvedValue([]);
   });
 
@@ -267,7 +281,7 @@ describe("POST /buffer/next", () => {
     expect(res.body.found).toBe(false);
   });
 
-  // ── With outletId: claim + Apollo + email-gateway ─────────────────
+  // ── With outletId: claim + Apollo + dedup ───────────────────────────
 
   it("claims journalist, resolves email via Apollo, returns enriched response", async () => {
     const sarah = await insertTestJournalist({
@@ -400,229 +414,6 @@ describe("POST /buffer/next", () => {
     expect(sarahCj[0].status).toBe("skipped");
   });
 
-  it("skips journalist whose email was already contacted", async () => {
-    const sarah = await insertTestJournalist({
-      outletId: OUTLET_ID,
-      journalistName: "Sarah Johnson",
-      firstName: "Sarah",
-      lastName: "Johnson",
-    });
-    const mike = await insertTestJournalist({
-      outletId: OUTLET_ID,
-      journalistName: "Mike Chen",
-      firstName: "Mike",
-      lastName: "Chen",
-    });
-
-    await insertTestCampaignJournalist({
-      journalistId: sarah.id,
-      orgId: ORG_ID,
-      brandIds: [BRAND_ID],
-      campaignId: CAMPAIGN_ID,
-      outletId: OUTLET_ID,
-      relevanceScore: "92.00",
-      status: "buffered",
-    });
-    await insertTestCampaignJournalist({
-      journalistId: mike.id,
-      orgId: ORG_ID,
-      brandIds: [BRAND_ID],
-      campaignId: CAMPAIGN_ID,
-      outletId: OUTLET_ID,
-      relevanceScore: "78.00",
-      status: "buffered",
-    });
-
-    setupBaseMocks();
-
-    // Both have emails from Apollo
-    mockedMatchPerson
-      .mockResolvedValueOnce({
-        enrichmentId: "e1",
-        person: {
-          id: "apollo-sarah",
-          firstName: "Sarah",
-          lastName: "Johnson",
-          email: "sarah@techcrunch.com",
-          emailStatus: "verified",
-          title: "Reporter",
-          linkedinUrl: null,
-          organizationName: "TechCrunch",
-          organizationDomain: "techcrunch.com",
-        },
-        cached: false,
-      })
-      .mockResolvedValueOnce({
-        enrichmentId: "e2",
-        person: {
-          id: "apollo-mike",
-          firstName: "Mike",
-          lastName: "Chen",
-          email: "mike@techcrunch.com",
-          emailStatus: "verified",
-          title: "Writer",
-          linkedinUrl: null,
-          organizationName: "TechCrunch",
-          organizationDomain: "techcrunch.com",
-        },
-        cached: false,
-      });
-
-    // No contacted journalists in DB → outlet dedup won't call email-gateway.
-    // Per-journalist email checks:
-    mockedCheckEmailStatuses
-      // Sarah's email: already contacted at brand level → skip
-      .mockResolvedValueOnce([
-        {
-          leadId: "any",
-          email: "sarah@techcrunch.com",
-          broadcast: {
-            campaign: null,
-            brand: {
-              lead: { contacted: true, delivered: true, replied: false, replyClassification: null, lastDeliveredAt: new Date().toISOString() },
-              email: { contacted: true, delivered: true, bounced: false, unsubscribed: false, lastDeliveredAt: new Date().toISOString() },
-            },
-            global: { email: { bounced: false, unsubscribed: false } },
-          },
-          transactional: {
-            campaign: null,
-            brand: null,
-            global: { email: { bounced: false, unsubscribed: false } },
-          },
-        },
-      ])
-      // Mike's email: not contacted → serve
-      .mockResolvedValueOnce([
-        {
-          leadId: "any",
-          email: "mike@techcrunch.com",
-          broadcast: {
-            campaign: null,
-            brand: {
-              lead: { contacted: false, delivered: false, replied: false, replyClassification: null, lastDeliveredAt: null },
-              email: { contacted: false, delivered: false, bounced: false, unsubscribed: false, lastDeliveredAt: null },
-            },
-            global: { email: { bounced: false, unsubscribed: false } },
-          },
-          transactional: {
-            campaign: null,
-            brand: null,
-            global: { email: { bounced: false, unsubscribed: false } },
-          },
-        },
-      ]);
-
-    const res = await request(app)
-      .post("/buffer/next")
-      .set(BUFFER_HEADERS)
-      .send({ outletId: OUTLET_ID });
-
-    expect(res.status).toBe(200);
-    expect(res.body.found).toBe(true);
-    expect(res.body.journalist.firstName).toBe("Mike");
-    expect(res.body.journalist.email).toBe("mike@techcrunch.com");
-
-    // Sarah was skipped
-    const sarahCj = await db
-      .select()
-      .from(campaignJournalists)
-      .where(eq(campaignJournalists.journalistId, sarah.id));
-    expect(sarahCj[0].status).toBe("skipped");
-  });
-
-  // ── Outlet blocked gate ──────────────────────────────────────────
-
-  it("blocks second journalist from same outlet when first was recently served (< 1h)", async () => {
-    const sarah = await insertTestJournalist({
-      outletId: OUTLET_ID,
-      journalistName: "Sarah Johnson",
-      firstName: "Sarah",
-      lastName: "Johnson",
-    });
-    const mike = await insertTestJournalist({
-      outletId: OUTLET_ID,
-      journalistName: "Mike Chen",
-      firstName: "Mike",
-      lastName: "Chen",
-    });
-
-    await insertTestCampaignJournalist({
-      journalistId: sarah.id,
-      orgId: ORG_ID,
-      brandIds: [BRAND_ID],
-      campaignId: CAMPAIGN_ID,
-      outletId: OUTLET_ID,
-      relevanceScore: "92.00",
-      status: "served",
-      email: "sarah@techcrunch.com",
-    });
-    await insertTestCampaignJournalist({
-      journalistId: mike.id,
-      orgId: ORG_ID,
-      brandIds: [BRAND_ID],
-      campaignId: CAMPAIGN_ID,
-      outletId: OUTLET_ID,
-      relevanceScore: "78.00",
-      status: "buffered",
-    });
-
-    // fetchOutlet is called before processOutlet in the outletId path
-    mockedFetchOutlet.mockResolvedValue({
-      id: OUTLET_ID,
-      outletName: "TechCrunch",
-      outletUrl: "https://techcrunch.com",
-    });
-
-    const res = await request(app)
-      .post("/buffer/next")
-      .set(BUFFER_HEADERS)
-      .send({ outletId: OUTLET_ID });
-
-    expect(res.status).toBe(200);
-    expect(res.body.found).toBe(false);
-    expect(res.body.reason).toContain("already has a served journalist");
-    expect(mockedCreateChildRun).not.toHaveBeenCalled();
-  });
-
-  it("always blocks when first journalist reached 'contacted' status", async () => {
-    const sarah = await insertTestJournalist({
-      outletId: OUTLET_ID,
-      journalistName: "Sarah Johnson",
-      firstName: "Sarah",
-      lastName: "Johnson",
-    });
-
-    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-    await insertTestCampaignJournalist({
-      journalistId: sarah.id,
-      orgId: ORG_ID,
-      brandIds: [BRAND_ID],
-      campaignId: CAMPAIGN_ID,
-      outletId: OUTLET_ID,
-      relevanceScore: "92.00",
-      status: "contacted",
-      email: "sarah@techcrunch.com",
-      createdAt: threeDaysAgo,
-    });
-
-    // fetchOutlet is called before processOutlet in the outletId path
-    mockedFetchOutlet.mockResolvedValue({
-      id: OUTLET_ID,
-      outletName: "TechCrunch",
-      outletUrl: "https://techcrunch.com",
-    });
-
-    const res = await request(app)
-      .post("/buffer/next")
-      .set(BUFFER_HEADERS)
-      .send({ outletId: OUTLET_ID });
-
-    expect(res.status).toBe(200);
-    expect(res.body.found).toBe(false);
-    expect(res.body.reason).toContain("already has a served journalist");
-    expect(mockedCreateChildRun).not.toHaveBeenCalled();
-  });
-
   it("skips journalists below relevance threshold (30)", async () => {
     const lowScore = await insertTestJournalist({
       outletId: OUTLET_ID,
@@ -665,6 +456,460 @@ describe("POST /buffer/next", () => {
     expect(cj[0].status).toBe("skipped");
   });
 
+  // ── Dedup by journalist_id (brand+org level) ─────────────────────────
+
+  describe("dedup by journalist_id", () => {
+    it("skips journalist already contacted for same brand+org in another campaign", async () => {
+      const sarah = await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: "Sarah Johnson",
+        firstName: "Sarah",
+        lastName: "Johnson",
+      });
+
+      // Contacted in another campaign for same brand+org
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: OTHER_CAMPAIGN,
+        outletId: OUTLET_ID,
+        relevanceScore: "90.00",
+        status: "contacted",
+        email: "sarah@techcrunch.com",
+      });
+
+      // Buffered in current campaign
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: CAMPAIGN_ID,
+        outletId: OUTLET_ID,
+        relevanceScore: "92.00",
+        status: "buffered",
+      });
+
+      await seedDiscoveryCache();
+      setupBaseMocks();
+
+      const res = await request(app)
+        .post("/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(200);
+      // Sarah is skipped because journalist_id dedup fires before Apollo
+      expect(res.body.found).toBe(false);
+      // Apollo should NOT have been called (pre-check saves API credit)
+      expect(mockedMatchPerson).not.toHaveBeenCalled();
+    });
+
+    it("skips journalist recently served (< 1h) for same brand+org", async () => {
+      const sarah = await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: "Sarah Johnson",
+        firstName: "Sarah",
+        lastName: "Johnson",
+      });
+
+      // Recently served in another campaign (within 1h race window)
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: OTHER_CAMPAIGN,
+        outletId: OUTLET_ID,
+        relevanceScore: "90.00",
+        status: "served",
+        email: "sarah@techcrunch.com",
+      });
+
+      // Buffered in current campaign
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: CAMPAIGN_ID,
+        outletId: OUTLET_ID,
+        relevanceScore: "92.00",
+        status: "buffered",
+      });
+
+      await seedDiscoveryCache();
+      setupBaseMocks();
+
+      const res = await request(app)
+        .post("/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(false);
+      expect(mockedMatchPerson).not.toHaveBeenCalled();
+    });
+
+    it("allows journalist served > 1h ago without contacted status", async () => {
+      const sarah = await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: "Sarah Johnson",
+        firstName: "Sarah",
+        lastName: "Johnson",
+      });
+
+      // Served > 1h ago in another campaign (race window expired, never became contacted)
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: OTHER_CAMPAIGN,
+        outletId: OUTLET_ID,
+        relevanceScore: "90.00",
+        status: "served",
+        email: "sarah@techcrunch.com",
+        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+      });
+
+      // Buffered in current campaign
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: CAMPAIGN_ID,
+        outletId: OUTLET_ID,
+        relevanceScore: "92.00",
+        status: "buffered",
+      });
+
+      setupBaseMocks();
+      setupApolloMock("sarah@techcrunch.com");
+      setupEmailGatewayNotContacted();
+
+      const res = await request(app)
+        .post("/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(true);
+      expect(res.body.journalist.firstName).toBe("Sarah");
+    });
+  });
+
+  // ── Dedup by email (brand+org level) ─────────────────────────────────
+
+  describe("dedup by email", () => {
+    it("skips journalist whose email was already contacted for same brand+org", { timeout: 15000 }, async () => {
+      const OUTLET_ID_2 = "22222222-1111-1111-1111-111111111111";
+
+      // Different journalist at a different outlet, but same email
+      const prev = await insertTestJournalist({
+        outletId: OUTLET_ID_2,
+        journalistName: "Sarah J",
+        firstName: "Sarah",
+        lastName: "J",
+      });
+      await insertTestCampaignJournalist({
+        journalistId: prev.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: OTHER_CAMPAIGN,
+        outletId: OUTLET_ID_2,
+        relevanceScore: "85.00",
+        status: "contacted",
+        email: "sarah@techcrunch.com",
+      });
+
+      // New journalist at our outlet
+      const sarah = await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: "Sarah Johnson",
+        firstName: "Sarah",
+        lastName: "Johnson",
+      });
+      const mike = await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: "Mike Chen",
+        firstName: "Mike",
+        lastName: "Chen",
+      });
+
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: CAMPAIGN_ID,
+        outletId: OUTLET_ID,
+        relevanceScore: "92.00",
+        status: "buffered",
+      });
+      await insertTestCampaignJournalist({
+        journalistId: mike.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: CAMPAIGN_ID,
+        outletId: OUTLET_ID,
+        relevanceScore: "78.00",
+        status: "buffered",
+      });
+
+      setupBaseMocks();
+
+      // Sarah resolves to same email as prev
+      mockedMatchPerson
+        .mockResolvedValueOnce({
+          enrichmentId: "e1",
+          person: {
+            id: "apollo-sarah",
+            firstName: "Sarah",
+            lastName: "Johnson",
+            email: "sarah@techcrunch.com",
+            emailStatus: "verified",
+            title: "Reporter",
+            linkedinUrl: null,
+            organizationName: "TechCrunch",
+            organizationDomain: "techcrunch.com",
+          },
+          cached: false,
+        })
+        .mockResolvedValueOnce({
+          enrichmentId: "e2",
+          person: {
+            id: "apollo-mike",
+            firstName: "Mike",
+            lastName: "Chen",
+            email: "mike@techcrunch.com",
+            emailStatus: "verified",
+            title: "Writer",
+            linkedinUrl: null,
+            organizationName: "TechCrunch",
+            organizationDomain: "techcrunch.com",
+          },
+          cached: false,
+        });
+
+      setupEmailGatewayNotContacted();
+
+      const res = await request(app)
+        .post("/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(true);
+      // Sarah skipped (email dedup), Mike served
+      expect(res.body.journalist.firstName).toBe("Mike");
+      expect(res.body.journalist.email).toBe("mike@techcrunch.com");
+    });
+  });
+
+  // ── Dedup by apollo_person_id (brand+org level) ──────────────────────
+
+  describe("dedup by apollo_person_id", () => {
+    it("skips journalist with same Apollo person ID already contacted for same brand+org", { timeout: 15000 }, async () => {
+      const OUTLET_ID_2 = "22222222-1111-1111-1111-111111111111";
+
+      // Previous journalist with same Apollo person ID, different email
+      const prev = await insertTestJournalist({
+        outletId: OUTLET_ID_2,
+        journalistName: "S Johnson",
+        firstName: "S",
+        lastName: "Johnson",
+      });
+      await insertTestCampaignJournalist({
+        journalistId: prev.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: OTHER_CAMPAIGN,
+        outletId: OUTLET_ID_2,
+        relevanceScore: "85.00",
+        status: "contacted",
+        email: "s.johnson@old-outlet.com",
+        apolloPersonId: "apollo-same-person",
+      });
+
+      // New journalist
+      const sarah = await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: "Sarah Johnson",
+        firstName: "Sarah",
+        lastName: "Johnson",
+      });
+      const mike = await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: "Mike Chen",
+        firstName: "Mike",
+        lastName: "Chen",
+      });
+
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: CAMPAIGN_ID,
+        outletId: OUTLET_ID,
+        relevanceScore: "92.00",
+        status: "buffered",
+      });
+      await insertTestCampaignJournalist({
+        journalistId: mike.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: CAMPAIGN_ID,
+        outletId: OUTLET_ID,
+        relevanceScore: "78.00",
+        status: "buffered",
+      });
+
+      setupBaseMocks();
+
+      // Sarah resolves to same Apollo person as prev (different email)
+      mockedMatchPerson
+        .mockResolvedValueOnce({
+          enrichmentId: "e1",
+          person: {
+            id: "apollo-same-person",
+            firstName: "Sarah",
+            lastName: "Johnson",
+            email: "sarah.new@techcrunch.com",
+            emailStatus: "verified",
+            title: "Reporter",
+            linkedinUrl: null,
+            organizationName: "TechCrunch",
+            organizationDomain: "techcrunch.com",
+          },
+          cached: false,
+        })
+        .mockResolvedValueOnce({
+          enrichmentId: "e2",
+          person: {
+            id: "apollo-mike",
+            firstName: "Mike",
+            lastName: "Chen",
+            email: "mike@techcrunch.com",
+            emailStatus: "verified",
+            title: "Writer",
+            linkedinUrl: null,
+            organizationName: "TechCrunch",
+            organizationDomain: "techcrunch.com",
+          },
+          cached: false,
+        });
+
+      setupEmailGatewayNotContacted();
+
+      const res = await request(app)
+        .post("/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(true);
+      // Sarah skipped (apollo person dedup), Mike served
+      expect(res.body.journalist.firstName).toBe("Mike");
+    });
+  });
+
+  // ── Email-gateway: bounced / unsubscribed ────────────────────────────
+
+  describe("email-gateway bounced/unsubscribed", () => {
+    it("skips journalist whose email is globally bounced", async () => {
+      const sarah = await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: "Sarah Johnson",
+        firstName: "Sarah",
+        lastName: "Johnson",
+      });
+
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: CAMPAIGN_ID,
+        outletId: OUTLET_ID,
+        relevanceScore: "92.00",
+        status: "buffered",
+      });
+
+      await seedDiscoveryCache();
+      setupBaseMocks();
+      setupApolloMock("sarah@techcrunch.com");
+
+      mockedCheckEmailStatuses.mockResolvedValue([
+        {
+          leadId: sarah.id,
+          email: "sarah@techcrunch.com",
+          broadcast: {
+            campaign: null,
+            brand: null,
+            global: { email: { bounced: true, unsubscribed: false } },
+          },
+          transactional: {
+            campaign: null,
+            brand: null,
+            global: { email: { bounced: false, unsubscribed: false } },
+          },
+        },
+      ]);
+
+      const res = await request(app)
+        .post("/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(false);
+    });
+
+    it("skips journalist whose email is globally unsubscribed", async () => {
+      const sarah = await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: "Sarah Johnson",
+        firstName: "Sarah",
+        lastName: "Johnson",
+      });
+
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: CAMPAIGN_ID,
+        outletId: OUTLET_ID,
+        relevanceScore: "92.00",
+        status: "buffered",
+      });
+
+      await seedDiscoveryCache();
+      setupBaseMocks();
+      setupApolloMock("sarah@techcrunch.com");
+
+      mockedCheckEmailStatuses.mockResolvedValue([
+        {
+          leadId: sarah.id,
+          email: "sarah@techcrunch.com",
+          broadcast: {
+            campaign: null,
+            brand: null,
+            global: { email: { bounced: false, unsubscribed: true } },
+          },
+          transactional: {
+            campaign: null,
+            brand: null,
+            global: { email: { bounced: false, unsubscribed: false } },
+          },
+        },
+      ]);
+
+      const res = await request(app)
+        .post("/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(false);
+    });
+  });
+
   // ── Refill on empty buffer ──────────────────────────────────────────
 
   it("refills buffer and serves top-1 with email when buffer is empty", async () => {
@@ -691,7 +936,6 @@ describe("POST /buffer/next", () => {
   // ── Without outletId: orchestration mode ──────────────────────────
 
   it("pulls outlet from outlets-service when outletId not provided", async () => {
-    // Pre-fill buffer for the pulled outlet
     const sarah = await insertTestJournalist({
       outletId: OUTLET_ID,
       journalistName: "Sarah Johnson",
@@ -916,7 +1160,6 @@ describe("POST /buffer/next", () => {
     mockedCreateChildRun.mockRejectedValue(
       new Error("Runs-service unavailable")
     );
-    // email-gateway dedup passes (no prior contacts)
     mockedCheckEmailStatuses.mockResolvedValue([]);
 
     const res = await request(app)
@@ -958,188 +1201,5 @@ describe("POST /buffer/next", () => {
 
     expect(res.status).toBe(502);
     expect(res.body.error).toContain("Apollo");
-  });
-
-  // ── Cross-campaign dedup via email-gateway ────────────────────────
-
-  describe("cross-campaign outlet dedup via email-gateway", () => {
-    it("blocks outlet when journalist replied negatively < 12 months ago", async () => {
-      const OTHER_CAMPAIGN = "66666666-6666-6666-6666-666666666666";
-
-      // Previous journalist from this outlet was contacted in another campaign
-      const prev = await insertTestJournalist({
-        outletId: OUTLET_ID,
-        journalistName: "Previous Writer",
-        firstName: "Previous",
-        lastName: "Writer",
-      });
-      await insertTestCampaignJournalist({
-        journalistId: prev.id,
-        orgId: ORG_ID,
-        brandIds: [BRAND_ID],
-        campaignId: OTHER_CAMPAIGN,
-        outletId: OUTLET_ID,
-        relevanceScore: "80.00",
-        status: "contacted",
-        email: "prev@techcrunch.com",
-      });
-
-      // Current campaign has a buffered journalist
-      const sarah = await insertTestJournalist({
-        outletId: OUTLET_ID,
-        journalistName: "Sarah Johnson",
-        firstName: "Sarah",
-        lastName: "Johnson",
-      });
-      await insertTestCampaignJournalist({
-        journalistId: sarah.id,
-        orgId: ORG_ID,
-        brandIds: [BRAND_ID],
-        campaignId: CAMPAIGN_ID,
-        outletId: OUTLET_ID,
-        relevanceScore: "92.00",
-        status: "buffered",
-      });
-
-      // fetchOutlet needed for the outletId path
-      mockedFetchOutlet.mockResolvedValue({
-        id: OUTLET_ID,
-        outletName: "TechCrunch",
-        outletUrl: "https://techcrunch.com",
-      });
-
-      // email-gateway reports negative reply
-      mockedCheckEmailStatuses.mockResolvedValue([
-        {
-          leadId: prev.id,
-          email: "prev@techcrunch.com",
-          broadcast: {
-            campaign: null,
-            brand: {
-              lead: {
-                contacted: true,
-                delivered: true,
-                replied: true,
-                replyClassification: "negative",
-                lastDeliveredAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-              },
-              email: { contacted: true, delivered: true, bounced: false, unsubscribed: false, lastDeliveredAt: null },
-            },
-            global: { email: { bounced: false, unsubscribed: false } },
-          },
-          transactional: {
-            campaign: null,
-            brand: null,
-            global: { email: { bounced: false, unsubscribed: false } },
-          },
-        },
-      ]);
-
-      const res = await request(app)
-        .post("/buffer/next")
-        .set(BUFFER_HEADERS)
-        .send({ outletId: OUTLET_ID });
-
-      expect(res.status).toBe(200);
-      expect(res.body.found).toBe(false);
-      expect(res.body.reason).toContain("replied negatively");
-    });
-
-    it("allows outlet when negative reply is older than 12 months", async () => {
-      const OTHER_CAMPAIGN = "66666666-6666-6666-6666-666666666666";
-
-      const prev = await insertTestJournalist({
-        outletId: OUTLET_ID,
-        journalistName: "Previous Writer",
-        firstName: "Previous",
-        lastName: "Writer",
-      });
-      await insertTestCampaignJournalist({
-        journalistId: prev.id,
-        orgId: ORG_ID,
-        brandIds: [BRAND_ID],
-        campaignId: OTHER_CAMPAIGN,
-        outletId: OUTLET_ID,
-        relevanceScore: "80.00",
-        status: "contacted",
-        email: "prev@techcrunch.com",
-      });
-
-      const sarah = await insertTestJournalist({
-        outletId: OUTLET_ID,
-        journalistName: "Sarah Johnson",
-        firstName: "Sarah",
-        lastName: "Johnson",
-      });
-      await insertTestCampaignJournalist({
-        journalistId: sarah.id,
-        orgId: ORG_ID,
-        brandIds: [BRAND_ID],
-        campaignId: CAMPAIGN_ID,
-        outletId: OUTLET_ID,
-        relevanceScore: "92.00",
-        status: "buffered",
-      });
-
-      setupBaseMocks();
-      setupApolloMock("sarah@techcrunch.com");
-
-      // email-gateway: negative reply but > 12 months old
-      mockedCheckEmailStatuses
-        .mockResolvedValueOnce([
-          {
-            leadId: prev.id,
-            email: "prev@techcrunch.com",
-            broadcast: {
-              campaign: null,
-              brand: {
-                lead: {
-                  contacted: true,
-                  delivered: true,
-                  replied: true,
-                  replyClassification: "negative",
-                  lastDeliveredAt: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString(),
-                },
-                email: { contacted: true, delivered: true, bounced: false, unsubscribed: false, lastDeliveredAt: null },
-              },
-              global: { email: { bounced: false, unsubscribed: false } },
-            },
-            transactional: {
-              campaign: null,
-              brand: null,
-              global: { email: { bounced: false, unsubscribed: false } },
-            },
-          },
-        ])
-        // Per-journalist email check: not contacted
-        .mockResolvedValueOnce([
-          {
-            leadId: sarah.id,
-            email: "sarah@techcrunch.com",
-            broadcast: {
-              campaign: null,
-              brand: {
-                lead: { contacted: false, delivered: false, replied: false, replyClassification: null, lastDeliveredAt: null },
-                email: { contacted: false, delivered: false, bounced: false, unsubscribed: false, lastDeliveredAt: null },
-              },
-              global: { email: { bounced: false, unsubscribed: false } },
-            },
-            transactional: {
-              campaign: null,
-              brand: null,
-              global: { email: { bounced: false, unsubscribed: false } },
-            },
-          },
-        ]);
-
-      const res = await request(app)
-        .post("/buffer/next")
-        .set(BUFFER_HEADERS)
-        .send({ outletId: OUTLET_ID });
-
-      expect(res.status).toBe(200);
-      expect(res.body.found).toBe(true);
-      expect(res.body.journalist.firstName).toBe("Sarah");
-    });
   });
 });

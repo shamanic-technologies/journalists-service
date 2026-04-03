@@ -102,7 +102,6 @@ async function claimNextBuffered(
   campaignId: string,
   outletId: string
 ): Promise<ClaimedRow | null> {
-  const servedCutoff = new Date(Date.now() - SERVED_COOLDOWN_MS).toISOString();
   const rows = await pgClient`
     UPDATE campaign_journalists
     SET status = 'claimed'
@@ -113,15 +112,6 @@ async function claimNextBuffered(
         AND cj.outlet_id = ${outletId}
         AND cj.status = 'buffered'
         AND cj.relevance_score >= ${MIN_RELEVANCE_SCORE}
-        AND NOT EXISTS (
-          SELECT 1 FROM campaign_journalists other
-          WHERE other.campaign_id = ${campaignId}
-            AND other.outlet_id = ${outletId}
-            AND (
-              other.status = 'contacted'
-              OR (other.status IN ('claimed', 'served') AND other.created_at >= ${servedCutoff}::timestamptz)
-            )
-        )
       ORDER BY cj.relevance_score DESC
       LIMIT 1
       FOR UPDATE SKIP LOCKED
@@ -177,17 +167,106 @@ interface ResolvedEmail {
 }
 
 /**
+ * Check if a journalist has already been contacted for any of the given brands+org.
+ *
+ * "contacted" = status='contacted' OR (status IN ('claimed','served') AND created_at >= 1h ago).
+ * The 1h window covers the race between serve and the downstream contacted callback.
+ *
+ * Three independent dedup axes — if ANY match, the journalist is blocked:
+ * 1. By journalist_id (our internal ID — same person, same outlet)
+ * 2. By email (same person across outlets)
+ * 3. By apollo_person_id (same person, different emails)
+ */
+async function isAlreadyContacted(
+  journalistId: string,
+  email: string | null,
+  apolloPersonId: string | null,
+  orgId: string,
+  brandIds: string[],
+  excludeId: string // campaign_journalist row to exclude (the one we just claimed)
+): Promise<{ contacted: boolean; reason: string }> {
+  const servedCutoff = new Date(Date.now() - SERVED_COOLDOWN_MS).toISOString();
+
+  // 1. By journalist_id
+  const byJournalist = await pgClient`
+    SELECT 1 FROM campaign_journalists
+    WHERE journalist_id = ${journalistId}
+      AND id != ${excludeId}
+      AND org_id = ${orgId}
+      AND brand_ids && ${brandIds}::uuid[]
+      AND (
+        status = 'contacted'
+        OR (status IN ('claimed', 'served') AND created_at >= ${servedCutoff}::timestamptz)
+      )
+    LIMIT 1
+  `;
+  if (byJournalist.length > 0) {
+    return { contacted: true, reason: `journalist ${journalistId} already contacted for this brand+org` };
+  }
+
+  // 2. By email
+  if (email) {
+    const byEmail = await pgClient`
+      SELECT 1 FROM campaign_journalists
+      WHERE email = ${email}
+        AND id != ${excludeId}
+        AND org_id = ${orgId}
+        AND brand_ids && ${brandIds}::uuid[]
+        AND (
+          status = 'contacted'
+          OR (status IN ('claimed', 'served') AND created_at >= ${servedCutoff}::timestamptz)
+        )
+      LIMIT 1
+    `;
+    if (byEmail.length > 0) {
+      return { contacted: true, reason: `email ${email} already contacted for this brand+org` };
+    }
+  }
+
+  // 3. By apollo_person_id
+  if (apolloPersonId) {
+    const byApollo = await pgClient`
+      SELECT 1 FROM campaign_journalists
+      WHERE apollo_person_id = ${apolloPersonId}
+        AND id != ${excludeId}
+        AND org_id = ${orgId}
+        AND brand_ids && ${brandIds}::uuid[]
+        AND (
+          status = 'contacted'
+          OR (status IN ('claimed', 'served') AND created_at >= ${servedCutoff}::timestamptz)
+        )
+      LIMIT 1
+    `;
+    if (byApollo.length > 0) {
+      return { contacted: true, reason: `apollo person ${apolloPersonId} already contacted for this brand+org` };
+    }
+  }
+
+  return { contacted: false, reason: "" };
+}
+
+/**
  * Try to resolve a verified, non-contacted email for a claimed journalist.
- * Returns null if Apollo has no match, email is bad, or email was already contacted.
+ * Returns null if Apollo has no match, email is bad, or already contacted for brand+org.
  */
 async function resolveAndCheckEmail(
   claimed: ClaimedRow,
   outletDomain: string,
-  campaignId: string,
+  orgId: string,
+  brandIds: string[],
   ctx: ServiceContext
 ): Promise<ResolvedEmail | null> {
   const firstName = claimed.firstName || "";
   const lastName = claimed.lastName || "";
+
+  // Pre-check: journalist_id dedup (before Apollo call to save API credits)
+  const preCheck = await isAlreadyContacted(
+    claimed.journalistId, null, null, orgId, brandIds, claimed.campaignJournalistId
+  );
+  if (preCheck.contacted) {
+    console.log(`[journalists-service] ${preCheck.reason}`);
+    return null;
+  }
 
   if (!firstName || !lastName) {
     console.log(
@@ -208,6 +287,7 @@ async function resolveAndCheckEmail(
 
   const email = apolloResult.person.email;
   const emailStatus = apolloResult.person.emailStatus;
+  const apolloPersonId = apolloResult.person.id ?? null;
 
   // Check email quality — reject "bounced" or unknown statuses
   if (emailStatus && !VALID_EMAIL_STATUSES.has(emailStatus)) {
@@ -217,24 +297,24 @@ async function resolveAndCheckEmail(
     return null;
   }
 
-  // Check email-gateway: was this email already contacted for any brand in brandIds?
+  // Full dedup: email + apollo_person_id (journalist_id already checked above)
+  const fullCheck = await isAlreadyContacted(
+    claimed.journalistId, email, apolloPersonId, orgId, brandIds, claimed.campaignJournalistId
+  );
+  if (fullCheck.contacted) {
+    console.log(`[journalists-service] ${fullCheck.reason}`);
+    return null;
+  }
+
+  // Email-gateway: check global bounced/unsubscribed
   const gatewayResults = await checkEmailStatuses(
     [{ leadId: claimed.journalistId, email }],
-    campaignId,
+    undefined,
     ctx
   );
 
   if (gatewayResults.length > 0) {
     const result = gatewayResults[0];
-    // Check brand-level broadcast status
-    const brandStatus = result.broadcast?.brand;
-    if (brandStatus?.email?.contacted) {
-      console.log(
-        `[journalists-service] Email ${email} already contacted (broadcast/brand)`
-      );
-      return null;
-    }
-    // Check global bounced/unsubscribed
     if (result.broadcast?.global?.email?.bounced) {
       console.log(
         `[journalists-service] Email ${email} globally bounced`
@@ -251,7 +331,7 @@ async function resolveAndCheckEmail(
 
   return {
     email,
-    apolloPersonId: apolloResult.person.id ?? null,
+    apolloPersonId,
   };
 }
 
@@ -276,21 +356,19 @@ async function processOutlet(
   maxArticles: number,
   ctx: ServiceContext
 ): Promise<BufferNextResponse> {
-  // ── Outlet blocked gate ─────────────────────────────────────────
-  const blocked = await checkOutletBlocked(outlet.outletId, campaignId, brandIds, ctx);
+  // ── Relevance gate ─────────────────────────────────────────
+  const blocked = await checkOutletBlocked(outlet.outletId, campaignId);
   if (blocked.blocked) {
-    if (blocked.reason.includes("below relevance threshold")) {
-      await pgClient`
-        UPDATE campaign_journalists
-        SET status = 'skipped'
-        WHERE campaign_id = ${campaignId}
-          AND outlet_id = ${outlet.outletId}
-          AND status = 'buffered'
-          AND relevance_score < ${MIN_RELEVANCE_SCORE}
-      `;
-    }
+    await pgClient`
+      UPDATE campaign_journalists
+      SET status = 'skipped'
+      WHERE campaign_id = ${campaignId}
+        AND outlet_id = ${outlet.outletId}
+        AND status = 'buffered'
+        AND relevance_score < ${MIN_RELEVANCE_SCORE}
+    `;
     console.log(
-      `[journalists-service] Outlet blocked: ${blocked.reason} (outletId=${outlet.outletId} campaignId=${campaignId} orgId=${ctx.orgId})`
+      `[journalists-service] Outlet blocked: ${blocked.reason} (outletId=${outlet.outletId} campaignId=${campaignId})`
     );
     return { found: false, reason: blocked.reason };
   }
@@ -311,11 +389,12 @@ async function processOutlet(
     const claimed = await claimNextBuffered(campaignId, outlet.outletId);
 
     if (claimed) {
-      // Try to resolve email
+      // Try to resolve email + dedup by email/apolloPersonId/journalistId at brand+org level
       const resolved = await resolveAndCheckEmail(
         claimed,
         outlet.outletDomain,
-        campaignId,
+        ctx.orgId,
+        brandIds,
         childCtx
       );
 
