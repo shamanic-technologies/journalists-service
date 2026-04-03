@@ -357,7 +357,7 @@ async function processOutlet(
   ctx: ServiceContext
 ): Promise<BufferNextResponse> {
   // ── Relevance gate ─────────────────────────────────────────
-  const blocked = await checkOutletBlocked(outlet.outletId, campaignId);
+  const blocked = await checkOutletBlocked(outlet.outletId, campaignId, ctx.orgId, brandIds);
   if (blocked.blocked) {
     await pgClient`
       UPDATE campaign_journalists

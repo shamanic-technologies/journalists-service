@@ -23,12 +23,14 @@ router.get("/internal/outlets/blocked", async (req, res) => {
 
   const { outlet_id } = parsed.data;
   const campaignId = res.locals.campaignId as string;
+  const orgId = res.locals.orgId as string;
+  const brandIds = res.locals.brandIds as string[];
 
   try {
-    const result = await checkOutletBlocked(outlet_id, campaignId);
+    const result = await checkOutletBlocked(outlet_id, campaignId, orgId, brandIds);
     if (result.blocked) {
       console.log(
-        `[journalists-service] GET /internal/outlets/blocked: ${result.reason} (outletId=${outlet_id} campaignId=${campaignId})`
+        `[journalists-service] GET /internal/outlets/blocked: ${result.reason} (outletId=${outlet_id} campaignId=${campaignId} orgId=${orgId})`
       );
       res.json({ blocked: true, reason: result.reason });
       return;
