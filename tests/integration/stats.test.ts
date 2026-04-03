@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import request from "supertest";
-import { createTestApp, AUTH_HEADERS } from "../helpers/test-app.js";
+import { createTestApp, AUTH_HEADERS, BASE_AUTH_HEADERS } from "../helpers/test-app.js";
 import {
   cleanTestData,
   insertTestJournalist,
@@ -641,6 +641,47 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.groupedBy["orphan-slug"].totalJournalists).toBe(1);
+  });
+});
+
+describe("GET /stats (base headers only — no workflow context)", () => {
+  beforeEach(async () => {
+    await cleanTestData();
+    mockFetch.mockReset();
+  });
+
+  it("returns stats with only base auth headers (no workflow headers)", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Base Stats 1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Base Stats 2" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "buffered",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "served",
+    });
+
+    mockLeadStats(0);
+
+    const res = await request(app)
+      .get(`/stats?campaignId=${CAMPAIGN_ID}`)
+      .set(BASE_AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.totalJournalists).toBe(2);
+    expect(res.body.byStatus.buffered).toBe(1);
+    expect(res.body.byStatus.served).toBe(1);
+  });
+
+  it("rejects when base headers are missing", async () => {
+    const res = await request(app)
+      .get("/stats")
+      .set({ "x-api-key": "test-api-key" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("x-org-id");
   });
 });
 

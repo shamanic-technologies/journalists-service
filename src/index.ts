@@ -13,7 +13,7 @@ import discoverRoutes from "./routes/discover.js";
 import campaignOutletJournalistsRoutes from "./routes/campaign-outlet-journalists.js";
 import statsRoutes from "./routes/stats.js";
 import statsCostsRoutes from "./routes/stats-costs.js";
-import { requireApiKey, requireIdentityHeaders } from "./middleware/auth.js";
+import { requireApiKey, requireBaseHeaders, requireIdentityHeaders } from "./middleware/auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -45,10 +45,16 @@ app.use(requireApiKey);
 // Public stats — API key only, no identity headers needed
 app.get("/stats/public", statsRoutes);
 
-// Private routes — require identity headers
+// Stats/read endpoints — only require base headers (x-org-id, x-user-id, x-run-id)
+// Workflow-context headers are optional since these are called from dashboard outside workflow execution
+const dashboardRouter = express.Router();
+dashboardRouter.use(requireBaseHeaders);
+dashboardRouter.use(statsRoutes);
+dashboardRouter.use(statsCostsRoutes);
+app.use(dashboardRouter);
+
+// Private routes — require all identity headers
 app.use(requireIdentityHeaders);
-app.use(statsRoutes);
-app.use(statsCostsRoutes);
 app.use(bufferNextRoutes);
 app.use(discoverRoutes);
 app.use(campaignOutletJournalistsRoutes);

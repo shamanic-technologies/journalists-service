@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import request from "supertest";
-import { createTestApp, AUTH_HEADERS } from "../helpers/test-app.js";
+import { createTestApp, AUTH_HEADERS, BASE_AUTH_HEADERS } from "../helpers/test-app.js";
 import {
   cleanTestData,
   insertTestJournalist,
@@ -283,6 +283,27 @@ describe("GET /journalists/stats/costs", () => {
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(500);
+  });
+
+  it("works with base auth headers only (no workflow context)", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Base Cost J1" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, runId: RUN_ID_A,
+    });
+
+    mockBatchRunCosts([
+      { runId: RUN_ID_A, totalCostInUsdCents: "500", actualCostInUsdCents: "500", provisionedCostInUsdCents: "0" },
+    ]);
+
+    const res = await request(app)
+      .get(`/journalists/stats/costs?brandId=${BRAND_ID}`)
+      .set(BASE_AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.groups).toHaveLength(1);
+    expect(res.body.groups[0].totalCostInUsdCents).toBe(500);
   });
 
   it("handles run not returned by batch endpoint (omitted)", async () => {
