@@ -128,7 +128,10 @@ ${a.articles.map((art) => `  - "${art.title || "(untitled)"}" (${art.publishedAt
 
 Rules:
 - Only keep HUMAN individual journalists (skip organizations, editorial teams, news desks, "Staff", "Admin", etc.)
-- Score relevance from 0-100 based on how well the journalist's coverage aligns with the brand
+- Score relevance using these three tiers:
+  * 70-100 "Direct fit": the journalist actively covers the brand's sector, industry, or core topics
+  * 30-70 "Adjacent": not a direct fit, but there is an angle that could interest the journalist
+  * 0-30 "Distant": no meaningful connection between the journalist's coverage and the brand
 - Provide a concise explanation for the relevance score (whyRelevant) and what might make them less relevant (whyNotRelevant)
 - Include the article URLs where each journalist was found`,
       message: `Brand: ${brandName}
@@ -140,7 +143,7 @@ ${campaignContext || "(none specified)"}
 Journalists found on this outlet:
 ${authorsText}
 
-Score each journalist's relevance to the brand (0-100). Filter out non-human entities.
+Score each journalist using the three-tier scale (70-100 direct fit, 30-70 adjacent, 0-30 distant). Filter out non-human entities.
 
 Return JSON:
 {

@@ -299,6 +299,100 @@ describe("POST /buffer/next", () => {
     expect(mockedChatComplete).not.toHaveBeenCalled();
   });
 
+  it("skips journalists with relevance score below 30 (distant tier)", async () => {
+    const lowScore = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Low Score Writer",
+      firstName: "Low",
+      lastName: "Score",
+    });
+
+    await insertTestCampaignJournalist({
+      journalistId: lowScore.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "15.00",
+      status: "buffered",
+    });
+
+    mockedCreateChildRun.mockResolvedValue({
+      id: CHILD_RUN_ID,
+      parentRunId: "99999999-9999-9999-9999-999999999999",
+      serviceName: "journalists-service",
+      taskName: "buffer-next",
+    });
+    mockedFetchOutlet.mockResolvedValue({
+      id: OUTLET_ID,
+      outletName: "TechCrunch",
+      outletUrl: "https://techcrunch.com",
+    });
+    mockedExtractBrandFields.mockResolvedValue({
+      brands: [{ brandId: BRAND_ID, domain: "techcorp.com", name: "TechCorp" }],
+      fields: {
+        brand_name: { value: "TechCorp", byBrand: { "techcorp.com": { value: "TechCorp", cached: false, extractedAt: "2026-03-01T00:00:00Z", expiresAt: null, sourceUrls: [] } } },
+        brand_description: { value: "SaaS platform", byBrand: { "techcorp.com": { value: "SaaS platform", cached: false, extractedAt: "2026-03-01T00:00:00Z", expiresAt: null, sourceUrls: [] } } },
+      },
+    });
+    mockedGetFieldValue.mockReturnValue("TechCorp");
+    mockedFetchCampaign.mockResolvedValue({
+      id: CAMPAIGN_ID,
+      featureInputs: null,
+      brandId: BRAND_ID,
+    });
+    mockedDiscoverOutletArticles.mockResolvedValue({ articles: [] });
+
+    const res = await request(app)
+      .post("/buffer/next")
+      .set(BUFFER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.found).toBe(false);
+  });
+
+  it("serves journalist at exactly 30 relevance score (adjacent tier threshold)", async () => {
+    const threshold = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Threshold Writer",
+      firstName: "Threshold",
+      lastName: "Writer",
+    });
+
+    await insertTestCampaignJournalist({
+      journalistId: threshold.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "30.00",
+      status: "buffered",
+    });
+
+    mockedCreateChildRun.mockResolvedValue({
+      id: CHILD_RUN_ID,
+      parentRunId: "99999999-9999-9999-9999-999999999999",
+      serviceName: "journalists-service",
+      taskName: "buffer-next",
+    });
+    mockedFetchOutlet.mockResolvedValue({
+      id: OUTLET_ID,
+      outletName: "TechCrunch",
+      outletUrl: "https://techcrunch.com",
+    });
+
+    const res = await request(app)
+      .post("/buffer/next")
+      .set(BUFFER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.found).toBe(true);
+    expect(res.body.journalist.firstName).toBe("Threshold");
+    expect(res.body.journalist.relevanceScore).toBe(30);
+  });
+
   it("blocks second journalist from same outlet when first was recently served (< 1h)", async () => {
     const sarah = await insertTestJournalist({
       outletId: OUTLET_ID,
