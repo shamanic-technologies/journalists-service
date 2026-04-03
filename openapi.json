@@ -403,6 +403,319 @@
           "groups"
         ]
       },
+      "EmailStatusScope": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "lead": {
+            "type": "object",
+            "properties": {
+              "contacted": {
+                "type": "boolean"
+              },
+              "delivered": {
+                "type": "boolean"
+              },
+              "replied": {
+                "type": "boolean"
+              },
+              "replyClassification": {
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  "positive",
+                  "negative",
+                  "neutral"
+                ]
+              },
+              "lastDeliveredAt": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "contacted",
+              "delivered",
+              "replied",
+              "replyClassification",
+              "lastDeliveredAt"
+            ]
+          },
+          "email": {
+            "type": "object",
+            "properties": {
+              "contacted": {
+                "type": "boolean"
+              },
+              "delivered": {
+                "type": "boolean"
+              },
+              "bounced": {
+                "type": "boolean"
+              },
+              "unsubscribed": {
+                "type": "boolean"
+              },
+              "lastDeliveredAt": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "contacted",
+              "delivered",
+              "bounced",
+              "unsubscribed",
+              "lastDeliveredAt"
+            ]
+          }
+        },
+        "required": [
+          "lead",
+          "email"
+        ]
+      },
+      "EmailGlobalScope": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "object",
+            "properties": {
+              "bounced": {
+                "type": "boolean"
+              },
+              "unsubscribed": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "bounced",
+              "unsubscribed"
+            ]
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "JournalistEmailStatus": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "broadcast": {
+            "type": "object",
+            "properties": {
+              "campaign": {
+                "$ref": "#/components/schemas/EmailStatusScope"
+              },
+              "brand": {
+                "$ref": "#/components/schemas/EmailStatusScope"
+              },
+              "global": {
+                "$ref": "#/components/schemas/EmailGlobalScope"
+              }
+            },
+            "required": [
+              "campaign",
+              "brand",
+              "global"
+            ]
+          },
+          "transactional": {
+            "type": "object",
+            "properties": {
+              "campaign": {
+                "$ref": "#/components/schemas/EmailStatusScope"
+              },
+              "brand": {
+                "$ref": "#/components/schemas/EmailStatusScope"
+              },
+              "global": {
+                "$ref": "#/components/schemas/EmailGlobalScope"
+              }
+            },
+            "required": [
+              "campaign",
+              "brand",
+              "global"
+            ]
+          }
+        },
+        "required": [
+          "broadcast",
+          "transactional"
+        ],
+        "description": "Email delivery statuses from email-gateway. Null if journalist has no email or email-gateway is unreachable."
+      },
+      "JournalistCost": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "totalCostInUsdCents": {
+            "type": "number",
+            "description": "Total cost in USD cents (actual + provisioned)"
+          },
+          "actualCostInUsdCents": {
+            "type": "number",
+            "description": "Actual metered cost in USD cents"
+          },
+          "provisionedCostInUsdCents": {
+            "type": "number",
+            "description": "Provisioned (reserved) cost in USD cents"
+          },
+          "runCount": {
+            "type": "number",
+            "description": "Number of distinct runs contributing to this cost"
+          }
+        },
+        "required": [
+          "totalCostInUsdCents",
+          "actualCostInUsdCents",
+          "provisionedCostInUsdCents",
+          "runCount"
+        ],
+        "description": "Per-journalist cost from runs-service. Null if no runs or runs-service is unreachable."
+      },
+      "JournalistListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "campaignId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orgId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "brandIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "featureSlug": {
+            "type": "string",
+            "nullable": true
+          },
+          "workflowSlug": {
+            "type": "string",
+            "nullable": true
+          },
+          "relevanceScore": {
+            "type": "string"
+          },
+          "whyRelevant": {
+            "type": "string"
+          },
+          "whyNotRelevant": {
+            "type": "string"
+          },
+          "articleUrls": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "buffered",
+              "claimed",
+              "served",
+              "contacted",
+              "skipped"
+            ]
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "runId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "journalistName": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          },
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "individual",
+              "organization"
+            ]
+          },
+          "emailStatus": {
+            "$ref": "#/components/schemas/JournalistEmailStatus"
+          },
+          "cost": {
+            "$ref": "#/components/schemas/JournalistCost"
+          }
+        },
+        "required": [
+          "id",
+          "journalistId",
+          "campaignId",
+          "outletId",
+          "orgId",
+          "brandIds",
+          "featureSlug",
+          "workflowSlug",
+          "relevanceScore",
+          "whyRelevant",
+          "whyNotRelevant",
+          "articleUrls",
+          "status",
+          "email",
+          "runId",
+          "createdAt",
+          "journalistName",
+          "firstName",
+          "lastName",
+          "entityType",
+          "emailStatus",
+          "cost"
+        ]
+      },
+      "JournalistsListResponse": {
+        "type": "object",
+        "properties": {
+          "journalists": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JournalistListItem"
+            }
+          }
+        },
+        "required": [
+          "journalists"
+        ]
+      },
       "OutletBlockedResponse": {
         "type": "object",
         "properties": {
@@ -1003,6 +1316,60 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CostStatsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/journalists/list": {
+      "get": {
+        "summary": "List all journalists for an org+brand with email delivery statuses and costs. Enriches each journalist with broadcast/transactional delivery status from email-gateway and per-journalist cost from runs-service. Both enrichments are fail-open.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Brand ID (required). Returns journalists whose brand_ids array contains this brand."
+            },
+            "required": true,
+            "name": "brandId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Optionally narrow to a single campaign"
+            },
+            "required": false,
+            "name": "campaignId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Enriched journalist list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalistsListResponse"
                 }
               }
             }
