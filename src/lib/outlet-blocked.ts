@@ -22,27 +22,30 @@ export type OutletBlockedResult =
  */
 export async function checkOutletBlocked(
   outletId: string,
-  campaignId: string,
+  campaignId: string | null,
   brandIds: string[],
   ctx: ServiceContext
 ): Promise<OutletBlockedResult> {
   // ── 1. Local dedup: recently served/claimed or confirmed contacted ──
-  const servedCutoff = new Date(Date.now() - SERVED_COOLDOWN_MS).toISOString();
-  const alreadyServed = await pgClient`
-    SELECT id FROM campaign_journalists
-    WHERE campaign_id = ${campaignId}
-      AND outlet_id = ${outletId}
-      AND (
-        status = 'contacted'
-        OR (status IN ('claimed', 'served') AND created_at >= ${servedCutoff}::timestamptz)
-      )
-    LIMIT 1
-  `;
-  if (alreadyServed.length > 0) {
-    return {
-      blocked: true,
-      reason: "outlet already has a served journalist in this campaign",
-    };
+  // Requires campaignId — skipped when not provided (caller doesn't have it)
+  if (campaignId) {
+    const servedCutoff = new Date(Date.now() - SERVED_COOLDOWN_MS).toISOString();
+    const alreadyServed = await pgClient`
+      SELECT id FROM campaign_journalists
+      WHERE campaign_id = ${campaignId}
+        AND outlet_id = ${outletId}
+        AND (
+          status = 'contacted'
+          OR (status IN ('claimed', 'served') AND created_at >= ${servedCutoff}::timestamptz)
+        )
+      LIMIT 1
+    `;
+    if (alreadyServed.length > 0) {
+      return {
+        blocked: true,
+        reason: "outlet already has a served journalist in this campaign",
+      };
+    }
   }
 
   // ── 2. Lead-service dedup: cross-campaign contact history per brand ──
@@ -54,21 +57,24 @@ export async function checkOutletBlocked(
   }
 
   // ── 3. Relevance threshold: all buffered journalists below minimum ──
-  const bufferCheck = await pgClient`
-    SELECT
-      COUNT(*)::int AS total,
-      COUNT(*) FILTER (WHERE relevance_score < ${MIN_RELEVANCE_SCORE})::int AS below
-    FROM campaign_journalists
-    WHERE campaign_id = ${campaignId}
-      AND outlet_id = ${outletId}
-      AND status = 'buffered'
-  `;
-  const { total, below } = bufferCheck[0];
-  if (total > 0 && total === below) {
-    return {
-      blocked: true,
-      reason: `all journalists below relevance threshold (${MIN_RELEVANCE_SCORE})`,
-    };
+  // Requires campaignId — skipped when not provided
+  if (campaignId) {
+    const bufferCheck = await pgClient`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE relevance_score < ${MIN_RELEVANCE_SCORE})::int AS below
+      FROM campaign_journalists
+      WHERE campaign_id = ${campaignId}
+        AND outlet_id = ${outletId}
+        AND status = 'buffered'
+    `;
+    const { total, below } = bufferCheck[0];
+    if (total > 0 && total === below) {
+      return {
+        blocked: true,
+        reason: `all journalists below relevance threshold (${MIN_RELEVANCE_SCORE})`,
+      };
+    }
   }
 
   return { blocked: false };

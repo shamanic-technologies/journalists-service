@@ -174,9 +174,10 @@ describe("POST /discover", () => {
   });
 
   it("returns 400 without x-campaign-id header", async () => {
+    const { "x-campaign-id": _, ...headersWithoutCampaign } = AUTH_HEADERS;
     const res = await request(app)
       .post("/discover")
-      .set(AUTH_HEADERS)
+      .set(headersWithoutCampaign)
       .send({ outletId: OUTLET_ID });
 
     expect(res.status).toBe(400);
@@ -184,9 +185,10 @@ describe("POST /discover", () => {
   });
 
   it("returns 400 without x-brand-id header", async () => {
+    const { "x-brand-id": _, ...headersWithoutBrand } = AUTH_HEADERS;
     const res = await request(app)
       .post("/discover")
-      .set({ ...AUTH_HEADERS, "x-campaign-id": CAMPAIGN_ID })
+      .set(headersWithoutBrand)
       .send({ outletId: OUTLET_ID });
 
     expect(res.status).toBe(400);

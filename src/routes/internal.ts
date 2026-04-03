@@ -9,12 +9,23 @@ import type { ServiceContext } from "../lib/service-context.js";
 const router = Router();
 
 // GET /internal/outlets/blocked — full dedup + local + relevance check
+// All identity/context comes from headers (enforced by middleware).
+// Only outlet_id is a query param (it's the resource being queried).
 const outletBlockedQuerySchema = z.object({
-  org_id: z.string().uuid(),
-  brand_ids: z.string().transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)),
   outlet_id: z.string().uuid(),
-  campaign_id: z.string().uuid(),
 });
+
+function getCtx(locals: Record<string, unknown>): ServiceContext {
+  return {
+    orgId: locals.orgId as string,
+    userId: locals.userId as string,
+    runId: locals.runId as string,
+    featureSlug: locals.featureSlug as string,
+    campaignId: locals.campaignId as string,
+    brandIds: locals.brandIds as string[],
+    workflowSlug: locals.workflowSlug as string,
+  };
+}
 
 router.get("/internal/outlets/blocked", async (req, res) => {
   const parsed = outletBlockedQuerySchema.safeParse(req.query);
@@ -23,29 +34,14 @@ router.get("/internal/outlets/blocked", async (req, res) => {
     return;
   }
 
-  const { org_id, brand_ids, outlet_id, campaign_id } = parsed.data;
-
-  if (brand_ids.length === 0) {
-    res.status(400).json({ error: "brand_ids must contain at least one UUID" });
-    return;
-  }
-
-  // Build a minimal ServiceContext from identity headers
-  const ctx: ServiceContext = {
-    orgId: org_id,
-    userId: res.locals.userId as string,
-    runId: res.locals.runId as string,
-    featureSlug: null,
-    campaignId: campaign_id,
-    brandIds: brand_ids,
-    workflowSlug: null,
-  };
+  const { outlet_id } = parsed.data;
+  const ctx = getCtx(res.locals);
 
   try {
-    const result = await checkOutletBlocked(outlet_id, campaign_id, brand_ids, ctx);
+    const result = await checkOutletBlocked(outlet_id, ctx.campaignId, ctx.brandIds, ctx);
     if (result.blocked) {
       console.log(
-        `[journalists-service] GET /internal/outlets/blocked: ${result.reason} (outletId=${outlet_id} campaignId=${campaign_id} orgId=${org_id})`
+        `[journalists-service] GET /internal/outlets/blocked: ${result.reason} (outletId=${outlet_id} campaignId=${ctx.campaignId} orgId=${ctx.orgId})`
       );
       res.json({ blocked: true, reason: result.reason });
       return;
