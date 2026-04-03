@@ -215,7 +215,6 @@ describe("GET /internal/outlets/blocked", () => {
   it("supports multiple brand_ids in CSV — blocks if any brand is blocked", async () => {
     const BRAND_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
-    // First brand: no contacts. Second brand: negative reply.
     mockedFetchLeadStatuses.mockImplementation(async (params) => {
       if (params.brandId === BRAND_B) {
         return [
@@ -289,7 +288,7 @@ describe("GET /internal/outlets/blocked", () => {
       outletId: OUTLET_ID,
       relevanceScore: "85.00",
       status: "contacted",
-      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
+      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
     });
 
     const res = await request(app)
@@ -317,7 +316,7 @@ describe("GET /internal/outlets/blocked", () => {
       outletId: OUTLET_ID,
       relevanceScore: "85.00",
       status: "served",
-      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
     });
 
     const res = await request(app)
