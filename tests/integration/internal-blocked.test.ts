@@ -311,6 +311,96 @@ describe("GET /internal/outlets/blocked", () => {
     expect(res.body.blocked).toBe(false);
   });
 
+  // ── Apollo no-email blocking ───────────────────────────────────────
+
+  it("returns blocked=true when all viable journalists have no email (Apollo checked < 30d)", async () => {
+    const noEmail = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "No Email Person",
+      firstName: "No",
+      lastName: "Email",
+      apolloCheckedAt: new Date(), // just checked
+      apolloEmail: null,
+    });
+
+    await insertTestCampaignJournalist({
+      journalistId: noEmail.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_A],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "85.00",
+      status: "buffered",
+    });
+
+    const res = await request(app)
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.blocked).toBe(true);
+    expect(res.body.reason).toContain("no email");
+  });
+
+  it("returns blocked=false when journalist has no email but Apollo check is stale (> 30d)", async () => {
+    const stale = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Stale Check Person",
+      firstName: "Stale",
+      lastName: "Check",
+      apolloCheckedAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000), // 31 days ago
+      apolloEmail: null,
+    });
+
+    await insertTestCampaignJournalist({
+      journalistId: stale.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_A],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "85.00",
+      status: "buffered",
+    });
+
+    const res = await request(app)
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.blocked).toBe(false);
+  });
+
+  it("returns blocked=false when journalist has Apollo email cached", async () => {
+    const withEmail = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Has Email Person",
+      firstName: "Has",
+      lastName: "Email",
+      apolloCheckedAt: new Date(),
+      apolloEmail: "has@example.com",
+      apolloEmailStatus: "verified",
+    });
+
+    await insertTestCampaignJournalist({
+      journalistId: withEmail.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_A],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "85.00",
+      status: "buffered",
+    });
+
+    const res = await request(app)
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.blocked).toBe(false);
+  });
+
+  // ── Mixed scenarios ────────────────────────────────────────────────
+
   it("returns blocked=false when one journalist is contacted but another is still viable", async () => {
     const sarah = await insertTestJournalist({
       outletId: OUTLET_ID,

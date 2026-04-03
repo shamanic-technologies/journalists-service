@@ -20,6 +20,10 @@ export async function insertTestJournalist(
     journalistName?: string;
     firstName?: string;
     lastName?: string;
+    apolloEmail?: string | null;
+    apolloEmailStatus?: string | null;
+    apolloPersonId?: string | null;
+    apolloCheckedAt?: Date | null;
   }
 ) {
   const [journalist] = await db
@@ -31,6 +35,10 @@ export async function insertTestJournalist(
         data.journalistName || `Test Journalist ${Date.now()}-${Math.random()}`,
       firstName: data.firstName || "Test",
       lastName: data.lastName || "Journalist",
+      apolloEmail: data.apolloEmail ?? null,
+      apolloEmailStatus: data.apolloEmailStatus ?? null,
+      apolloPersonId: data.apolloPersonId ?? null,
+      apolloCheckedAt: data.apolloCheckedAt ?? null,
     })
     .returning();
   return journalist;

@@ -37,6 +37,10 @@ export const journalists = pgTable(
     lastName: text("last_name"),
     journalistName: text("journalist_name").notNull(),
     entityType: entityTypeEnum("entity_type").notNull(),
+    apolloEmail: text("apollo_email"),
+    apolloEmailStatus: text("apollo_email_status"),
+    apolloPersonId: text("apollo_person_id"),
+    apolloCheckedAt: timestamp("apollo_checked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -49,6 +53,10 @@ export const journalists = pgTable(
       table.outletId,
       table.journalistName,
       table.entityType
+    ),
+    index("idx_journalists_apollo_checked").on(
+      table.outletId,
+      table.apolloCheckedAt
     ),
   ]
 );

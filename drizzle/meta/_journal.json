@@ -85,6 +85,13 @@
       "when": 1775458800000,
       "tag": "0011_dedup_refactor",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1775545200000,
+      "tag": "0012_apollo_checked_at",
+      "breakpoints": true
     }
   ]
 }
