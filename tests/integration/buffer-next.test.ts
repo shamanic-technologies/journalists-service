@@ -257,12 +257,17 @@ describe("POST /buffer/next", () => {
       status: "buffered",
     });
 
-    // Need child run mock for the route
+    // Need child run + outlet mocks for the route
     mockedCreateChildRun.mockResolvedValue({
       id: CHILD_RUN_ID,
       parentRunId: "99999999-9999-9999-9999-999999999999",
       serviceName: "journalists-service",
       taskName: "buffer-next",
+    });
+    mockedFetchOutlet.mockResolvedValue({
+      id: OUTLET_ID,
+      outletName: "TechCrunch",
+      outletUrl: "https://techcrunch.com",
     });
 
     const res = await request(app)
@@ -294,7 +299,7 @@ describe("POST /buffer/next", () => {
     expect(mockedChatComplete).not.toHaveBeenCalled();
   });
 
-  it("serves second-best on subsequent call after first is consumed", async () => {
+  it("blocks second journalist from same outlet when first was recently served (< 1h)", async () => {
     const sarah = await insertTestJournalist({
       outletId: OUTLET_ID,
       journalistName: "Sarah Johnson",
@@ -315,7 +320,54 @@ describe("POST /buffer/next", () => {
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
       relevanceScore: "92.00",
-      status: "served", // Already consumed
+      status: "served", // Served recently (default createdAt = now)
+    });
+    await insertTestCampaignJournalist({
+      journalistId: mike.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "78.00",
+      status: "buffered",
+    });
+
+    const res = await request(app)
+      .post("/buffer/next")
+      .set(BUFFER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.found).toBe(false);
+    expect(res.body.reason).toContain("already has a served journalist");
+    // Should NOT create a child run — local dedup fires before run creation
+    expect(mockedCreateChildRun).not.toHaveBeenCalled();
+  });
+
+  it("allows second journalist when first was served > 1h ago (send probably failed)", async () => {
+    const sarah = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Sarah Johnson",
+      firstName: "Sarah",
+      lastName: "Johnson",
+    });
+    const mike = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Mike Chen",
+      firstName: "Mike",
+      lastName: "Chen",
+    });
+
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    await insertTestCampaignJournalist({
+      journalistId: sarah.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "92.00",
+      status: "served",
+      createdAt: twoHoursAgo, // Served 2 hours ago, never became "contacted"
     });
     await insertTestCampaignJournalist({
       journalistId: mike.id,
@@ -333,6 +385,11 @@ describe("POST /buffer/next", () => {
       serviceName: "journalists-service",
       taskName: "buffer-next",
     });
+    mockedFetchOutlet.mockResolvedValue({
+      id: OUTLET_ID,
+      outletName: "TechCrunch",
+      outletUrl: "https://techcrunch.com",
+    });
 
     const res = await request(app)
       .post("/buffer/next")
@@ -342,6 +399,52 @@ describe("POST /buffer/next", () => {
     expect(res.status).toBe(200);
     expect(res.body.found).toBe(true);
     expect(res.body.journalist.firstName).toBe("Mike");
+  });
+
+  it("always blocks when first journalist reached 'contacted' status regardless of age", async () => {
+    const sarah = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Sarah Johnson",
+      firstName: "Sarah",
+      lastName: "Johnson",
+    });
+    const mike = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Mike Chen",
+      firstName: "Mike",
+      lastName: "Chen",
+    });
+
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    await insertTestCampaignJournalist({
+      journalistId: sarah.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "92.00",
+      status: "contacted", // Confirmed contacted — always blocks
+      createdAt: threeDaysAgo,
+    });
+    await insertTestCampaignJournalist({
+      journalistId: mike.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "78.00",
+      status: "buffered",
+    });
+
+    const res = await request(app)
+      .post("/buffer/next")
+      .set(BUFFER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.found).toBe(false);
+    expect(res.body.reason).toContain("already has a served journalist");
+    expect(mockedCreateChildRun).not.toHaveBeenCalled();
   });
 
   // ── Refill on empty buffer ──────────────────────────────────────────
@@ -443,6 +546,11 @@ describe("POST /buffer/next", () => {
       parentRunId: "99999999-9999-9999-9999-999999999999",
       serviceName: "journalists-service",
       taskName: "buffer-next",
+    });
+    mockedFetchOutlet.mockResolvedValue({
+      id: OUTLET_ID,
+      outletName: "TechCrunch",
+      outletUrl: "https://techcrunch.com",
     });
 
     const idempotencyKey = "test-idem-key-123";
@@ -628,6 +736,11 @@ describe("POST /buffer/next", () => {
         serviceName: "journalists-service",
         taskName: "buffer-next",
       });
+      mockedFetchOutlet.mockResolvedValue({
+        id: OUTLET_ID,
+        outletName: "TechCrunch",
+        outletUrl: "https://techcrunch.com",
+      });
 
       mockedFetchLeadStatuses.mockResolvedValue([
         {
@@ -677,6 +790,11 @@ describe("POST /buffer/next", () => {
         parentRunId: "99999999-9999-9999-9999-999999999999",
         serviceName: "journalists-service",
         taskName: "buffer-next",
+      });
+      mockedFetchOutlet.mockResolvedValue({
+        id: OUTLET_ID,
+        outletName: "TechCrunch",
+        outletUrl: "https://techcrunch.com",
       });
 
       mockedFetchLeadStatuses.mockResolvedValue([

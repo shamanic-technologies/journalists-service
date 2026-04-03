@@ -50,6 +50,7 @@ export async function insertTestCampaignJournalist(data: {
   workflowSlug?: string;
   runId?: string;
   status?: "buffered" | "claimed" | "served" | "contacted" | "skipped";
+  createdAt?: Date;
 }) {
   const [row] = await db
     .insert(campaignJournalists)
@@ -67,6 +68,7 @@ export async function insertTestCampaignJournalist(data: {
       workflowSlug: data.workflowSlug ?? null,
       runId: data.runId ?? null,
       status: data.status ?? "buffered",
+      createdAt: data.createdAt ?? new Date(),
     })
     .returning();
   return row;
