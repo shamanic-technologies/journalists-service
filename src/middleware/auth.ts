@@ -23,6 +23,10 @@ function parseBrandIds(raw: string | undefined): string[] {
   return String(raw).split(",").map((s) => s.trim()).filter(Boolean);
 }
 
+/**
+ * All authenticated endpoints require ALL 6 contextual headers.
+ * Returns 400 listing which ones are missing.
+ */
 export function requireIdentityHeaders(
   req: Request,
   res: Response,
@@ -31,15 +35,24 @@ export function requireIdentityHeaders(
   const orgId = req.headers["x-org-id"] as string | undefined;
   const userId = req.headers["x-user-id"] as string | undefined;
   const runId = req.headers["x-run-id"] as string | undefined;
+  const campaignId = req.headers["x-campaign-id"] as string | undefined;
+  const brandIdRaw = req.headers["x-brand-id"] as string | undefined;
+  const featureSlug = req.headers["x-feature-slug"] as string | undefined;
+  const workflowSlug = req.headers["x-workflow-slug"] as string | undefined;
 
-  if (!orgId || !userId || !runId) {
-    const missing = [
-      !orgId && "x-org-id",
-      !userId && "x-user-id",
-      !runId && "x-run-id",
-    ].filter(Boolean);
+  const missing = [
+    !orgId && "x-org-id",
+    !userId && "x-user-id",
+    !runId && "x-run-id",
+    !campaignId && "x-campaign-id",
+    !brandIdRaw && "x-brand-id",
+    !featureSlug && "x-feature-slug",
+    !workflowSlug && "x-workflow-slug",
+  ].filter(Boolean);
+
+  if (missing.length > 0) {
     console.warn(
-      `[journalists-service] Missing identity headers on ${req.method} ${req.path}: ${missing.join(", ")}`
+      `[journalists-service] Missing required headers on ${req.method} ${req.path}: ${missing.join(", ")}`
     );
     res
       .status(400)
@@ -47,17 +60,14 @@ export function requireIdentityHeaders(
     return;
   }
 
-  const featureSlug = req.headers["x-feature-slug"] as string | undefined;
-  const campaignId = req.headers["x-campaign-id"] as string | undefined;
-  const brandIds = parseBrandIds(req.headers["x-brand-id"] as string | undefined);
-  const workflowSlug = req.headers["x-workflow-slug"] as string | undefined;
+  const brandIds = parseBrandIds(brandIdRaw);
 
   res.locals.orgId = orgId;
   res.locals.userId = userId;
   res.locals.runId = runId;
-  res.locals.featureSlug = featureSlug ?? null;
-  res.locals.campaignId = campaignId ?? null;
+  res.locals.campaignId = campaignId;
   res.locals.brandIds = brandIds;
-  res.locals.workflowSlug = workflowSlug ?? null;
+  res.locals.featureSlug = featureSlug;
+  res.locals.workflowSlug = workflowSlug;
   next();
 }

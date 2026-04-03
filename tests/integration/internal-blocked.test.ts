@@ -25,7 +25,13 @@ const OUTLET_ID = "11111111-1111-1111-1111-111111111111";
 const BRAND_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const CAMPAIGN_ID = "55555555-5555-5555-5555-555555555555";
 
-const BASE_QS = `org_id=${ORG_ID}&brand_ids=${BRAND_A}&outlet_id=${OUTLET_ID}&campaign_id=${CAMPAIGN_ID}`;
+// All identity context comes from headers; only outlet_id is a query param
+const BLOCKED_HEADERS = {
+  ...AUTH_HEADERS,
+  "x-org-id": ORG_ID,
+  "x-brand-id": BRAND_A,
+  "x-campaign-id": CAMPAIGN_ID,
+};
 
 describe("GET /internal/outlets/blocked", () => {
   beforeEach(async () => {
@@ -41,18 +47,19 @@ describe("GET /internal/outlets/blocked", () => {
 
   // ── Validation ──────────────────────────────────────────────────────
 
-  it("returns 400 with missing required params", async () => {
+  it("returns 400 with missing required headers", async () => {
     const res = await request(app)
-      .get("/internal/outlets/blocked")
-      .set(AUTH_HEADERS);
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set({ "x-api-key": "test-api-key" }); // missing all identity headers
 
     expect(res.status).toBe(400);
+    expect(res.body.error).toContain("Missing required headers");
   });
 
-  it("returns 400 without campaign_id", async () => {
+  it("returns 400 with missing outlet_id query param", async () => {
     const res = await request(app)
-      .get(`/internal/outlets/blocked?org_id=${ORG_ID}&brand_ids=${BRAND_A}&outlet_id=${OUTLET_ID}`)
-      .set(AUTH_HEADERS);
+      .get("/internal/outlets/blocked")
+      .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(400);
   });
@@ -61,8 +68,8 @@ describe("GET /internal/outlets/blocked", () => {
 
   it("returns blocked=false when no prior contacts exist", async () => {
     const res = await request(app)
-      .get(`/internal/outlets/blocked?${BASE_QS}`)
-      .set(AUTH_HEADERS);
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.blocked).toBe(false);
@@ -86,8 +93,8 @@ describe("GET /internal/outlets/blocked", () => {
     ]);
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?${BASE_QS}`)
-      .set(AUTH_HEADERS);
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.blocked).toBe(true);
@@ -111,8 +118,8 @@ describe("GET /internal/outlets/blocked", () => {
     ]);
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?${BASE_QS}`)
-      .set(AUTH_HEADERS);
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.blocked).toBe(true);
@@ -136,8 +143,8 @@ describe("GET /internal/outlets/blocked", () => {
     ]);
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?${BASE_QS}`)
-      .set(AUTH_HEADERS);
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.blocked).toBe(true);
@@ -161,8 +168,8 @@ describe("GET /internal/outlets/blocked", () => {
     ]);
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?${BASE_QS}`)
-      .set(AUTH_HEADERS);
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.blocked).toBe(false);
@@ -185,8 +192,8 @@ describe("GET /internal/outlets/blocked", () => {
     ]);
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?${BASE_QS}`)
-      .set(AUTH_HEADERS);
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.blocked).toBe(false);
@@ -198,8 +205,8 @@ describe("GET /internal/outlets/blocked", () => {
     );
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?${BASE_QS}`)
-      .set(AUTH_HEADERS);
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(502);
     expect(res.body.error).toContain("lead-service");
@@ -208,7 +215,6 @@ describe("GET /internal/outlets/blocked", () => {
   it("supports multiple brand_ids in CSV — blocks if any brand is blocked", async () => {
     const BRAND_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
-    // First brand: no contacts. Second brand: negative reply.
     mockedFetchLeadStatuses.mockImplementation(async (params) => {
       if (params.brandId === BRAND_B) {
         return [
@@ -230,8 +236,8 @@ describe("GET /internal/outlets/blocked", () => {
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?org_id=${ORG_ID}&brand_ids=${BRAND_A},${BRAND_B}&outlet_id=${OUTLET_ID}&campaign_id=${CAMPAIGN_ID}`)
-      .set(AUTH_HEADERS);
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set({ ...BLOCKED_HEADERS, "x-brand-id": `${BRAND_A},${BRAND_B}` });
 
     expect(res.status).toBe(200);
     expect(res.body.blocked).toBe(true);
@@ -258,8 +264,8 @@ describe("GET /internal/outlets/blocked", () => {
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?${BASE_QS}`)
-      .set(AUTH_HEADERS);
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.blocked).toBe(true);
@@ -282,12 +288,12 @@ describe("GET /internal/outlets/blocked", () => {
       outletId: OUTLET_ID,
       relevanceScore: "85.00",
       status: "contacted",
-      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
+      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?${BASE_QS}`)
-      .set(AUTH_HEADERS);
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.blocked).toBe(true);
@@ -310,12 +316,12 @@ describe("GET /internal/outlets/blocked", () => {
       outletId: OUTLET_ID,
       relevanceScore: "85.00",
       status: "served",
-      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?${BASE_QS}`)
-      .set(AUTH_HEADERS);
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.blocked).toBe(false);
@@ -357,8 +363,8 @@ describe("GET /internal/outlets/blocked", () => {
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?${BASE_QS}`)
-      .set(AUTH_HEADERS);
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.blocked).toBe(true);
@@ -399,8 +405,8 @@ describe("GET /internal/outlets/blocked", () => {
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?${BASE_QS}`)
-      .set(AUTH_HEADERS);
+      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.blocked).toBe(false);

@@ -68,11 +68,8 @@ const BRAND_ID = "44444444-4444-4444-4444-444444444444";
 const CAMPAIGN_ID = "55555555-5555-5555-5555-555555555555";
 const CHILD_RUN_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 
-const BUFFER_HEADERS = {
-  ...AUTH_HEADERS,
-  "x-campaign-id": CAMPAIGN_ID,
-  "x-brand-id": BRAND_ID,
-};
+// AUTH_HEADERS already includes x-campaign-id and x-brand-id matching test constants
+const BUFFER_HEADERS = AUTH_HEADERS;
 
 function setupRefillMocks() {
   mockedCreateChildRun.mockResolvedValue({
@@ -190,9 +187,10 @@ describe("POST /buffer/next", () => {
   });
 
   it("returns 400 without x-campaign-id header", async () => {
+    const { "x-campaign-id": _, ...headersWithoutCampaign } = AUTH_HEADERS;
     const res = await request(app)
       .post("/buffer/next")
-      .set(AUTH_HEADERS)
+      .set(headersWithoutCampaign)
       .send({ outletId: OUTLET_ID });
 
     expect(res.status).toBe(400);
@@ -200,9 +198,10 @@ describe("POST /buffer/next", () => {
   });
 
   it("returns 400 without x-brand-id header", async () => {
+    const { "x-brand-id": _, ...headersWithoutBrand } = AUTH_HEADERS;
     const res = await request(app)
       .post("/buffer/next")
-      .set({ ...AUTH_HEADERS, "x-campaign-id": CAMPAIGN_ID })
+      .set(headersWithoutBrand)
       .send({ outletId: OUTLET_ID });
 
     expect(res.status).toBe(400);

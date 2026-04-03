@@ -41,7 +41,7 @@ describe("Auth middleware logging", () => {
       .send({ outletId: "11111111-1111-1111-1111-111111111111" });
 
     expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining("Missing identity headers")
+      expect.stringContaining("Missing required headers")
     );
   });
 
