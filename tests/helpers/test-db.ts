@@ -49,6 +49,8 @@ export async function insertTestCampaignJournalist(data: {
   featureSlug?: string;
   workflowSlug?: string;
   runId?: string;
+  email?: string;
+  apolloPersonId?: string;
   status?: "buffered" | "claimed" | "served" | "contacted" | "skipped";
   createdAt?: Date;
 }) {
@@ -67,6 +69,8 @@ export async function insertTestCampaignJournalist(data: {
       featureSlug: data.featureSlug ?? null,
       workflowSlug: data.workflowSlug ?? null,
       runId: data.runId ?? null,
+      email: data.email ?? null,
+      apolloPersonId: data.apolloPersonId ?? null,
       status: data.status ?? "buffered",
       createdAt: data.createdAt ?? new Date(),
     })

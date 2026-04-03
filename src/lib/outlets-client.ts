@@ -34,3 +34,47 @@ export async function fetchOutlet(
   const data = (await response.json()) as OutletInfo;
   return data;
 }
+
+export interface PulledOutlet {
+  outletId: string;
+  outletName: string;
+  outletUrl: string;
+  outletDomain: string;
+  campaignId: string;
+  brandIds: string[];
+  relevanceScore: number;
+  whyRelevant: string;
+  whyNotRelevant: string;
+}
+
+/**
+ * Pull the next best outlet from the outlets-service buffer.
+ * Returns null if no outlets are available.
+ */
+export async function pullNextOutlet(
+  ctx: ServiceContext,
+  idempotencyKey?: string
+): Promise<PulledOutlet | null> {
+  const { url, apiKey } = getConfig();
+  const headers = buildServiceHeaders(ctx, apiKey);
+
+  const body: Record<string, unknown> = { count: 1 };
+  if (idempotencyKey) body.idempotencyKey = idempotencyKey;
+
+  const response = await fetch(`${url}/buffer/next`, {
+    method: "POST",
+    headers: { ...headers, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(
+      `[journalists-service] Outlets service POST /buffer/next failed (${response.status}): ${text}`
+    );
+  }
+
+  const data = (await response.json()) as { outlets: PulledOutlet[] };
+  if (data.outlets.length === 0) return null;
+  return data.outlets[0];
+}

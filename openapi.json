@@ -58,6 +58,23 @@
             "items": {
               "type": "string"
             }
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "apolloPersonId": {
+            "type": "string"
+          },
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outletName": {
+            "type": "string"
+          },
+          "outletDomain": {
+            "type": "string"
           }
         },
         "required": [
@@ -117,10 +134,7 @@
           "idempotencyKey": {
             "type": "string"
           }
-        },
-        "required": [
-          "outletId"
-        ]
+        }
       },
       "DiscoverResponse": {
         "type": "object",
@@ -491,7 +505,7 @@
     },
     "/buffer/next": {
       "post": {
-        "summary": "Pull next best journalist from buffer for a campaign+outlet. Refills buffer automatically on first call. The x-brand-id header supports CSV format (e.g. uuid1,uuid2).",
+        "summary": "Pull next best journalist with verified email. When outletId is provided, searches that outlet only. When omitted, pulls outlets from outlets-service and loops until finding a journalist with a valid email. Resolves email via Apollo, checks dedup via email-gateway.",
         "security": [
           {
             "ApiKeyAuth": []
@@ -508,7 +522,7 @@
         },
         "responses": {
           "200": {
-            "description": "Next journalist or { found: false } if buffer exhausted",
+            "description": "Next journalist with email, or { found: false } if exhausted",
             "content": {
               "application/json": {
                 "schema": {

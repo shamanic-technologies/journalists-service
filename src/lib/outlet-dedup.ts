@@ -1,5 +1,5 @@
-import { fetchLeadStatuses } from "./lead-client.js";
-import { buildServiceHeaders } from "./service-context.js";
+import { sql as pgClient } from "../db/index.js";
+import { checkEmailStatuses } from "./email-gateway-client.js";
 import type { ServiceContext } from "./service-context.js";
 
 // Outlet dedup: don't serve a second journalist from the same outlet
@@ -14,6 +14,9 @@ export type OutletDedupResult =
 /**
  * Check whether this outlet is blocked for the given brand+org.
  *
+ * Looks up previously contacted journalists from this outlet (cross-campaign)
+ * in our own DB, then checks email-gateway for delivery/reply status.
+ *
  * Rules:
  * 1. If a journalist from this outlet was contacted < 12 months ago:
  *    - Negative reply → blocked (outlet is "burned")
@@ -27,26 +30,42 @@ export async function checkOutletDedup(
   brandId: string,
   ctx: ServiceContext
 ): Promise<OutletDedupResult> {
-  const headers = buildServiceHeaders(ctx, "");
-  // Remove empty x-api-key — lead-service uses its own key via fetchLeadStatuses
-  delete headers["x-api-key"];
+  // Find all journalists at this outlet that were contacted for this brand (cross-campaign)
+  const contactedRows = await pgClient`
+    SELECT DISTINCT cj.email, cj.journalist_id
+    FROM campaign_journalists cj
+    WHERE cj.outlet_id = ${outletId}
+      AND ${brandId} = ANY(cj.brand_ids)
+      AND cj.status IN ('contacted', 'served')
+      AND cj.email IS NOT NULL
+  `;
 
-  const statuses = await fetchLeadStatuses(
-    { brandId, outletId },
-    headers
-  );
-
-  if (statuses.length === 0) {
+  if (contactedRows.length === 0) {
     return { blocked: false };
   }
 
+  // Check email-gateway for delivery/reply status
+  const items = contactedRows.map((row) => ({
+    leadId: row.journalist_id as string,
+    email: row.email as string,
+  }));
+
+  const results = await checkEmailStatuses(items, undefined, ctx);
+
   const now = Date.now();
 
-  for (const status of statuses) {
-    if (!status.contacted) continue;
+  for (const result of results) {
+    // Check both broadcast and transactional at brand scope
+    const brandStatus =
+      result.broadcast?.brand ?? result.transactional?.brand;
 
-    const deliveredAt = status.lastDeliveredAt
-      ? new Date(status.lastDeliveredAt).getTime()
+    if (!brandStatus) continue;
+
+    const { lead } = brandStatus;
+    if (!lead.contacted) continue;
+
+    const deliveredAt = lead.lastDeliveredAt
+      ? new Date(lead.lastDeliveredAt).getTime()
       : 0;
     const age = now - deliveredAt;
 
@@ -54,14 +73,14 @@ export async function checkOutletDedup(
     if (age >= OUTLET_BLOCK_WINDOW_MS) continue;
 
     // Within 12-month window
-    if (status.replyClassification === "negative") {
+    if (lead.replyClassification === "negative") {
       return {
         blocked: true,
         reason: `outlet blocked: journalist replied negatively ${Math.round(age / (24 * 60 * 60 * 1000))}d ago (12-month cooldown)`,
       };
     }
 
-    if (status.replyClassification === "positive") {
+    if (lead.replyClassification === "positive") {
       return {
         blocked: true,
         reason: `outlet blocked: journalist replied positively — already in conversation`,
@@ -69,7 +88,7 @@ export async function checkOutletDedup(
     }
 
     // No decisive reply (neutral or null) — check 30-day cooldown
-    if (!status.replied && age < OUTLET_NO_REPLY_COOLDOWN_MS) {
+    if (!lead.replied && age < OUTLET_NO_REPLY_COOLDOWN_MS) {
       return {
         blocked: true,
         reason: `outlet blocked: journalist contacted ${Math.round(age / (24 * 60 * 60 * 1000))}d ago, waiting for reply (30-day cooldown)`,

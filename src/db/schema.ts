@@ -75,6 +75,8 @@ export const campaignJournalists = pgTable(
     whyNotRelevant: text("why_not_relevant").notNull(),
     articleUrls: jsonb("article_urls").$type<string[]>(),
     status: bufferStatusEnum("status").notNull().default("buffered"),
+    email: text("email"),
+    apolloPersonId: text("apollo_person_id"),
     runId: uuid("run_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -97,6 +99,7 @@ export const campaignJournalists = pgTable(
       table.relevanceScore
     ),
     index("idx_cj_brand_ids").using("gin", table.brandIds),
+    index("idx_cj_outlet_email").on(table.outletId, table.email),
   ]
 );
 

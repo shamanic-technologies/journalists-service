@@ -13,13 +13,15 @@ import {
   getFieldValue,
 } from "../lib/brand-client.js";
 import { fetchCampaign } from "../lib/campaign-client.js";
-import { fetchOutlet } from "../lib/outlets-client.js";
+import { fetchOutlet, pullNextOutlet } from "../lib/outlets-client.js";
 import { extractDomain, refillBuffer } from "../lib/journalist-discovery.js";
 import {
   checkOutletBlocked,
   SERVED_COOLDOWN_MS,
   MIN_RELEVANCE_SCORE,
 } from "../lib/outlet-blocked.js";
+import { matchPerson } from "../lib/apollo-client.js";
+import { checkEmailStatuses } from "../lib/email-gateway-client.js";
 import { BufferNextSchema } from "../schemas.js";
 import type { ServiceContext } from "../lib/service-context.js";
 
@@ -28,7 +30,11 @@ const router = Router();
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const IDEMPOTENCY_TTL_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
 const MAX_PULL_ITERATIONS = 100;
+const MAX_OUTLET_ITERATIONS = 20;
 const CLEANUP_PROBABILITY = 0.01;
+
+// Email statuses that indicate a usable email
+const VALID_EMAIL_STATUSES = new Set(["verified", "guessed", "unavailable"]);
 
 function getCtx(locals: Record<string, unknown>): ServiceContext {
   return {
@@ -56,6 +62,11 @@ interface BufferNextResponse {
     whyRelevant: string;
     whyNotRelevant: string;
     articleUrls: string[];
+    email?: string;
+    apolloPersonId?: string;
+    outletId?: string;
+    outletName?: string;
+    outletDomain?: string;
   };
 }
 
@@ -71,240 +82,6 @@ async function maybeCleanupIdempotencyCache(): Promise<void> {
     // Non-critical — ignore errors
   }
 }
-
-router.post("/buffer/next", async (req, res) => {
-  const parsed = BufferNextSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  const { outletId, maxArticles, idempotencyKey } = parsed.data;
-  const ctx = getCtx(res.locals);
-  // Headers guaranteed by requireIdentityHeaders middleware
-  const campaignId = ctx.campaignId;
-  const brandIds = ctx.brandIds;
-
-  console.log(
-    `[journalists-service] POST /buffer/next — outletId=${outletId} campaignId=${campaignId} brandIds=${brandIds.join(",")} orgId=${ctx.orgId}`
-  );
-
-  try {
-    // Probabilistic cleanup
-    maybeCleanupIdempotencyCache();
-
-    // Check idempotency cache
-    if (idempotencyKey) {
-      const cached = await db
-        .select()
-        .from(idempotencyCache)
-        .where(eq(idempotencyCache.idempotencyKey, idempotencyKey));
-
-      if (cached.length > 0 && new Date(cached[0].expiresAt) > new Date()) {
-        res.json(cached[0].responseBody);
-        return;
-      }
-    }
-
-    // ── Outlet blocked gate (shared logic) ─────────────────────────────
-    // Checks local dedup, lead-service dedup, and relevance threshold.
-    const blocked = await checkOutletBlocked(outletId, campaignId, brandIds, ctx);
-    if (blocked.blocked) {
-      // If blocked due to low relevance, mark those journalists as skipped
-      if (blocked.reason.includes("below relevance threshold")) {
-        await pgClient`
-          UPDATE campaign_journalists
-          SET status = 'skipped'
-          WHERE campaign_id = ${campaignId}
-            AND outlet_id = ${outletId}
-            AND status = 'buffered'
-            AND relevance_score < ${MIN_RELEVANCE_SCORE}
-        `;
-      }
-      console.log(
-        `[journalists-service] Outlet blocked: ${blocked.reason} (outletId=${outletId} campaignId=${campaignId} orgId=${ctx.orgId})`
-      );
-      res.json({ found: false, reason: blocked.reason });
-      return;
-    }
-
-    const childRun = await createChildRun(
-      {
-        parentRunId: ctx.runId,
-        serviceName: "journalists-service",
-        taskName: "buffer-next",
-      },
-      ctx
-    );
-    const childCtx: ServiceContext = { ...ctx, runId: childRun.id };
-
-    // Fetch outlet info once — used for refill and for logging
-    const outlet = await fetchOutlet(outletId, childCtx);
-    const outletLabel = outlet.outletName || extractDomain(outlet.outletUrl);
-
-    let response: BufferNextResponse = { found: false, runId: childRun.id };
-    let hasAttemptedRefill = false;
-
-    for (let i = 0; i < MAX_PULL_ITERATIONS; i++) {
-      // Atomic claim: SELECT ... FOR UPDATE SKIP LOCKED
-      const claimed = await claimNextBuffered(campaignId, outletId);
-
-      if (claimed) {
-        // Mark as served
-        await db
-          .update(campaignJournalists)
-          .set({ status: "served" })
-          .where(eq(campaignJournalists.id, claimed.campaignJournalistId));
-
-        response = {
-          found: true,
-          journalist: {
-            id: claimed.journalistId,
-            journalistName: claimed.journalistName,
-            firstName: claimed.firstName || "",
-            lastName: claimed.lastName || "",
-            entityType: claimed.entityType,
-            relevanceScore: Number(claimed.relevanceScore),
-            whyRelevant: claimed.whyRelevant,
-            whyNotRelevant: claimed.whyNotRelevant,
-            articleUrls: (claimed.articleUrls as string[]) || [],
-          },
-        };
-        break;
-      }
-
-      // Buffer empty (above-threshold journalists exhausted) — try refill (only once)
-      if (hasAttemptedRefill) {
-        response = { found: false };
-        break;
-      }
-
-      hasAttemptedRefill = true;
-
-      // Check discovery cache — if fresh, no more journalists to find
-      const discoveryCached = await db
-        .select()
-        .from(discoveryCache)
-        .where(
-          and(
-            eq(discoveryCache.orgId, ctx.orgId),
-            eq(discoveryCache.campaignId, campaignId),
-            eq(discoveryCache.outletId, outletId)
-          )
-        );
-
-      const isFresh =
-        discoveryCached.length > 0 &&
-        Date.now() - new Date(discoveryCached[0].discoveredAt).getTime() <
-          CACHE_MAX_AGE_MS;
-
-      if (isFresh) {
-        // Discovery already ran recently — buffer is genuinely empty (all served/skipped)
-        response = { found: false };
-        break;
-      }
-
-      // Refill buffer (outlet already fetched above)
-      const [brandFields, campaign] = await Promise.all([
-        extractBrandFields(
-          [
-            { key: "brand_name", description: "The brand's name" },
-            {
-              key: "brand_description",
-              description:
-                "A concise description of what the brand does, its products, and market positioning",
-            },
-          ],
-          childCtx
-        ),
-        fetchCampaign(campaignId, childCtx),
-      ]);
-
-      const brandName =
-        getFieldValue(brandFields.fields, "brand_name") || "Unknown Brand";
-      const brandDescription = getFieldValue(
-        brandFields.fields,
-        "brand_description"
-      );
-      const featureInputs = campaign.featureInputs ?? {};
-      const outletDomain = extractDomain(outlet.outletUrl);
-
-      const filled = await refillBuffer({
-        outletDomain,
-        outletId,
-        campaignId,
-        brandName,
-        brandDescription,
-        featureInputs,
-        maxArticles,
-        orgId: ctx.orgId,
-        brandIds,
-        ctx: childCtx,
-        runId: childRun.id,
-      });
-
-      // Update discovery cache
-      await db
-        .insert(discoveryCache)
-        .values({
-          orgId: ctx.orgId,
-          brandIds,
-          campaignId,
-          outletId,
-          discoveredAt: new Date(),
-          runId: childRun.id,
-        })
-        .onConflictDoUpdate({
-          target: [
-            discoveryCache.orgId,
-            discoveryCache.campaignId,
-            discoveryCache.outletId,
-          ],
-          set: {
-            brandIds,
-            discoveredAt: new Date(),
-            runId: childRun.id,
-          },
-        });
-
-      if (filled === 0) {
-        response = { found: false };
-        break;
-      }
-
-      // Loop back to claim from the freshly-filled buffer
-    }
-
-    console.log(
-      `[journalists-service] POST /buffer/next result — outlet="${outletLabel}" found=${response.found}${response.found ? ` journalist="${response.journalist!.firstName} ${response.journalist!.lastName}"` : ""}`
-    );
-
-    // Save to idempotency cache
-    if (idempotencyKey) {
-      await db
-        .insert(idempotencyCache)
-        .values({
-          idempotencyKey,
-          responseBody: response,
-          expiresAt: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
-        })
-        .onConflictDoUpdate({
-          target: idempotencyCache.idempotencyKey,
-          set: {
-            responseBody: response,
-            expiresAt: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
-          },
-        });
-    }
-
-    res.json(response);
-  } catch (err) {
-    console.error("[journalists-service] Buffer/next error:", err);
-    const message =
-      err instanceof Error ? err.message : "Internal server error";
-    res.status(502).json({ error: message });
-  }
-});
 
 // ── Atomic claim via FOR UPDATE SKIP LOCKED ──────────────────────────
 
@@ -391,5 +168,433 @@ async function claimNextBuffered(
     articleUrls: cj.articleUrls,
   };
 }
+
+// ── Resolve email via Apollo + email-gateway dedup ──────────────────
+
+interface ResolvedEmail {
+  email: string;
+  apolloPersonId: string | null;
+}
+
+/**
+ * Try to resolve a verified, non-contacted email for a claimed journalist.
+ * Returns null if Apollo has no match, email is bad, or email was already contacted.
+ */
+async function resolveAndCheckEmail(
+  claimed: ClaimedRow,
+  outletDomain: string,
+  campaignId: string,
+  ctx: ServiceContext
+): Promise<ResolvedEmail | null> {
+  const firstName = claimed.firstName || "";
+  const lastName = claimed.lastName || "";
+
+  if (!firstName || !lastName) {
+    console.log(
+      `[journalists-service] Skipping Apollo match — missing name for journalist ${claimed.journalistId}`
+    );
+    return null;
+  }
+
+  // Apollo match
+  const apolloResult = await matchPerson(firstName, lastName, outletDomain, ctx);
+
+  if (!apolloResult.person?.email) {
+    console.log(
+      `[journalists-service] Apollo: no email for ${firstName} ${lastName} @ ${outletDomain}`
+    );
+    return null;
+  }
+
+  const email = apolloResult.person.email;
+  const emailStatus = apolloResult.person.emailStatus;
+
+  // Check email quality — reject "bounced" or unknown statuses
+  if (emailStatus && !VALID_EMAIL_STATUSES.has(emailStatus)) {
+    console.log(
+      `[journalists-service] Apollo: bad emailStatus "${emailStatus}" for ${email}`
+    );
+    return null;
+  }
+
+  // Check email-gateway: was this email already contacted for any brand in brandIds?
+  const gatewayResults = await checkEmailStatuses(
+    [{ leadId: claimed.journalistId, email }],
+    campaignId,
+    ctx
+  );
+
+  if (gatewayResults.length > 0) {
+    const result = gatewayResults[0];
+    // Check brand-level broadcast status
+    const brandStatus = result.broadcast?.brand;
+    if (brandStatus?.email?.contacted) {
+      console.log(
+        `[journalists-service] Email ${email} already contacted (broadcast/brand)`
+      );
+      return null;
+    }
+    // Check global bounced/unsubscribed
+    if (result.broadcast?.global?.email?.bounced) {
+      console.log(
+        `[journalists-service] Email ${email} globally bounced`
+      );
+      return null;
+    }
+    if (result.broadcast?.global?.email?.unsubscribed) {
+      console.log(
+        `[journalists-service] Email ${email} globally unsubscribed`
+      );
+      return null;
+    }
+  }
+
+  return {
+    email,
+    apolloPersonId: apolloResult.person.id ?? null,
+  };
+}
+
+// ── Process a single outlet: claim journalist + resolve email ────────
+
+interface OutletContext {
+  outletId: string;
+  outletName: string;
+  outletUrl: string;
+  outletDomain: string;
+}
+
+/**
+ * Try to find a journalist with a verified email at the given outlet.
+ * Loops through buffered journalists, refilling once if needed.
+ * Returns the journalist + email, or null if outlet is exhausted.
+ */
+async function processOutlet(
+  outlet: OutletContext,
+  campaignId: string,
+  brandIds: string[],
+  maxArticles: number,
+  ctx: ServiceContext
+): Promise<BufferNextResponse> {
+  // ── Outlet blocked gate ─────────────────────────────────────────
+  const blocked = await checkOutletBlocked(outlet.outletId, campaignId, brandIds, ctx);
+  if (blocked.blocked) {
+    if (blocked.reason.includes("below relevance threshold")) {
+      await pgClient`
+        UPDATE campaign_journalists
+        SET status = 'skipped'
+        WHERE campaign_id = ${campaignId}
+          AND outlet_id = ${outlet.outletId}
+          AND status = 'buffered'
+          AND relevance_score < ${MIN_RELEVANCE_SCORE}
+      `;
+    }
+    console.log(
+      `[journalists-service] Outlet blocked: ${blocked.reason} (outletId=${outlet.outletId} campaignId=${campaignId} orgId=${ctx.orgId})`
+    );
+    return { found: false, reason: blocked.reason };
+  }
+
+  const childRun = await createChildRun(
+    {
+      parentRunId: ctx.runId,
+      serviceName: "journalists-service",
+      taskName: "buffer-next",
+    },
+    ctx
+  );
+  const childCtx: ServiceContext = { ...ctx, runId: childRun.id };
+
+  let hasAttemptedRefill = false;
+
+  for (let i = 0; i < MAX_PULL_ITERATIONS; i++) {
+    const claimed = await claimNextBuffered(campaignId, outlet.outletId);
+
+    if (claimed) {
+      // Try to resolve email
+      const resolved = await resolveAndCheckEmail(
+        claimed,
+        outlet.outletDomain,
+        campaignId,
+        childCtx
+      );
+
+      if (resolved) {
+        // Email found and valid — mark as served with email data
+        await db
+          .update(campaignJournalists)
+          .set({
+            status: "served",
+            email: resolved.email,
+            apolloPersonId: resolved.apolloPersonId,
+          })
+          .where(eq(campaignJournalists.id, claimed.campaignJournalistId));
+
+        return {
+          found: true,
+          runId: childRun.id,
+          journalist: {
+            id: claimed.journalistId,
+            journalistName: claimed.journalistName,
+            firstName: claimed.firstName || "",
+            lastName: claimed.lastName || "",
+            entityType: claimed.entityType,
+            relevanceScore: Number(claimed.relevanceScore),
+            whyRelevant: claimed.whyRelevant,
+            whyNotRelevant: claimed.whyNotRelevant,
+            articleUrls: (claimed.articleUrls as string[]) || [],
+            email: resolved.email,
+            apolloPersonId: resolved.apolloPersonId ?? undefined,
+            outletId: outlet.outletId,
+            outletName: outlet.outletName,
+            outletDomain: outlet.outletDomain,
+          },
+        };
+      }
+
+      // No email — mark as skipped, try next journalist
+      await db
+        .update(campaignJournalists)
+        .set({ status: "skipped" })
+        .where(eq(campaignJournalists.id, claimed.campaignJournalistId));
+
+      console.log(
+        `[journalists-service] Skipped journalist ${claimed.firstName} ${claimed.lastName} — no valid email`
+      );
+      continue;
+    }
+
+    // Buffer empty — try refill (only once)
+    if (hasAttemptedRefill) {
+      return { found: false, runId: childRun.id };
+    }
+
+    hasAttemptedRefill = true;
+
+    // Check discovery cache
+    const discoveryCached = await db
+      .select()
+      .from(discoveryCache)
+      .where(
+        and(
+          eq(discoveryCache.orgId, ctx.orgId),
+          eq(discoveryCache.campaignId, campaignId),
+          eq(discoveryCache.outletId, outlet.outletId)
+        )
+      );
+
+    const isFresh =
+      discoveryCached.length > 0 &&
+      Date.now() - new Date(discoveryCached[0].discoveredAt).getTime() <
+        CACHE_MAX_AGE_MS;
+
+    if (isFresh) {
+      return { found: false, runId: childRun.id };
+    }
+
+    // Refill buffer
+    const [brandFields, campaign] = await Promise.all([
+      extractBrandFields(
+        [
+          { key: "brand_name", description: "The brand's name" },
+          {
+            key: "brand_description",
+            description:
+              "A concise description of what the brand does, its products, and market positioning",
+          },
+        ],
+        childCtx
+      ),
+      fetchCampaign(campaignId, childCtx),
+    ]);
+
+    const brandName =
+      getFieldValue(brandFields.fields, "brand_name") || "Unknown Brand";
+    const brandDescription = getFieldValue(
+      brandFields.fields,
+      "brand_description"
+    );
+
+    const featureInputs = campaign.featureInputs ?? {};
+
+    const filled = await refillBuffer({
+      outletDomain: outlet.outletDomain,
+      outletId: outlet.outletId,
+      campaignId,
+      brandName,
+      brandDescription,
+      featureInputs,
+      maxArticles,
+      orgId: ctx.orgId,
+      brandIds,
+      ctx: childCtx,
+      runId: childRun.id,
+    });
+
+    // Update discovery cache
+    await db
+      .insert(discoveryCache)
+      .values({
+        orgId: ctx.orgId,
+        brandIds,
+        campaignId,
+        outletId: outlet.outletId,
+        discoveredAt: new Date(),
+        runId: childRun.id,
+      })
+      .onConflictDoUpdate({
+        target: [
+          discoveryCache.orgId,
+          discoveryCache.campaignId,
+          discoveryCache.outletId,
+        ],
+        set: {
+          brandIds,
+          discoveredAt: new Date(),
+          runId: childRun.id,
+        },
+      });
+
+    if (filled === 0) {
+      return { found: false, runId: childRun.id };
+    }
+
+    // Loop back to claim from the freshly-filled buffer
+  }
+
+  return { found: false };
+}
+
+// ── Route handler ───────────────────────────────────────────────────
+
+router.post("/buffer/next", async (req, res) => {
+  const parsed = BufferNextSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const { outletId, maxArticles, idempotencyKey } = parsed.data;
+  const ctx = getCtx(res.locals);
+  const campaignId = ctx.campaignId;
+  const brandIds = ctx.brandIds;
+
+  console.log(
+    `[journalists-service] POST /buffer/next — outletId=${outletId ?? "(auto)"} campaignId=${campaignId} brandIds=${brandIds.join(",")} orgId=${ctx.orgId}`
+  );
+
+  try {
+    // Probabilistic cleanup
+    maybeCleanupIdempotencyCache();
+
+    // Check idempotency cache
+    if (idempotencyKey) {
+      const cached = await db
+        .select()
+        .from(idempotencyCache)
+        .where(eq(idempotencyCache.idempotencyKey, idempotencyKey));
+
+      if (cached.length > 0 && new Date(cached[0].expiresAt) > new Date()) {
+        res.json(cached[0].responseBody);
+        return;
+      }
+    }
+
+    let response: BufferNextResponse;
+
+    if (outletId) {
+      // ── Explicit outlet — single attempt ──────────────────────
+      const outlet = await fetchOutlet(outletId, ctx);
+      const outletDomain = extractDomain(outlet.outletUrl);
+
+      response = await processOutlet(
+        {
+          outletId,
+          outletName: outlet.outletName || outletDomain,
+          outletUrl: outlet.outletUrl,
+          outletDomain,
+        },
+        campaignId,
+        brandIds,
+        maxArticles,
+        ctx
+      );
+    } else {
+      // ── No outlet — pull from outlets-service, loop until found ─
+      response = { found: false };
+
+      for (let i = 0; i < MAX_OUTLET_ITERATIONS; i++) {
+        const pulled = await pullNextOutlet(ctx);
+
+        if (!pulled) {
+          console.log(
+            `[journalists-service] No more outlets available from outlets-service`
+          );
+          response = { found: false, reason: "no outlets available" };
+          break;
+        }
+
+        console.log(
+          `[journalists-service] Trying outlet: ${pulled.outletName} (${pulled.outletDomain})`
+        );
+
+        const result = await processOutlet(
+          {
+            outletId: pulled.outletId,
+            outletName: pulled.outletName,
+            outletUrl: pulled.outletUrl,
+            outletDomain: pulled.outletDomain,
+          },
+          campaignId,
+          brandIds,
+          maxArticles,
+          ctx
+        );
+
+        if (result.found) {
+          response = result;
+          break;
+        }
+
+        console.log(
+          `[journalists-service] Outlet ${pulled.outletName} exhausted: ${result.reason ?? "no journalists with email"}`
+        );
+        // Continue to next outlet
+      }
+    }
+
+    const journalistLabel = response.found
+      ? ` journalist="${response.journalist!.firstName} ${response.journalist!.lastName}" email=${response.journalist!.email ?? "none"}`
+      : "";
+    console.log(
+      `[journalists-service] POST /buffer/next result — found=${response.found}${journalistLabel}`
+    );
+
+    // Save to idempotency cache
+    if (idempotencyKey) {
+      await db
+        .insert(idempotencyCache)
+        .values({
+          idempotencyKey,
+          responseBody: response,
+          expiresAt: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
+        })
+        .onConflictDoUpdate({
+          target: idempotencyCache.idempotencyKey,
+          set: {
+            responseBody: response,
+            expiresAt: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
+          },
+        });
+    }
+
+    res.json(response);
+  } catch (err) {
+    console.error("[journalists-service] Buffer/next error:", err);
+    const message =
+      err instanceof Error ? err.message : "Internal server error";
+    res.status(502).json({ error: message });
+  }
+});
 
 export default router;

@@ -19,4 +19,6 @@ process.env.WORKFLOW_SERVICE_URL = "http://localhost:9990";
 process.env.WORKFLOW_SERVICE_API_KEY = "test-workflow-key";
 process.env.LEAD_SERVICE_URL = "http://localhost:9989";
 process.env.LEAD_SERVICE_API_KEY = "test-lead-key";
+process.env.EMAIL_GATEWAY_SERVICE_URL = "http://localhost:9988";
+process.env.EMAIL_GATEWAY_SERVICE_API_KEY = "test-email-gateway-key";
 process.env.NODE_ENV = "test";
