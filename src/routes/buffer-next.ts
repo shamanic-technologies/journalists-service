@@ -42,6 +42,7 @@ function getCtx(locals: Record<string, unknown>): ServiceContext {
 
 interface BufferNextResponse {
   found: boolean;
+  reason?: string;
   runId?: string;
   journalist?: {
     id: string;
@@ -199,7 +200,32 @@ router.post("/buffer/next", async (req, res) => {
         break;
       }
 
-      // Buffer empty — try refill (only once)
+      // No claimable journalist — check if it's because all are below the score threshold
+      const belowThreshold = await pgClient`
+        SELECT COUNT(*)::int AS count FROM campaign_journalists
+        WHERE campaign_id = ${campaignId}
+          AND outlet_id = ${outletId}
+          AND status = 'buffered'
+          AND relevance_score < ${MIN_RELEVANCE_SCORE}
+      `;
+      if (belowThreshold[0].count > 0) {
+        // Mark them as skipped so they don't block future refills
+        await pgClient`
+          UPDATE campaign_journalists
+          SET status = 'skipped'
+          WHERE campaign_id = ${campaignId}
+            AND outlet_id = ${outletId}
+            AND status = 'buffered'
+            AND relevance_score < ${MIN_RELEVANCE_SCORE}
+        `;
+        console.log(
+          `[journalists-service] Skipped ${belowThreshold[0].count} journalist(s) below relevance threshold (${MIN_RELEVANCE_SCORE}) for outlet=${outletId} campaign=${campaignId}`
+        );
+        response = { found: false, reason: `all journalists below relevance threshold (${MIN_RELEVANCE_SCORE})` };
+        break;
+      }
+
+      // Buffer genuinely empty — try refill (only once)
       if (hasAttemptedRefill) {
         response = { found: false };
         break;
