@@ -3,16 +3,17 @@ import { inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import { journalists } from "../db/schema.js";
-import { checkOutletDedup } from "../lib/outlet-dedup.js";
+import { checkOutletBlocked } from "../lib/outlet-blocked.js";
 import type { ServiceContext } from "../lib/service-context.js";
 
 const router = Router();
 
-// GET /internal/outlets/blocked — full dedup logic via lead-service
+// GET /internal/outlets/blocked — full dedup + local + relevance check
 const outletBlockedQuerySchema = z.object({
   org_id: z.string().uuid(),
   brand_ids: z.string().transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)),
   outlet_id: z.string().uuid(),
+  campaign_id: z.string().uuid(),
 });
 
 router.get("/internal/outlets/blocked", async (req, res) => {
@@ -22,7 +23,7 @@ router.get("/internal/outlets/blocked", async (req, res) => {
     return;
   }
 
-  const { org_id, brand_ids, outlet_id } = parsed.data;
+  const { org_id, brand_ids, outlet_id, campaign_id } = parsed.data;
 
   if (brand_ids.length === 0) {
     res.status(400).json({ error: "brand_ids must contain at least one UUID" });
@@ -35,22 +36,19 @@ router.get("/internal/outlets/blocked", async (req, res) => {
     userId: res.locals.userId as string,
     runId: res.locals.runId as string,
     featureSlug: null,
-    campaignId: null,
+    campaignId: campaign_id,
     brandIds: brand_ids,
     workflowSlug: null,
   };
 
   try {
-    // Check each brand — if ANY brand blocks the outlet, it's blocked
-    for (const brandId of brand_ids) {
-      const result = await checkOutletDedup(outlet_id, brandId, ctx);
-      if (result.blocked) {
-        console.log(
-          `[journalists-service] GET /internal/outlets/blocked: ${result.reason} (outletId=${outlet_id} brandId=${brandId} orgId=${org_id})`
-        );
-        res.json({ blocked: true, reason: result.reason });
-        return;
-      }
+    const result = await checkOutletBlocked(outlet_id, campaign_id, brand_ids, ctx);
+    if (result.blocked) {
+      console.log(
+        `[journalists-service] GET /internal/outlets/blocked: ${result.reason} (outletId=${outlet_id} campaignId=${campaign_id} orgId=${org_id})`
+      );
+      res.json({ blocked: true, reason: result.reason });
+      return;
     }
 
     res.json({ blocked: false });
