@@ -15,7 +15,11 @@ import {
 import { fetchCampaign } from "../lib/campaign-client.js";
 import { fetchOutlet } from "../lib/outlets-client.js";
 import { extractDomain, refillBuffer } from "../lib/journalist-discovery.js";
-import { checkOutletDedup } from "../lib/outlet-dedup.js";
+import {
+  checkOutletBlocked,
+  SERVED_COOLDOWN_MS,
+  MIN_RELEVANCE_SCORE,
+} from "../lib/outlet-blocked.js";
 import { BufferNextSchema } from "../schemas.js";
 import type { ServiceContext } from "../lib/service-context.js";
 
@@ -23,8 +27,6 @@ const router = Router();
 
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const IDEMPOTENCY_TTL_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
-const SERVED_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour — treat recently-served as "contacted" to close the race window
-const MIN_RELEVANCE_SCORE = 30; // Don't serve "distant" journalists (0-30 tier)
 const MAX_PULL_ITERATIONS = 100;
 const CLEANUP_PROBABILITY = 0.01;
 
@@ -115,44 +117,26 @@ router.post("/buffer/next", async (req, res) => {
       }
     }
 
-    // ── Local dedup gate: close the race window between served and contacted ─
-    // A journalist that was served/claimed < 1 hour ago is presumed in-flight
-    // (workflow is generating the email, creating the campaign, etc.).
-    // "contacted" always blocks (lead-service confirmed the send).
-    // After 1 hour without transitioning to "contacted", we assume the send
-    // failed and allow another journalist from the same outlet.
-    const servedCutoff = new Date(Date.now() - SERVED_COOLDOWN_MS).toISOString();
-    const alreadyServed = await pgClient`
-      SELECT id FROM campaign_journalists
-      WHERE campaign_id = ${campaignId}
-        AND outlet_id = ${outletId}
-        AND (
-          status = 'contacted'
-          OR (status IN ('claimed', 'served') AND created_at >= ${servedCutoff}::timestamptz)
-        )
-      LIMIT 1
-    `;
-    if (alreadyServed.length > 0) {
-      console.log(
-        `[journalists-service] Local outlet dedup: already served a journalist from outlet=${outletId} in campaign=${campaignId}`
-      );
-      res.json({ found: false, reason: "outlet already has a served journalist in this campaign" });
-      return;
-    }
-
-    // ── Outlet dedup gate: check all brands ────────────────────────────
-    // For each brand, check if this outlet is blocked. If ANY brand blocks
-    // the outlet, we don't serve. We check before creating the child run
-    // to avoid unnecessary run costs.
-    for (const brandId of brandIds) {
-      const dedup = await checkOutletDedup(outletId, brandId, ctx);
-      if (dedup.blocked) {
-        console.log(
-          `[journalists-service] Outlet dedup gate: ${dedup.reason} (outletId=${outletId} brandId=${brandId} orgId=${ctx.orgId})`
-        );
-        res.json({ found: false, reason: dedup.reason });
-        return;
+    // ── Outlet blocked gate (shared logic) ─────────────────────────────
+    // Checks local dedup, lead-service dedup, and relevance threshold.
+    const blocked = await checkOutletBlocked(outletId, campaignId, brandIds, ctx);
+    if (blocked.blocked) {
+      // If blocked due to low relevance, mark those journalists as skipped
+      if (blocked.reason.includes("below relevance threshold")) {
+        await pgClient`
+          UPDATE campaign_journalists
+          SET status = 'skipped'
+          WHERE campaign_id = ${campaignId}
+            AND outlet_id = ${outletId}
+            AND status = 'buffered'
+            AND relevance_score < ${MIN_RELEVANCE_SCORE}
+        `;
       }
+      console.log(
+        `[journalists-service] Outlet blocked: ${blocked.reason} (outletId=${outletId} campaignId=${campaignId} orgId=${ctx.orgId})`
+      );
+      res.json({ found: false, reason: blocked.reason });
+      return;
     }
 
     const childRun = await createChildRun(
@@ -200,32 +184,7 @@ router.post("/buffer/next", async (req, res) => {
         break;
       }
 
-      // No claimable journalist — check if it's because all are below the score threshold
-      const belowThreshold = await pgClient`
-        SELECT COUNT(*)::int AS count FROM campaign_journalists
-        WHERE campaign_id = ${campaignId}
-          AND outlet_id = ${outletId}
-          AND status = 'buffered'
-          AND relevance_score < ${MIN_RELEVANCE_SCORE}
-      `;
-      if (belowThreshold[0].count > 0) {
-        // Mark them as skipped so they don't block future refills
-        await pgClient`
-          UPDATE campaign_journalists
-          SET status = 'skipped'
-          WHERE campaign_id = ${campaignId}
-            AND outlet_id = ${outletId}
-            AND status = 'buffered'
-            AND relevance_score < ${MIN_RELEVANCE_SCORE}
-        `;
-        console.log(
-          `[journalists-service] Skipped ${belowThreshold[0].count} journalist(s) below relevance threshold (${MIN_RELEVANCE_SCORE}) for outlet=${outletId} campaign=${campaignId}`
-        );
-        response = { found: false, reason: `all journalists below relevance threshold (${MIN_RELEVANCE_SCORE})` };
-        break;
-      }
-
-      // Buffer genuinely empty — try refill (only once)
+      // Buffer empty (above-threshold journalists exhausted) — try refill (only once)
       if (hasAttemptedRefill) {
         response = { found: false };
         break;
