@@ -8,7 +8,7 @@ import {
   closeDb,
 } from "../helpers/test-db.js";
 import { db } from "../../src/db/index.js";
-import { campaignJournalists, discoveryCache } from "../../src/db/schema.js";
+import { campaignJournalists, journalists, discoveryCache } from "../../src/db/schema.js";
 import { eq } from "drizzle-orm";
 
 // Mock all external service clients
@@ -413,6 +413,181 @@ describe("POST /buffer/next", () => {
       .where(eq(campaignJournalists.journalistId, sarah.id));
     expect(sarahCj[0].status).toBe("skipped");
   });
+
+  // ── Apollo cache ───────────────────────────────────────────────────
+
+  it("uses cached Apollo email instead of calling Apollo again", async () => {
+    const sarah = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Sarah Johnson",
+      firstName: "Sarah",
+      lastName: "Johnson",
+      apolloEmail: "sarah.cached@techcrunch.com",
+      apolloEmailStatus: "verified",
+      apolloPersonId: "apollo-cached-1",
+      apolloCheckedAt: new Date(), // fresh cache
+    });
+
+    await insertTestCampaignJournalist({
+      journalistId: sarah.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "92.00",
+      whyRelevant: "Covers SaaS",
+      whyNotRelevant: "Consumer tech",
+      status: "buffered",
+    });
+
+    setupBaseMocks();
+    setupEmailGatewayNotContacted();
+
+    const res = await request(app)
+      .post("/buffer/next")
+      .set(BUFFER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.found).toBe(true);
+    expect(res.body.journalist.email).toBe("sarah.cached@techcrunch.com");
+    expect(res.body.journalist.apolloPersonId).toBe("apollo-cached-1");
+
+    // Apollo should NOT have been called — cache hit
+    expect(mockedMatchPerson).not.toHaveBeenCalled();
+  });
+
+  it("skips journalist with recent Apollo check and no email (cache hit)", async () => {
+    const noEmail = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "No Email Person",
+      firstName: "No",
+      lastName: "Email",
+      apolloCheckedAt: new Date(), // checked recently, no email found
+      apolloEmail: null,
+    });
+
+    await insertTestCampaignJournalist({
+      journalistId: noEmail.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "85.00",
+      whyRelevant: "Covers tech",
+      whyNotRelevant: "Low output",
+      status: "buffered",
+    });
+
+    setupBaseMocks();
+    await seedDiscoveryCache();
+
+    const res = await request(app)
+      .post("/buffer/next")
+      .set(BUFFER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.found).toBe(false);
+
+    // Apollo should NOT have been called — cache says no email
+    expect(mockedMatchPerson).not.toHaveBeenCalled();
+  });
+
+  it("calls Apollo when cache is stale (> 30 days)", async () => {
+    const stale = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Stale Cache Person",
+      firstName: "Stale",
+      lastName: "Cache",
+      apolloCheckedAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000), // 31 days ago
+      apolloEmail: null,
+    });
+
+    await insertTestCampaignJournalist({
+      journalistId: stale.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "85.00",
+      whyRelevant: "Covers tech",
+      whyNotRelevant: "Low output",
+      status: "buffered",
+    });
+
+    setupBaseMocks();
+    setupApolloMock("stale@techcrunch.com", "apollo-stale-1");
+    setupEmailGatewayNotContacted();
+
+    const res = await request(app)
+      .post("/buffer/next")
+      .set(BUFFER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.found).toBe(true);
+    expect(res.body.journalist.email).toBe("stale@techcrunch.com");
+
+    // Apollo WAS called because cache was stale
+    expect(mockedMatchPerson).toHaveBeenCalledOnce();
+
+    // Verify journalists table was updated with new Apollo data
+    const updated = await db
+      .select()
+      .from(journalists)
+      .where(eq(journalists.id, stale.id));
+    expect(updated[0].apolloEmail).toBe("stale@techcrunch.com");
+    expect(updated[0].apolloPersonId).toBe("apollo-stale-1");
+    expect(updated[0].apolloCheckedAt).not.toBeNull();
+  });
+
+  it("stores Apollo no-email result on journalists table for future cache hits", async () => {
+    const person = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Will Fail Apollo",
+      firstName: "Will",
+      lastName: "Fail",
+    });
+
+    await insertTestCampaignJournalist({
+      journalistId: person.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "85.00",
+      whyRelevant: "Covers tech",
+      whyNotRelevant: "Low output",
+      status: "buffered",
+    });
+
+    setupBaseMocks();
+    mockedMatchPerson.mockResolvedValue({
+      enrichmentId: null,
+      person: null,
+      cached: false,
+    });
+    await seedDiscoveryCache();
+
+    const res = await request(app)
+      .post("/buffer/next")
+      .set(BUFFER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.found).toBe(false);
+
+    // Verify the journalists table was updated with apollo_checked_at
+    const updated = await db
+      .select()
+      .from(journalists)
+      .where(eq(journalists.id, person.id));
+    expect(updated[0].apolloCheckedAt).not.toBeNull();
+    expect(updated[0].apolloEmail).toBeNull();
+  });
+
+  // ── Relevance threshold ───────────────────────────────────────────
 
   it("skips journalists below relevance threshold (30)", async () => {
     const lowScore = await insertTestJournalist({

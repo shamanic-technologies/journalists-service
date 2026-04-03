@@ -29,6 +29,7 @@ const router = Router();
 
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const IDEMPOTENCY_TTL_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
+const APOLLO_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — don't re-call Apollo within this window
 const MAX_PULL_ITERATIONS = 100;
 const MAX_OUTLET_ITERATIONS = 20;
 const CLEANUP_PROBABILITY = 0.01;
@@ -275,19 +276,67 @@ async function resolveAndCheckEmail(
     return null;
   }
 
-  // Apollo match
-  const apolloResult = await matchPerson(firstName, lastName, outletDomain, ctx);
+  // Check global journalists table for cached Apollo results
+  const cachedRows = await db
+    .select({
+      apolloEmail: journalists.apolloEmail,
+      apolloEmailStatus: journalists.apolloEmailStatus,
+      apolloPersonId: journalists.apolloPersonId,
+      apolloCheckedAt: journalists.apolloCheckedAt,
+    })
+    .from(journalists)
+    .where(eq(journalists.id, claimed.journalistId));
 
-  if (!apolloResult.person?.email) {
+  const cached = cachedRows[0];
+  const isCacheFresh =
+    cached?.apolloCheckedAt &&
+    Date.now() - new Date(cached.apolloCheckedAt).getTime() < APOLLO_CACHE_MAX_AGE_MS;
+
+  let email: string | null = null;
+  let emailStatus: string | null = null;
+  let apolloPersonId: string | null = null;
+
+  if (isCacheFresh) {
+    // Cache hit — use stored results
+    if (!cached.apolloEmail) {
+      console.log(
+        `[journalists-service] Apollo cache: no email for ${firstName} ${lastName} (checked ${cached.apolloCheckedAt!.toISOString()})`
+      );
+      return null;
+    }
+    email = cached.apolloEmail;
+    emailStatus = cached.apolloEmailStatus;
+    apolloPersonId = cached.apolloPersonId;
     console.log(
-      `[journalists-service] Apollo: no email for ${firstName} ${lastName} @ ${outletDomain}`
+      `[journalists-service] Apollo cache hit: ${email} for ${firstName} ${lastName}`
     );
-    return null;
-  }
+  } else {
+    // Cache miss or stale — call Apollo
+    const apolloResult = await matchPerson(firstName, lastName, outletDomain, ctx);
 
-  const email = apolloResult.person.email;
-  const emailStatus = apolloResult.person.emailStatus;
-  const apolloPersonId = apolloResult.person.id ?? null;
+    // Store results on global journalists table (even if no email)
+    await db
+      .update(journalists)
+      .set({
+        apolloEmail: apolloResult.person?.email ?? null,
+        apolloEmailStatus: apolloResult.person?.emailStatus ?? null,
+        apolloPersonId: apolloResult.person?.id ?? null,
+        apolloCheckedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(journalists.id, claimed.journalistId));
+
+    if (!apolloResult.person?.email) {
+      console.log(
+        `[journalists-service] Apollo: no email for ${firstName} ${lastName} @ ${outletDomain}`
+      );
+      return null;
+    }
+
+    email = apolloResult.person.email;
+    emailStatus = apolloResult.person.emailStatus ?? null;
+    apolloPersonId = apolloResult.person.id ?? null;
+  }
 
   // Check email quality — reject "bounced" or unknown statuses
   if (emailStatus && !VALID_EMAIL_STATUSES.has(emailStatus)) {
