@@ -21,10 +21,10 @@ function buildCtx(locals: Record<string, unknown>): ServiceContext {
     orgId: locals.orgId as string,
     userId: locals.userId as string,
     runId: locals.runId as string,
-    featureSlug: locals.featureSlug as string | null,
-    campaignId: locals.campaignId as string | null,
+    featureSlug: locals.featureSlug as string,
+    campaignId: locals.campaignId as string,
     brandIds: locals.brandIds as string[],
-    workflowSlug: locals.workflowSlug as string | null,
+    workflowSlug: locals.workflowSlug as string,
   };
 }
 
