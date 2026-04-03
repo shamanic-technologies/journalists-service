@@ -185,6 +185,34 @@ describe("all 7 headers forwarded by every client", () => {
     expect(headers["x-workflow-slug"]).toBe("my-workflow");
   });
 
+  it("omits workflow-context headers when empty (dashboard/stats context)", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockOkResponse({ content: "ok", tokensInput: 1, tokensOutput: 1, model: "test" })
+    );
+
+    const baseOnlyCtx: ServiceContext = {
+      orgId: "org-1",
+      userId: "user-1",
+      runId: "run-1",
+      featureSlug: "",
+      campaignId: "",
+      brandIds: [],
+      workflowSlug: "",
+    };
+
+    const { chatComplete } = await import("../../src/lib/chat-client.js");
+    await chatComplete({ provider: "google", model: "flash", message: "hi", systemPrompt: "test" }, baseOnlyCtx);
+
+    const headers = getHeaders();
+    expect(headers["x-org-id"]).toBe("org-1");
+    expect(headers["x-user-id"]).toBe("user-1");
+    expect(headers["x-run-id"]).toBe("run-1");
+    expect(headers).not.toHaveProperty("x-campaign-id");
+    expect(headers).not.toHaveProperty("x-brand-id");
+    expect(headers).not.toHaveProperty("x-feature-slug");
+    expect(headers).not.toHaveProperty("x-workflow-slug");
+  });
+
   it("sends CSV x-brand-id for multiple brand IDs", async () => {
     fetchSpy.mockResolvedValueOnce(
       mockOkResponse({ content: "ok", tokensInput: 1, tokensOutput: 1, model: "test" })
