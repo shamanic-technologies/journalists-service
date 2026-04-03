@@ -23,6 +23,7 @@ const router = Router();
 
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const IDEMPOTENCY_TTL_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
+const SERVED_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour — treat recently-served as "contacted" to close the race window
 const MAX_PULL_ITERATIONS = 100;
 const CLEANUP_PROBABILITY = 0.01;
 
@@ -110,6 +111,31 @@ router.post("/buffer/next", async (req, res) => {
         res.json(cached[0].responseBody);
         return;
       }
+    }
+
+    // ── Local dedup gate: close the race window between served and contacted ─
+    // A journalist that was served/claimed < 1 hour ago is presumed in-flight
+    // (workflow is generating the email, creating the campaign, etc.).
+    // "contacted" always blocks (lead-service confirmed the send).
+    // After 1 hour without transitioning to "contacted", we assume the send
+    // failed and allow another journalist from the same outlet.
+    const servedCutoff = new Date(Date.now() - SERVED_COOLDOWN_MS).toISOString();
+    const alreadyServed = await pgClient`
+      SELECT id FROM campaign_journalists
+      WHERE campaign_id = ${campaignId}
+        AND outlet_id = ${outletId}
+        AND (
+          status = 'contacted'
+          OR (status IN ('claimed', 'served') AND created_at >= ${servedCutoff}::timestamptz)
+        )
+      LIMIT 1
+    `;
+    if (alreadyServed.length > 0) {
+      console.log(
+        `[journalists-service] Local outlet dedup: already served a journalist from outlet=${outletId} in campaign=${campaignId}`
+      );
+      res.json({ found: false, reason: "outlet already has a served journalist in this campaign" });
+      return;
     }
 
     // ── Outlet dedup gate: check all brands ────────────────────────────
@@ -324,6 +350,7 @@ async function claimNextBuffered(
   campaignId: string,
   outletId: string
 ): Promise<ClaimedRow | null> {
+  const servedCutoff = new Date(Date.now() - SERVED_COOLDOWN_MS).toISOString();
   const rows = await pgClient`
     UPDATE campaign_journalists
     SET status = 'claimed'
@@ -333,6 +360,15 @@ async function claimNextBuffered(
       WHERE cj.campaign_id = ${campaignId}
         AND cj.outlet_id = ${outletId}
         AND cj.status = 'buffered'
+        AND NOT EXISTS (
+          SELECT 1 FROM campaign_journalists other
+          WHERE other.campaign_id = ${campaignId}
+            AND other.outlet_id = ${outletId}
+            AND (
+              other.status = 'contacted'
+              OR (other.status IN ('claimed', 'served') AND other.created_at >= ${servedCutoff}::timestamptz)
+            )
+        )
       ORDER BY cj.relevance_score DESC
       LIMIT 1
       FOR UPDATE SKIP LOCKED
