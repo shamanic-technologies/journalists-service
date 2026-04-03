@@ -24,6 +24,7 @@ const router = Router();
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const IDEMPOTENCY_TTL_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
 const SERVED_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour — treat recently-served as "contacted" to close the race window
+const MIN_RELEVANCE_SCORE = 30; // Don't serve "distant" journalists (0-30 tier)
 const MAX_PULL_ITERATIONS = 100;
 const CLEANUP_PROBABILITY = 0.01;
 
@@ -360,6 +361,7 @@ async function claimNextBuffered(
       WHERE cj.campaign_id = ${campaignId}
         AND cj.outlet_id = ${outletId}
         AND cj.status = 'buffered'
+        AND cj.relevance_score >= ${MIN_RELEVANCE_SCORE}
         AND NOT EXISTS (
           SELECT 1 FROM campaign_journalists other
           WHERE other.campaign_id = ${campaignId}
