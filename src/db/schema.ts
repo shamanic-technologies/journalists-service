@@ -99,7 +99,8 @@ export const campaignJournalists = pgTable(
       table.relevanceScore
     ),
     index("idx_cj_brand_ids").using("gin", table.brandIds),
-    index("idx_cj_outlet_email").on(table.outletId, table.email),
+    index("idx_cj_email").on(table.email),
+    index("idx_cj_apollo_person_id").on(table.apolloPersonId),
   ]
 );
 

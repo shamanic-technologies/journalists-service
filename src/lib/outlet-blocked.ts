@@ -1,6 +1,4 @@
 import { sql as pgClient } from "../db/index.js";
-import { checkOutletDedup } from "./outlet-dedup.js";
-import type { ServiceContext } from "./service-context.js";
 
 // ── Shared constants ─────────────────────────────────────────────────
 export const SERVED_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour — treat recently-served as "contacted" to close the race window
@@ -12,48 +10,16 @@ export type OutletBlockedResult =
   | { blocked: true; reason: string };
 
 /**
- * Full outlet-blocked check combining all three layers:
+ * Check whether this outlet's buffer has any viable journalists.
  *
- * 1. Local dedup — journalist already claimed/served/contacted for this campaign+outlet
- * 2. Lead-service dedup — cross-campaign contact history (reply status, cooldowns)
- * 3. Relevance threshold — all buffered journalists are below MIN_RELEVANCE_SCORE
- *
- * Used by both `POST /buffer/next` and `GET /internal/outlets/blocked`.
+ * Only checks relevance threshold — outlet-level dedup (cross-campaign)
+ * is handled by outlets-service, not here.
  */
 export async function checkOutletBlocked(
   outletId: string,
-  campaignId: string,
-  brandIds: string[],
-  ctx: ServiceContext
+  campaignId: string
 ): Promise<OutletBlockedResult> {
-  // ── 1. Local dedup: recently served/claimed or confirmed contacted ──
-  const servedCutoff = new Date(Date.now() - SERVED_COOLDOWN_MS).toISOString();
-  const alreadyServed = await pgClient`
-    SELECT id FROM campaign_journalists
-    WHERE campaign_id = ${campaignId}
-      AND outlet_id = ${outletId}
-      AND (
-        status = 'contacted'
-        OR (status IN ('claimed', 'served') AND created_at >= ${servedCutoff}::timestamptz)
-      )
-    LIMIT 1
-  `;
-  if (alreadyServed.length > 0) {
-    return {
-      blocked: true,
-      reason: "outlet already has a served journalist in this campaign",
-    };
-  }
-
-  // ── 2. Lead-service dedup: cross-campaign contact history per brand ──
-  for (const brandId of brandIds) {
-    const result = await checkOutletDedup(outletId, brandId, ctx);
-    if (result.blocked) {
-      return result;
-    }
-  }
-
-  // ── 3. Relevance threshold: all buffered journalists below minimum ──
+  // All buffered journalists below minimum relevance → blocked
   const bufferCheck = await pgClient`
     SELECT
       COUNT(*)::int AS total,
