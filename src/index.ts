@@ -13,6 +13,7 @@ import discoverRoutes from "./routes/discover.js";
 import campaignOutletJournalistsRoutes from "./routes/campaign-outlet-journalists.js";
 import statsRoutes from "./routes/stats.js";
 import statsCostsRoutes from "./routes/stats-costs.js";
+import journalistsListRoutes from "./routes/journalists-list.js";
 import { requireApiKey, requireBaseHeaders, requireIdentityHeaders } from "./middleware/auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -51,6 +52,7 @@ const dashboardRouter = express.Router();
 dashboardRouter.use(requireBaseHeaders);
 dashboardRouter.use(statsRoutes);
 dashboardRouter.use(statsCostsRoutes);
+dashboardRouter.use(journalistsListRoutes);
 app.use(dashboardRouter);
 
 // Private routes — require all identity headers

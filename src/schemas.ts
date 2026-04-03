@@ -180,6 +180,88 @@ export const StatsResponseSchema = z
   })
   .openapi("StatsResponse");
 
+// ==================== Journalists List Schemas ====================
+
+export const JournalistsListQuerySchema = z
+  .object({
+    brandId: z.string().uuid().openapi({ description: "Brand ID (required). Returns journalists whose brand_ids array contains this brand." }),
+    campaignId: z.string().uuid().optional().openapi({ description: "Optionally narrow to a single campaign" }),
+  })
+  .openapi("JournalistsListQuery");
+
+const EmailStatusScopeSchema = z.object({
+  lead: z.object({
+    contacted: z.boolean(),
+    delivered: z.boolean(),
+    replied: z.boolean(),
+    replyClassification: z.enum(["positive", "negative", "neutral"]).nullable(),
+    lastDeliveredAt: z.string().nullable(),
+  }),
+  email: z.object({
+    contacted: z.boolean(),
+    delivered: z.boolean(),
+    bounced: z.boolean(),
+    unsubscribed: z.boolean(),
+    lastDeliveredAt: z.string().nullable(),
+  }),
+}).openapi("EmailStatusScope");
+
+const EmailGlobalScopeSchema = z.object({
+  email: z.object({
+    bounced: z.boolean(),
+    unsubscribed: z.boolean(),
+  }),
+}).openapi("EmailGlobalScope");
+
+const JournalistEmailStatusSchema = z.object({
+  broadcast: z.object({
+    campaign: EmailStatusScopeSchema.nullable(),
+    brand: EmailStatusScopeSchema.nullable(),
+    global: EmailGlobalScopeSchema,
+  }),
+  transactional: z.object({
+    campaign: EmailStatusScopeSchema.nullable(),
+    brand: EmailStatusScopeSchema.nullable(),
+    global: EmailGlobalScopeSchema,
+  }),
+}).openapi("JournalistEmailStatus");
+
+const JournalistCostSchema = z.object({
+  totalCostInUsdCents: z.number().openapi({ description: "Total cost in USD cents (actual + provisioned)" }),
+  actualCostInUsdCents: z.number().openapi({ description: "Actual metered cost in USD cents" }),
+  provisionedCostInUsdCents: z.number().openapi({ description: "Provisioned (reserved) cost in USD cents" }),
+  runCount: z.number().openapi({ description: "Number of distinct runs contributing to this cost" }),
+}).openapi("JournalistCost");
+
+const JournalistListItemSchema = z.object({
+  id: z.string().uuid(),
+  journalistId: z.string().uuid(),
+  campaignId: z.string().uuid(),
+  outletId: z.string().uuid(),
+  orgId: z.string().uuid(),
+  brandIds: z.array(z.string().uuid()),
+  featureSlug: z.string().nullable(),
+  workflowSlug: z.string().nullable(),
+  relevanceScore: z.string(),
+  whyRelevant: z.string(),
+  whyNotRelevant: z.string(),
+  articleUrls: z.array(z.string()).nullable(),
+  status: z.enum(["buffered", "claimed", "served", "contacted", "skipped"]),
+  email: z.string().nullable(),
+  runId: z.string().uuid().nullable(),
+  createdAt: z.string(),
+  journalistName: z.string(),
+  firstName: z.string().nullable(),
+  lastName: z.string().nullable(),
+  entityType: z.enum(["individual", "organization"]),
+  emailStatus: JournalistEmailStatusSchema.nullable().openapi({ description: "Email delivery statuses from email-gateway. Null if journalist has no email or email-gateway is unreachable." }),
+  cost: JournalistCostSchema.nullable().openapi({ description: "Per-journalist cost from runs-service. Null if no runs or runs-service is unreachable." }),
+}).openapi("JournalistListItem");
+
+export const JournalistsListResponseSchema = z.object({
+  journalists: z.array(JournalistListItemSchema),
+}).openapi("JournalistsListResponse");
+
 // ==================== Cost Stats Schemas ====================
 
 export const CostStatsQuerySchema = z
@@ -228,6 +310,9 @@ registry.registerPath({ method: "get", path: "/stats/public", summary: "Get jour
 
 // Cost Stats
 registry.registerPath({ method: "get", path: "/journalists/stats/costs", summary: "Get cost stats for journalist discovery runs. Returns aggregated costs from runs-service, distributed per journalist. Requires x-org-id to scope costs to the requesting org.", security: [{ [apiKeyAuth.name]: [] }], request: { query: CostStatsQuerySchema }, responses: { 200: { description: "Cost stats (flat or grouped by journalistId)", content: { "application/json": { schema: CostStatsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+
+// Journalists List
+registry.registerPath({ method: "get", path: "/journalists/list", summary: "List all journalists for an org+brand with email delivery statuses and costs. Enriches each journalist with broadcast/transactional delivery status from email-gateway and per-journalist cost from runs-service. Both enrichments are fail-open.", security: [{ [apiKeyAuth.name]: [] }], request: { query: JournalistsListQuerySchema }, responses: { 200: { description: "Enriched journalist list", content: { "application/json": { schema: JournalistsListResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Internal — Outlet blocked check
 registry.registerPath({ method: "get", path: "/internal/outlets/blocked", summary: "Check if an outlet is blocked for a brand+org. Uses full dedup logic: checks lead-service for prior contacts, reply classification, 30-day no-reply cooldown, and 12-month expiry.", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ org_id: z.string().uuid().openapi({ description: "Organization ID" }), brand_ids: z.string().openapi({ description: "Comma-separated brand UUIDs", example: "uuid1,uuid2" }), outlet_id: z.string().uuid().openapi({ description: "Outlet ID to check" }) }) }, responses: { 200: { description: "Outlet blocked status", content: { "application/json": { schema: z.object({ blocked: z.boolean().openapi({ description: "Whether this outlet is blocked for the given brand+org" }), reason: z.string().optional().openapi({ description: "Human-readable reason when blocked" }) }).openapi("OutletBlockedResponse") } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });

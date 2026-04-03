@@ -7,6 +7,7 @@ import discoverRoutes from "../../src/routes/discover.js";
 import campaignOutletJournalistsRoutes from "../../src/routes/campaign-outlet-journalists.js";
 import statsRoutes from "../../src/routes/stats.js";
 import statsCostsRoutes from "../../src/routes/stats-costs.js";
+import journalistsListRoutes from "../../src/routes/journalists-list.js";
 import { requireApiKey, requireBaseHeaders, requireIdentityHeaders } from "../../src/middleware/auth.js";
 
 export function createTestApp() {
@@ -22,6 +23,7 @@ export function createTestApp() {
   dashboardRouter.use(requireBaseHeaders);
   dashboardRouter.use(statsRoutes);
   dashboardRouter.use(statsCostsRoutes);
+  dashboardRouter.use(journalistsListRoutes);
   app.use(dashboardRouter);
   // Private routes — require all identity headers
   app.use(requireIdentityHeaders);
