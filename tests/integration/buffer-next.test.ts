@@ -299,7 +299,7 @@ describe("POST /buffer/next", () => {
     expect(mockedChatComplete).not.toHaveBeenCalled();
   });
 
-  it("skips journalists with relevance score below 30 (distant tier)", async () => {
+  it("skips journalists below 30 with reason, marks them as skipped, no refill", async () => {
     const lowScore = await insertTestJournalist({
       outletId: OUTLET_ID,
       journalistName: "Low Score Writer",
@@ -328,20 +328,6 @@ describe("POST /buffer/next", () => {
       outletName: "TechCrunch",
       outletUrl: "https://techcrunch.com",
     });
-    mockedExtractBrandFields.mockResolvedValue({
-      brands: [{ brandId: BRAND_ID, domain: "techcorp.com", name: "TechCorp" }],
-      fields: {
-        brand_name: { value: "TechCorp", byBrand: { "techcorp.com": { value: "TechCorp", cached: false, extractedAt: "2026-03-01T00:00:00Z", expiresAt: null, sourceUrls: [] } } },
-        brand_description: { value: "SaaS platform", byBrand: { "techcorp.com": { value: "SaaS platform", cached: false, extractedAt: "2026-03-01T00:00:00Z", expiresAt: null, sourceUrls: [] } } },
-      },
-    });
-    mockedGetFieldValue.mockReturnValue("TechCorp");
-    mockedFetchCampaign.mockResolvedValue({
-      id: CAMPAIGN_ID,
-      featureInputs: null,
-      brandId: BRAND_ID,
-    });
-    mockedDiscoverOutletArticles.mockResolvedValue({ articles: [] });
 
     const res = await request(app)
       .post("/buffer/next")
@@ -350,6 +336,18 @@ describe("POST /buffer/next", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.found).toBe(false);
+    expect(res.body.reason).toContain("below relevance threshold");
+
+    // Journalist should be marked as skipped
+    const cj = await db
+      .select()
+      .from(campaignJournalists)
+      .where(eq(campaignJournalists.journalistId, lowScore.id));
+    expect(cj[0].status).toBe("skipped");
+
+    // No refill attempted — we detected the threshold issue early
+    expect(mockedDiscoverOutletArticles).not.toHaveBeenCalled();
+    expect(mockedChatComplete).not.toHaveBeenCalled();
   });
 
   it("serves journalist at exactly 30 relevance score (adjacent tier threshold)", async () => {
