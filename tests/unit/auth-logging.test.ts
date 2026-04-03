@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
+
+// Mock the DB module so this unit test doesn't need a real database connection
+vi.mock("../../src/db/index.js", () => ({
+  sql: {},
+  db: {},
+}));
+
 import { createTestApp, AUTH_HEADERS } from "../helpers/test-app.js";
 
 const app = createTestApp();
@@ -48,16 +55,18 @@ describe("Auth middleware logging", () => {
   it("does not log warnings for valid auth", async () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
+    // POST /buffer/next with valid auth but empty body — fails on Zod validation (400)
+    // before reaching any DB calls, which is enough to verify auth doesn't warn
     await request(app)
-      .get("/campaign-outlet-journalists")
+      .post("/buffer/next")
       .set(AUTH_HEADERS)
-      .query({ brand_id: "44444444-4444-4444-4444-444444444444" });
+      .send({});
 
     expect(spy).not.toHaveBeenCalledWith(
       expect.stringContaining("[journalists-service] Auth rejected")
     );
     expect(spy).not.toHaveBeenCalledWith(
-      expect.stringContaining("Missing identity headers")
+      expect.stringContaining("Missing required headers")
     );
   });
 });
