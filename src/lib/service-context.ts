@@ -3,26 +3,25 @@ export interface ServiceContext {
   orgId: string;
   userId: string;
   runId: string;
-  featureSlug: string | null;
-  campaignId: string | null;
+  featureSlug: string;
+  campaignId: string;
   brandIds: string[];
-  workflowSlug: string | null;
+  workflowSlug: string;
 }
 
-/** Build standard headers from a ServiceContext */
+/** Build standard headers from a ServiceContext — always forwards all 7 identity headers */
 export function buildServiceHeaders(
   ctx: ServiceContext,
   apiKey: string
 ): Record<string, string> {
-  const headers: Record<string, string> = {
+  return {
     "x-api-key": apiKey,
     "x-org-id": ctx.orgId,
     "x-user-id": ctx.userId,
     "x-run-id": ctx.runId,
+    "x-campaign-id": ctx.campaignId,
+    "x-brand-id": ctx.brandIds.join(","),
+    "x-feature-slug": ctx.featureSlug,
+    "x-workflow-slug": ctx.workflowSlug,
   };
-  if (ctx.featureSlug) headers["x-feature-slug"] = ctx.featureSlug;
-  if (ctx.campaignId) headers["x-campaign-id"] = ctx.campaignId;
-  if (ctx.brandIds.length > 0) headers["x-brand-id"] = ctx.brandIds.join(",");
-  if (ctx.workflowSlug) headers["x-workflow-slug"] = ctx.workflowSlug;
-  return headers;
 }

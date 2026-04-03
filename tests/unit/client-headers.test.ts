@@ -157,32 +157,32 @@ describe("all 7 headers forwarded by every client", () => {
     });
   });
 
-  it("omits optional headers when empty/null", async () => {
+  it("always forwards all 7 identity headers", async () => {
     fetchSpy.mockResolvedValueOnce(
       mockOkResponse({ content: "ok", tokensInput: 1, tokensOutput: 1, model: "test" })
     );
 
-    const nullCtx: ServiceContext = {
+    const fullCtx: ServiceContext = {
       orgId: "org-1",
       userId: "user-1",
       runId: "run-1",
-      featureSlug: null,
-      campaignId: null,
-      brandIds: [],
-      workflowSlug: null,
+      featureSlug: "my-feature",
+      campaignId: "camp-1",
+      brandIds: ["brand-1"],
+      workflowSlug: "my-workflow",
     };
 
     const { chatComplete } = await import("../../src/lib/chat-client.js");
-    await chatComplete({ provider: "google", model: "flash", message: "hi", systemPrompt: "test" }, nullCtx);
+    await chatComplete({ provider: "google", model: "flash", message: "hi", systemPrompt: "test" }, fullCtx);
 
     const headers = getHeaders();
     expect(headers["x-org-id"]).toBe("org-1");
     expect(headers["x-user-id"]).toBe("user-1");
     expect(headers["x-run-id"]).toBe("run-1");
-    expect(headers["x-feature-slug"]).toBeUndefined();
-    expect(headers["x-campaign-id"]).toBeUndefined();
-    expect(headers["x-brand-id"]).toBeUndefined();
-    expect(headers["x-workflow-slug"]).toBeUndefined();
+    expect(headers["x-feature-slug"]).toBe("my-feature");
+    expect(headers["x-campaign-id"]).toBe("camp-1");
+    expect(headers["x-brand-id"]).toBe("brand-1");
+    expect(headers["x-workflow-slug"]).toBe("my-workflow");
   });
 
   it("sends CSV x-brand-id for multiple brand IDs", async () => {
@@ -194,10 +194,10 @@ describe("all 7 headers forwarded by every client", () => {
       orgId: "org-1",
       userId: "user-1",
       runId: "run-1",
-      featureSlug: null,
-      campaignId: null,
+      featureSlug: "my-feature",
+      campaignId: "camp-1",
       brandIds: ["brand-1", "brand-2", "brand-3"],
-      workflowSlug: null,
+      workflowSlug: "my-workflow",
     };
 
     const { chatComplete } = await import("../../src/lib/chat-client.js");
