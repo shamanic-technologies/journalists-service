@@ -296,6 +296,38 @@ export const CostStatsResponseSchema = z
   })
   .openapi("CostStatsResponse");
 
+// ==================== Outlet Status Schemas ====================
+
+export const OutletStatusRequestSchema = z
+  .object({
+    outletIds: z.array(z.string().uuid()).min(1).openapi({
+      description: "List of outlet UUIDs to get status for",
+    }),
+  })
+  .openapi("OutletStatusRequest");
+
+const EnrichedStatusEnum = z
+  .enum(["buffered", "claimed", "skipped", "served", "contacted", "delivered", "replied"])
+  .openapi("EnrichedStatus", {
+    description: "High watermark status: DB status enriched with email-gateway real-time data",
+  });
+
+const OutletStatusEntrySchema = z
+  .object({
+    status: EnrichedStatusEnum,
+    journalistCount: z.number().int().openapi({ description: "Total journalists associated with this outlet" }),
+    contactedCount: z.number().int().openapi({ description: "Journalists with at least contacted=true from email-gateway" }),
+  })
+  .openapi("OutletStatusEntry");
+
+export const OutletStatusResponseSchema = z
+  .object({
+    results: z.record(z.string().uuid(), OutletStatusEntrySchema).openapi({
+      description: "Map of outletId → status entry",
+    }),
+  })
+  .openapi("OutletStatusResponse");
+
 // ==================== Path Registrations ====================
 
 // Health
@@ -324,6 +356,9 @@ registry.registerPath({ method: "get", path: "/journalists/list", summary: "List
 
 // Internal — Outlet blocked check
 registry.registerPath({ method: "get", path: "/internal/outlets/blocked", summary: "Check if an outlet is blocked for a brand+org. Uses full dedup logic: checks lead-service for prior contacts, reply classification, 30-day no-reply cooldown, and 12-month expiry.", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ org_id: z.string().uuid().openapi({ description: "Organization ID" }), brand_ids: z.string().openapi({ description: "Comma-separated brand UUIDs", example: "uuid1,uuid2" }), outlet_id: z.string().uuid().openapi({ description: "Outlet ID to check" }) }) }, responses: { 200: { description: "Outlet blocked status", content: { "application/json": { schema: z.object({ blocked: z.boolean().openapi({ description: "Whether this outlet is blocked for the given brand+org" }), reason: z.string().optional().openapi({ description: "Human-readable reason when blocked" }) }).openapi("OutletBlockedResponse") } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+
+// Internal — Outlet status (enriched from email-gateway)
+registry.registerPath({ method: "post", path: "/internal/outlets/status", summary: "Batch outlet status enriched from email-gateway. Returns the high watermark status across all journalists for each outlet, combining DB status with real-time email-gateway data.", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: OutletStatusRequestSchema } } } }, responses: { 200: { description: "Per-outlet enriched status", content: { "application/json": { schema: OutletStatusResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error (email-gateway)", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Internal — Batch journalist lookup
 registry.registerPath({ method: "get", path: "/internal/journalists/by-ids", summary: "Batch lookup journalists by IDs", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ ids: z.string() }) }, responses: { 200: { description: "Journalists", content: { "application/json": { schema: z.object({ journalists: z.array(JournalistSchema) }) } } } } });
