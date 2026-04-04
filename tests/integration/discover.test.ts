@@ -8,7 +8,7 @@ import {
   closeDb,
 } from "../helpers/test-db.js";
 import { db } from "../../src/db/index.js";
-import { campaignJournalists } from "../../src/db/schema.js";
+import { campaignJournalists, journalists } from "../../src/db/schema.js";
 import { eq } from "drizzle-orm";
 
 // Mock all external service clients
@@ -365,6 +365,167 @@ describe("POST /discover", () => {
       "failed",
       expect.any(Object)
     );
+  });
+
+  it("matches author to existing journalist via LLM existingJournalistId", async () => {
+    setupDiscoverMocks();
+
+    // Pre-insert "S. Johnson" with abbreviated first name
+    const sarah = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "S. Johnson",
+      firstName: "S.",
+      lastName: "Johnson",
+    });
+
+    // LLM returns existingJournalistId matching the pre-inserted journalist
+    mockedChatComplete.mockResolvedValue({
+      content: "",
+      json: {
+        journalists: [
+          {
+            existingJournalistId: sarah.id,
+            firstName: "Sarah",
+            lastName: "Johnson",
+            relevanceScore: 92,
+            whyRelevant: "Covers SaaS and developer tools.",
+            whyNotRelevant: "Some consumer tech coverage.",
+            articleUrls: ["https://techcrunch.com/2026/01/15/top-saas-tools"],
+          },
+          {
+            firstName: "Mike",
+            lastName: "Chen",
+            relevanceScore: 78,
+            whyRelevant: "Covers AI funding rounds.",
+            whyNotRelevant: "Focuses more on funding than products.",
+            articleUrls: ["https://techcrunch.com/2026/02/10/ai-dev-tools-funding"],
+          },
+        ],
+      },
+      tokensInput: 1500,
+      tokensOutput: 500,
+      model: "claude-sonnet-4-6",
+    });
+
+    const res = await request(app)
+      .post("/discover")
+      .set(DISCOVER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.discovered).toBe(2);
+
+    // Sarah's journalist record should be reused (matched by existingJournalistId)
+    const cjs = await db
+      .select()
+      .from(campaignJournalists)
+      .where(eq(campaignJournalists.campaignId, CAMPAIGN_ID));
+    expect(cjs).toHaveLength(2);
+
+    const sarahCj = cjs.find((cj) => cj.journalistId === sarah.id);
+    expect(sarahCj).toBeDefined();
+
+    // Name should be enriched to the longer version ("Sarah" > "S.")
+    const [updatedSarah] = await db
+      .select()
+      .from(journalists)
+      .where(eq(journalists.id, sarah.id));
+    expect(updatedSarah.firstName).toBe("Sarah");
+    expect(updatedSarah.lastName).toBe("Johnson");
+    expect(updatedSarah.journalistName).toBe("Sarah Johnson");
+  });
+
+  it("enriches existing journalist name to the longer version on name match", async () => {
+    setupDiscoverMocks();
+
+    // Pre-insert "S. Johnson" — will be matched by case-insensitive name lookup
+    // (LLM returns "S. Johnson" as firstName/lastName but with longer version)
+    const sarah = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Sarah Johnson",
+      firstName: "S.",
+      lastName: "Johnson",
+    });
+
+    // LLM returns full name "Sarah Johnson" (no existingJournalistId)
+    mockedChatComplete.mockResolvedValue({
+      content: "",
+      json: {
+        journalists: [
+          {
+            firstName: "Sarah",
+            lastName: "Johnson",
+            relevanceScore: 92,
+            whyRelevant: "Covers SaaS and developer tools.",
+            whyNotRelevant: "Some consumer tech coverage.",
+            articleUrls: ["https://techcrunch.com/2026/01/15/top-saas-tools"],
+          },
+        ],
+      },
+      tokensInput: 1500,
+      tokensOutput: 500,
+      model: "claude-sonnet-4-6",
+    });
+
+    const res = await request(app)
+      .post("/discover")
+      .set(DISCOVER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+
+    // Name should be enriched: "S." → "Sarah" (longer first name wins)
+    const [updatedSarah] = await db
+      .select()
+      .from(journalists)
+      .where(eq(journalists.id, sarah.id));
+    expect(updatedSarah.firstName).toBe("Sarah");
+    expect(updatedSarah.journalistName).toBe("Sarah Johnson");
+  });
+
+  it("falls through to name lookup when existingJournalistId does not exist in DB", async () => {
+    setupDiscoverMocks();
+
+    const FAKE_ID = "deadbeef-dead-beef-dead-beefdeadbeef";
+
+    // LLM returns a non-existent existingJournalistId
+    mockedChatComplete.mockResolvedValue({
+      content: "",
+      json: {
+        journalists: [
+          {
+            existingJournalistId: FAKE_ID,
+            firstName: "Sarah",
+            lastName: "Johnson",
+            relevanceScore: 92,
+            whyRelevant: "Covers SaaS and developer tools.",
+            whyNotRelevant: "Some consumer tech coverage.",
+            articleUrls: ["https://techcrunch.com/2026/01/15/top-saas-tools"],
+          },
+        ],
+      },
+      tokensInput: 1500,
+      tokensOutput: 500,
+      model: "claude-sonnet-4-6",
+    });
+
+    const res = await request(app)
+      .post("/discover")
+      .set(DISCOVER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.discovered).toBe(1);
+
+    // Should have created a new journalist since the ID didn't exist
+    const cjs = await db
+      .select()
+      .from(campaignJournalists)
+      .where(eq(campaignJournalists.campaignId, CAMPAIGN_ID));
+    expect(cjs).toHaveLength(1);
+
+    // The journalist should NOT have the fake ID
+    expect(cjs[0].journalistId).not.toBe(FAKE_ID);
   });
 
   it("returns 502 when runs-service fails", async () => {

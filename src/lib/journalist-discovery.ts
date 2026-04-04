@@ -11,6 +11,7 @@ import type { ServiceContext } from "./service-context.js";
 // ── Types ────────────────────────────────────────────────────────────
 
 export interface LlmJournalist {
+  existingJournalistId?: string;
   firstName: string;
   lastName: string;
   relevanceScore: number;
@@ -102,6 +103,7 @@ export async function scoreJournalists(
   brandName: string,
   brandDescription: string,
   featureInputs: Record<string, string>,
+  existingJournalists: Array<{ id: string; journalistName: string }>,
   ctx: ServiceContext
 ): Promise<LlmJournalist[]> {
   if (authors.length === 0) return [];
@@ -140,15 +142,22 @@ Description: ${truncate(brandDescription, 500)}
 Campaign context:
 ${campaignContext || "(none specified)"}
 
+Known journalists at this outlet (match authors to these if they are the same person — same person may have abbreviated names, initials, or slight spelling variations):
+${existingJournalists.map(j => `- id="${j.id}" name="${j.journalistName}"`).join('\n')}
+
 Journalists found on this outlet:
 ${authorsText}
 
 Score each journalist using the three-tier scale (70-100 direct fit, 30-70 adjacent, 0-30 distant). Filter out non-human entities.
 
+For each journalist, if they match a known journalist, include "existingJournalistId" with the id.
+Always include "firstName" and "lastName" with the MOST COMPLETE version of the name (e.g., prefer "Samantha" over "S.", prefer full last names over abbreviations).
+
 Return JSON:
 {
   "journalists": [
     {
+      "existingJournalistId": "optional - id of matched known journalist",
       "firstName": "string",
       "lastName": "string",
       "relevanceScore": number (0-100),
@@ -199,47 +208,83 @@ export async function storeJournalists(
   for (const j of llmJournalists) {
     const journalistName = `${j.firstName} ${j.lastName}`;
 
-    // Journalist identity is global: unique per (outlet, name, entity_type)
-    // Case-insensitive lookup to prevent "Samantha McLean" vs "Samantha Mclean" duplicates
-    const existing = await db
-      .select()
-      .from(journalists)
-      .where(
-        and(
-          eq(journalists.outletId, outletId),
-          sql`lower(${journalists.journalistName}) = lower(${journalistName})`,
-          eq(journalists.entityType, "individual")
-        )
-      );
-
-    let journalistId: string;
+    let journalistId = "";
     let isNew = false;
+    let matched = false;
 
-    if (existing.length > 0) {
-      journalistId = existing[0].id;
-      if (!existing[0].firstName || !existing[0].lastName) {
-        await db
-          .update(journalists)
-          .set({
+    // If LLM matched to an existing journalist, use that directly
+    if (j.existingJournalistId) {
+      const existingById = await db
+        .select()
+        .from(journalists)
+        .where(eq(journalists.id, j.existingJournalistId));
+      if (existingById.length > 0) {
+        journalistId = existingById[0].id;
+        isNew = false;
+        matched = true;
+        // Still enrich the name to the most complete version
+        const newFirstName = (j.firstName.length > (existingById[0].firstName?.length ?? 0)) ? j.firstName : existingById[0].firstName;
+        const newLastName = (j.lastName.length > (existingById[0].lastName?.length ?? 0)) ? j.lastName : existingById[0].lastName;
+        const newJournalistName = `${newFirstName} ${newLastName}`;
+        if (newFirstName !== existingById[0].firstName || newLastName !== existingById[0].lastName) {
+          await db
+            .update(journalists)
+            .set({
+              firstName: newFirstName,
+              lastName: newLastName,
+              journalistName: newJournalistName,
+              updatedAt: new Date(),
+            })
+            .where(eq(journalists.id, journalistId));
+        }
+      }
+    }
+
+    if (!matched) {
+      // Journalist identity is global: unique per (outlet, name, entity_type)
+      // Case-insensitive lookup to prevent "Samantha McLean" vs "Samantha Mclean" duplicates
+      const existing = await db
+        .select()
+        .from(journalists)
+        .where(
+          and(
+            eq(journalists.outletId, outletId),
+            sql`lower(${journalists.journalistName}) = lower(${journalistName})`,
+            eq(journalists.entityType, "individual")
+          )
+        );
+
+      if (existing.length > 0) {
+        journalistId = existing[0].id;
+        // Always enrich with the most complete name
+        const newFirstName = (j.firstName.length > (existing[0].firstName?.length ?? 0)) ? j.firstName : existing[0].firstName;
+        const newLastName = (j.lastName.length > (existing[0].lastName?.length ?? 0)) ? j.lastName : existing[0].lastName;
+        const newJournalistName = `${newFirstName} ${newLastName}`;
+        if (newFirstName !== existing[0].firstName || newLastName !== existing[0].lastName) {
+          await db
+            .update(journalists)
+            .set({
+              firstName: newFirstName,
+              lastName: newLastName,
+              journalistName: newJournalistName,
+              updatedAt: new Date(),
+            })
+            .where(eq(journalists.id, journalistId));
+        }
+      } else {
+        const [created] = await db
+          .insert(journalists)
+          .values({
+            outletId,
+            entityType: "individual",
+            journalistName,
             firstName: j.firstName,
             lastName: j.lastName,
-            updatedAt: new Date(),
           })
-          .where(eq(journalists.id, journalistId));
+          .returning();
+        journalistId = created.id;
+        isNew = true;
       }
-    } else {
-      const [created] = await db
-        .insert(journalists)
-        .values({
-          outletId,
-          entityType: "individual",
-          journalistName,
-          firstName: j.firstName,
-          lastName: j.lastName,
-        })
-        .returning();
-      journalistId = created.id;
-      isNew = true;
     }
 
     // Campaign scoring — status defaults to 'buffered'
@@ -301,11 +346,17 @@ export async function refillBuffer(opts: {
 
   const authors = groupArticlesByAuthor(articlesResponse.articles);
 
+  const existingAtOutlet = await db
+    .select({ id: journalists.id, journalistName: journalists.journalistName })
+    .from(journalists)
+    .where(eq(journalists.outletId, opts.outletId));
+
   const llmJournalists = await scoreJournalists(
     authors,
     opts.brandName,
     opts.brandDescription,
     opts.featureInputs,
+    existingAtOutlet,
     opts.ctx
   );
 
