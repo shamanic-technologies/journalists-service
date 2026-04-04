@@ -314,6 +314,38 @@ describe("POST /discover", () => {
     expect(cjs).toHaveLength(2);
   });
 
+  it("deduplicates journalists with case-insensitive name matching", async () => {
+    setupDiscoverMocks();
+
+    // Pre-insert "Sarah Johnson" with different casing
+    const sarah = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "sarah johnson",
+      firstName: "sarah",
+      lastName: "johnson",
+    });
+
+    const res = await request(app)
+      .post("/discover")
+      .set(DISCOVER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+
+    // Sarah should reuse the existing journalist record (case-insensitive match)
+    const cjs = await db
+      .select()
+      .from(campaignJournalists)
+      .where(eq(campaignJournalists.campaignId, CAMPAIGN_ID));
+
+    // Both Sarah and Mike should be stored
+    expect(cjs).toHaveLength(2);
+
+    // Sarah's campaign_journalist should point to the original record
+    const sarahCj = cjs.find((cj) => cj.journalistId === sarah.id);
+    expect(sarahCj).toBeDefined();
+  });
+
   it("closes run as failed on upstream error", async () => {
     setupDiscoverMocks();
     mockedDiscoverOutletArticles.mockRejectedValue(

@@ -317,6 +317,89 @@ describe("GET /journalists/list", () => {
     expect(j.cost.totalCostInUsdCents).toBe(50);
   });
 
+  it("deduplicates by journalist_id across campaigns — picks best status", async () => {
+    const journalist = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Samantha McLean",
+      firstName: "Samantha",
+      lastName: "McLean",
+    });
+
+    // Same journalist in 3 campaigns: buffered, served (with email), contacted (with email)
+    await insertTestCampaignJournalist({
+      journalistId: journalist.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      status: "buffered",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: journalist.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID_2,
+      outletId: OUTLET_ID,
+      status: "served",
+      email: "samantha@example.com",
+    });
+    const thirdCampaign = "55555555-5555-5555-5555-555555555557";
+    await insertTestCampaignJournalist({
+      journalistId: journalist.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: thirdCampaign,
+      outletId: OUTLET_ID,
+      status: "contacted",
+      email: "samantha@example.com",
+    });
+
+    // Mock email-gateway for the email enrichment
+    mockEmailGatewayStatus([
+      { leadId: journalist.id, email: "samantha@example.com", contacted: true, delivered: true, replied: false, replyClassification: null },
+    ]);
+
+    const res = await request(app)
+      .get(`/journalists/list?brandId=${BRAND_ID}`)
+      .set(BASE_AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    // Should be deduplicated to 1 entry (the "contacted" one — best status)
+    expect(res.body.journalists).toHaveLength(1);
+    expect(res.body.journalists[0].status).toBe("contacted");
+    expect(res.body.journalists[0].email).toBe("samantha@example.com");
+  });
+
+  it("does not deduplicate when campaignId filter is provided", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dedup Test" });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      status: "buffered",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID_2,
+      outletId: OUTLET_ID,
+      status: "served",
+      email: "dedup@example.com",
+    });
+
+    // Query with campaignId filter — should return exactly 1 row for that campaign
+    const res = await request(app)
+      .get(`/journalists/list?brandId=${BRAND_ID}&campaignId=${CAMPAIGN_ID}`)
+      .set(BASE_AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.journalists).toHaveLength(1);
+    expect(res.body.journalists[0].status).toBe("buffered");
+  });
+
   it("scopes by orgId from headers — does not return other org's journalists", async () => {
     const journalist = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Other Org" });
     await insertTestCampaignJournalist({
