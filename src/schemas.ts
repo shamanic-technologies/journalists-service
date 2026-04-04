@@ -318,8 +318,6 @@ const OutletStatusEntrySchema = z
     replyClassification: z.enum(["positive", "negative", "neutral"]).nullable().openapi({
       description: "Best reply classification across all journalists when status is replied. Hierarchy: positive > negative > neutral. Null when status is not replied.",
     }),
-    journalistCount: z.number().int().openapi({ description: "Total journalists associated with this outlet" }),
-    contactedCount: z.number().int().openapi({ description: "Journalists with at least contacted=true from email-gateway" }),
   })
   .openapi("OutletStatusEntry");
 

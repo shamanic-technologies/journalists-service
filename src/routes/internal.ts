@@ -182,15 +182,12 @@ router.post("/internal/outlets/status", async (req, res) => {
     const results: Record<string, {
       status: string;
       replyClassification: "positive" | "negative" | "neutral" | null;
-      journalistCount: number;
-      contactedCount: number;
     }> = {};
 
     for (const outletId of outletIds) {
       const outletRows = byOutlet.get(outletId) ?? [];
       let highWatermark = "served";
       let bestClassification: "positive" | "negative" | "neutral" | null = null;
-      let contactedCount = 0;
 
       for (const row of outletRows) {
         // Start with DB status
@@ -202,7 +199,6 @@ router.post("/internal/outlets/status", async (req, res) => {
           if (egStatus) {
             if (egStatus.replied) {
               enrichedStatus = higherStatus(enrichedStatus, "replied");
-              // Track best reply classification: positive > negative > neutral
               if (egStatus.replyClassification) {
                 if (!bestClassification || CLASSIFICATION_RANK[egStatus.replyClassification] > CLASSIFICATION_RANK[bestClassification]) {
                   bestClassification = egStatus.replyClassification;
@@ -213,10 +209,6 @@ router.post("/internal/outlets/status", async (req, res) => {
             } else if (egStatus.contacted) {
               enrichedStatus = higherStatus(enrichedStatus, "contacted");
             }
-
-            if (egStatus.contacted) {
-              contactedCount++;
-            }
           }
         }
 
@@ -226,8 +218,6 @@ router.post("/internal/outlets/status", async (req, res) => {
       results[outletId] = {
         status: highWatermark,
         replyClassification: highWatermark === "replied" ? bestClassification : null,
-        journalistCount: outletRows.length,
-        contactedCount,
       };
     }
 
