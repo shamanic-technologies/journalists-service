@@ -752,6 +752,72 @@
           "blocked"
         ]
       },
+      "EnrichedStatus": {
+        "type": "string",
+        "enum": [
+          "buffered",
+          "claimed",
+          "skipped",
+          "served",
+          "contacted",
+          "delivered",
+          "replied"
+        ],
+        "description": "High watermark status: DB status enriched with email-gateway real-time data"
+      },
+      "OutletStatusEntry": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/EnrichedStatus"
+          },
+          "journalistCount": {
+            "type": "integer",
+            "description": "Total journalists associated with this outlet"
+          },
+          "contactedCount": {
+            "type": "integer",
+            "description": "Journalists with at least contacted=true from email-gateway"
+          }
+        },
+        "required": [
+          "status",
+          "journalistCount",
+          "contactedCount"
+        ]
+      },
+      "OutletStatusResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/OutletStatusEntry"
+            },
+            "description": "Map of outletId → status entry"
+          }
+        },
+        "required": [
+          "results"
+        ]
+      },
+      "OutletStatusRequest": {
+        "type": "object",
+        "properties": {
+          "outletIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "description": "List of outlet UUIDs to get status for"
+          }
+        },
+        "required": [
+          "outletIds"
+        ]
+      },
       "Journalist": {
         "type": "object",
         "properties": {
@@ -1506,6 +1572,57 @@
           },
           "502": {
             "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/outlets/status": {
+      "post": {
+        "summary": "Batch outlet status enriched from email-gateway. Returns the high watermark status across all journalists for each outlet, combining DB status with real-time email-gateway data.",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutletStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Per-outlet enriched status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutletStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream service error (email-gateway)",
             "content": {
               "application/json": {
                 "schema": {
