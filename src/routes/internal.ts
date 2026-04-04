@@ -190,8 +190,8 @@ router.post("/internal/outlets/status", async (req, res) => {
       let bestClassification: "positive" | "negative" | "neutral" | null = null;
 
       for (const row of outletRows) {
-        // Start with DB status
-        let enrichedStatus = row.status;
+        // Start with DB status — widen type since email-gateway can produce "delivered"/"replied"
+        let enrichedStatus: string = row.status;
 
         // Enrich with email-gateway if available
         if (row.email) {
