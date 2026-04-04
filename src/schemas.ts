@@ -110,7 +110,9 @@ export const CampaignOutletJournalistSchema = z
     whyRelevant: z.string(),
     whyNotRelevant: z.string(),
     articleUrls: z.array(z.string()).nullable(),
-    status: z.enum(["buffered", "claimed", "served", "contacted", "skipped"]),
+    consolidatedStatus: z.enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"]).openapi({ description: "Consolidated status: email-gateway status when available, otherwise local DB status" }),
+    localStatus: z.enum(["buffered", "claimed", "served", "contacted", "skipped"]).openapi({ description: "Status from the local database" }),
+    emailGatewayStatus: z.enum(["contacted", "delivered", "replied", "bounced"]).nullable().openapi({ description: "Status derived from email-gateway. Null if no email-gateway data." }),
     runId: z.string().uuid().nullable(),
     createdAt: z.string(),
     journalistName: z.string(),
@@ -164,7 +166,7 @@ export const StatsQuerySchema = z
   .openapi("StatsQuery");
 
 const StatusCountSchema = z.record(z.string(), z.number()).openapi("StatusCount", {
-  description: "Map of buffer status to journalist count. Possible keys: buffered, claimed, served, contacted, skipped. The 'contacted' key is enriched from lead-service.",
+  description: "Map of status to journalist count. Local statuses: buffered, claimed, served, skipped. Email-gateway enriched statuses: contacted, delivered, replied, bounced.",
 });
 
 const GroupedEntrySchema = z.object({
@@ -241,7 +243,9 @@ const JournalistCampaignEntrySchema = z.object({
   campaignId: z.string().uuid(),
   featureSlug: z.string().nullable(),
   workflowSlug: z.string().nullable(),
-  status: z.enum(["buffered", "claimed", "served", "contacted", "skipped"]),
+  consolidatedStatus: z.enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"]).openapi({ description: "Consolidated status: email-gateway status when available, otherwise local DB status" }),
+  localStatus: z.enum(["buffered", "claimed", "served", "contacted", "skipped"]).openapi({ description: "Status from the local database" }),
+  emailGatewayStatus: z.enum(["contacted", "delivered", "replied", "bounced"]).nullable().openapi({ description: "Status derived from email-gateway. Null if no email-gateway data." }),
   relevanceScore: z.string(),
   whyRelevant: z.string(),
   whyNotRelevant: z.string(),

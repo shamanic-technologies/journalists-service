@@ -109,7 +109,9 @@ describe("GET /journalists/list", () => {
     expect(j.cost).toBeNull();
     expect(j.campaigns).toHaveLength(1);
     expect(j.campaigns[0].campaignId).toBe(CAMPAIGN_ID);
-    expect(j.campaigns[0].status).toBe("buffered");
+    expect(j.campaigns[0].consolidatedStatus).toBe("buffered");
+    expect(j.campaigns[0].localStatus).toBe("buffered");
+    expect(j.campaigns[0].emailGatewayStatus).toBeNull();
   });
 
   it("groups multiple campaigns under one journalist", async () => {
@@ -153,8 +155,12 @@ describe("GET /journalists/list", () => {
     const j = res.body.journalists[0];
     expect(j.journalistName).toBe("Samantha McLean");
     expect(j.campaigns).toHaveLength(2);
-    const statuses = j.campaigns.map((c: { status: string }) => c.status).sort();
-    expect(statuses).toEqual(["buffered", "served"]);
+    const localStatuses = j.campaigns.map((c: { localStatus: string }) => c.localStatus).sort();
+    expect(localStatuses).toEqual(["buffered", "served"]);
+    // The "served" campaign should be consolidated to "delivered" (email-gateway says contacted+delivered)
+    const servedCampaign = j.campaigns.find((c: { localStatus: string }) => c.localStatus === "served");
+    expect(servedCampaign.consolidatedStatus).toBe("delivered");
+    expect(servedCampaign.emailGatewayStatus).toBe("delivered");
   });
 
   it("uses apollo_email from journalists table as global email", async () => {
@@ -189,6 +195,64 @@ describe("GET /journalists/list", () => {
     expect(j.email).toBe("bob@global.com");
     // Campaign-level email is still in the campaigns array
     expect(j.campaigns[0].email).toBe("bob@campaign.com");
+  });
+
+  it("consolidates status from email-gateway: served → contacted/delivered/replied", async () => {
+    const journalist = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Status Triplet Test",
+      firstName: "Status",
+      lastName: "Triplet",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: journalist.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      status: "served",
+      email: "status@example.com",
+    });
+
+    mockEmailGatewayStatus([
+      { leadId: journalist.id, email: "status@example.com", contacted: true, delivered: true, replied: true, replyClassification: "positive" },
+    ]);
+
+    const res = await request(app)
+      .get(`/journalists/list?brandId=${BRAND_ID}`)
+      .set(BASE_AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    const j = res.body.journalists[0];
+    const c = j.campaigns[0];
+    expect(c.localStatus).toBe("served");
+    expect(c.emailGatewayStatus).toBe("replied");
+    expect(c.consolidatedStatus).toBe("replied");
+  });
+
+  it("keeps localStatus as consolidatedStatus when no email-gateway data", async () => {
+    const journalist = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "No Gateway",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: journalist.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      status: "buffered",
+    });
+
+    const res = await request(app)
+      .get(`/journalists/list?brandId=${BRAND_ID}`)
+      .set(BASE_AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    const c = res.body.journalists[0].campaigns[0];
+    expect(c.consolidatedStatus).toBe("buffered");
+    expect(c.localStatus).toBe("buffered");
+    expect(c.emailGatewayStatus).toBeNull();
   });
 
   it("enriches with email statuses from email-gateway", async () => {

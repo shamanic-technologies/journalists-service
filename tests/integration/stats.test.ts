@@ -33,23 +33,56 @@ function mockDynasties(dynasties: { dynastySlug: string; slugs: string[] }[]) {
   });
 }
 
-function mockLeadStats(contacted = 0) {
-  mockFetch.mockResolvedValueOnce({
-    ok: true,
-    json: async () => ({ served: 0, contacted, buffered: 0, skipped: 0 }),
-  });
-}
-
-function mockLeadStatsGrouped(groups: Array<{ key: string; contacted: number }>) {
+function mockEmailGatewayStats(contacted = 0, delivered = 0, replied = 0, bounced = 0) {
   mockFetch.mockResolvedValueOnce({
     ok: true,
     json: async () => ({
-      groups: groups.map((g) => ({ ...g, served: 0, buffered: 0, skipped: 0 })),
+      broadcast: {
+        emailsContacted: contacted,
+        emailsSent: contacted,
+        emailsDelivered: delivered,
+        emailsOpened: 0,
+        emailsClicked: 0,
+        emailsReplied: replied,
+        emailsBounced: bounced,
+        repliesWillingToMeet: 0,
+        repliesInterested: 0,
+        repliesNotInterested: 0,
+        repliesOutOfOffice: 0,
+        repliesUnsubscribe: 0,
+        recipients: contacted,
+      },
     }),
   });
 }
 
-function mockLeadStatsFailure() {
+function mockEmailGatewayStatsGrouped(groups: Array<{ key: string; contacted: number; delivered?: number; replied?: number; bounced?: number }>) {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      groups: groups.map((g) => ({
+        key: g.key,
+        broadcast: {
+          emailsContacted: g.contacted,
+          emailsSent: g.contacted,
+          emailsDelivered: g.delivered ?? 0,
+          emailsOpened: 0,
+          emailsClicked: 0,
+          emailsReplied: g.replied ?? 0,
+          emailsBounced: g.bounced ?? 0,
+          repliesWillingToMeet: 0,
+          repliesInterested: 0,
+          repliesNotInterested: 0,
+          repliesOutOfOffice: 0,
+          repliesUnsubscribe: 0,
+          recipients: g.contacted,
+        },
+      })),
+    }),
+  });
+}
+
+function mockEmailGatewayStatsFailure() {
   mockFetch.mockResolvedValueOnce({ ok: false, status: 502 });
 }
 
@@ -82,7 +115,7 @@ describe("GET /stats", () => {
       outletId: OUTLET_ID, featureSlug: "feat-b", status: "served",
     });
 
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
 
     const res = await request(app)
       .get("/stats")
@@ -94,7 +127,7 @@ describe("GET /stats", () => {
     expect(res.body.byStatus.served).toBe(2);
   });
 
-  it("includes contacted from lead-service in byStatus", async () => {
+  it("includes contacted from email-gateway in byStatus", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Contacted Writer 1" });
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Contacted Writer 2" });
     const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Contacted Writer 3" });
@@ -112,8 +145,8 @@ describe("GET /stats", () => {
       outletId: OUTLET_ID, status: "buffered",
     });
 
-    // Lead-service reports 2 of the served journalists have been contacted
-    mockLeadStats(2);
+    // Email-gateway reports 2 of the served journalists have been contacted
+    mockEmailGatewayStats(2);
 
     const res = await request(app)
       .get("/stats")
@@ -126,14 +159,14 @@ describe("GET /stats", () => {
     expect(res.body.byStatus.contacted).toBe(2);
   });
 
-  it("omits contacted when lead-service returns 0", async () => {
+  it("omits contacted when email-gateway returns 0", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "No Contact" });
     await insertTestCampaignJournalist({
       journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, status: "served",
     });
 
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
 
     const res = await request(app)
       .get("/stats")
@@ -143,14 +176,14 @@ describe("GET /stats", () => {
     expect(res.body.byStatus.contacted).toBeUndefined();
   });
 
-  it("fails open when lead-service is unavailable", async () => {
+  it("fails open when email-gateway is unavailable", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Fail Open" });
     await insertTestCampaignJournalist({
       journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID, status: "served",
     });
 
-    mockLeadStatsFailure();
+    mockEmailGatewayStatsFailure();
 
     const res = await request(app)
       .get("/stats")
@@ -176,7 +209,7 @@ describe("GET /stats", () => {
       outletId: OUTLET_ID,
     });
 
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
 
     const res = await request(app)
       .get(`/stats?brandId=${BRAND_ID}`)
@@ -195,7 +228,7 @@ describe("GET /stats", () => {
       outletId: OUTLET_ID,
     });
 
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
 
     // Filter by first brand
     const res1 = await request(app)
@@ -203,7 +236,7 @@ describe("GET /stats", () => {
       .set(AUTH_HEADERS);
     expect(res1.body.totalJournalists).toBe(1);
 
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
 
     // Filter by second brand
     const res2 = await request(app)
@@ -225,7 +258,7 @@ describe("GET /stats", () => {
       outletId: OUTLET_ID, featureSlug: "feat-b",
     });
 
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
 
     const res = await request(app)
       .get("/stats?featureSlug=feat-a")
@@ -248,7 +281,7 @@ describe("GET /stats", () => {
       outletId: OUTLET_ID, workflowSlug: "wf-b",
     });
 
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
 
     const res = await request(app)
       .get("/stats?workflowSlug=wf-a")
@@ -277,7 +310,7 @@ describe("GET /stats", () => {
     });
 
     mockDynastyResolution(["feat-alpha", "feat-alpha-v2"]);
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
 
     const res = await request(app)
       .get("/stats?featureDynastySlug=feat-alpha")
@@ -301,7 +334,7 @@ describe("GET /stats", () => {
     });
 
     mockDynastyResolution(["cold-email", "cold-email-v2"]);
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
 
     const res = await request(app)
       .get("/stats?workflowDynastySlug=cold-email")
@@ -319,7 +352,7 @@ describe("GET /stats", () => {
     });
 
     mockDynastyResolution([]);
-    // No lead-service call expected: emptyStats() is returned early
+    // No email-gateway call expected: emptyStats() is returned early
 
     const res = await request(app)
       .get("/stats?featureDynastySlug=nonexistent")
@@ -344,7 +377,7 @@ describe("GET /stats", () => {
     });
 
     mockDynastyResolution(["feat-alpha", "feat-alpha-v2"]);
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
 
     const res = await request(app)
       .get(`/stats?featureDynastySlug=feat-alpha&campaignId=${CAMPAIGN_ID}`)
@@ -373,8 +406,8 @@ describe("GET /stats", () => {
       outletId: OUTLET_ID, featureSlug: "feat-b", status: "served",
     });
 
-    mockLeadStats(0);
-    mockLeadStatsGrouped([]);
+    mockEmailGatewayStats(0);
+    mockEmailGatewayStatsGrouped([]);
 
     const res = await request(app)
       .get("/stats?groupBy=featureSlug")
@@ -400,8 +433,8 @@ describe("GET /stats", () => {
       outletId: OUTLET_ID, workflowSlug: "wf-b", status: "served",
     });
 
-    mockLeadStats(0);
-    mockLeadStatsGrouped([]);
+    mockEmailGatewayStats(0);
+    mockEmailGatewayStatsGrouped([]);
 
     const res = await request(app)
       .get("/stats?groupBy=workflowSlug")
@@ -430,12 +463,12 @@ describe("GET /stats", () => {
       outletId: OUTLET_ID, featureSlug: "feat-beta", status: "served",
     });
 
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
     mockDynasties([
       { dynastySlug: "feat-alpha", slugs: ["feat-alpha", "feat-alpha-v2"] },
       { dynastySlug: "feat-beta", slugs: ["feat-beta"] },
     ]);
-    mockLeadStatsGrouped([]);
+    mockEmailGatewayStatsGrouped([]);
 
     const res = await request(app)
       .get("/stats?groupBy=featureDynastySlug")
@@ -466,12 +499,12 @@ describe("GET /stats", () => {
       outletId: OUTLET_ID, workflowSlug: "warm-intro", status: "served",
     });
 
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
     mockDynasties([
       { dynastySlug: "cold-email", slugs: ["cold-email", "cold-email-v2"] },
       { dynastySlug: "warm-intro", slugs: ["warm-intro"] },
     ]);
-    mockLeadStatsGrouped([]);
+    mockEmailGatewayStatsGrouped([]);
 
     const res = await request(app)
       .get("/stats?groupBy=workflowDynastySlug")
@@ -500,7 +533,7 @@ describe("GET /stats", () => {
       outletId: OUTLET_ID, workflowSlug: "wf-c", status: "served",
     });
 
-    mockLeadStats(1);
+    mockEmailGatewayStats(1);
 
     const res = await request(app)
       .get("/stats?workflowSlugs=wf-a,wf-b")
@@ -531,8 +564,8 @@ describe("GET /stats", () => {
       outletId: OUTLET_ID, workflowSlug: "wf-c", status: "served",
     });
 
-    mockLeadStats(0);
-    mockLeadStatsGrouped([
+    mockEmailGatewayStats(0);
+    mockEmailGatewayStatsGrouped([
       { key: "wf-a", contacted: 0 },
       { key: "wf-b", contacted: 3 },
     ]);
@@ -569,7 +602,7 @@ describe("GET /stats", () => {
       outletId: OUTLET_ID, featureSlug: "unrelated-feature", status: "served",
     });
 
-    mockLeadStats(1);
+    mockEmailGatewayStats(1);
 
     const res = await request(app)
       .get("/stats?featureSlugs=pr-journalist-outreach,pr-journalist-outreach-v2")
@@ -600,8 +633,8 @@ describe("GET /stats", () => {
       outletId: OUTLET_ID, featureSlug: "unrelated-feature", status: "served",
     });
 
-    mockLeadStats(0);
-    mockLeadStatsGrouped([
+    mockEmailGatewayStats(0);
+    mockEmailGatewayStatsGrouped([
       { key: "pr-journalist-outreach", contacted: 0 },
       { key: "pr-journalist-outreach-v2", contacted: 2 },
     ]);
@@ -628,12 +661,12 @@ describe("GET /stats", () => {
       outletId: OUTLET_ID, featureSlug: "orphan-slug", status: "served",
     });
 
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
     // Return dynasties that don't include "orphan-slug"
     mockDynasties([
       { dynastySlug: "feat-alpha", slugs: ["feat-alpha", "feat-alpha-v2"] },
     ]);
-    mockLeadStatsGrouped([]);
+    mockEmailGatewayStatsGrouped([]);
 
     const res = await request(app)
       .get("/stats?groupBy=featureDynastySlug")
@@ -663,7 +696,7 @@ describe("GET /stats (base headers only — no workflow context)", () => {
       outletId: OUTLET_ID, status: "served",
     });
 
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
 
     const res = await request(app)
       .get(`/stats?campaignId=${CAMPAIGN_ID}`)
@@ -698,7 +731,7 @@ describe("GET /stats/public", () => {
       outletId: OUTLET_ID, status: "served",
     });
 
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
 
     const res = await request(app)
       .get("/stats/public")
@@ -721,7 +754,7 @@ describe("GET /stats/public", () => {
       outletId: OUTLET_ID, featureSlug: "feat-b",
     });
 
-    mockLeadStats(0);
+    mockEmailGatewayStats(0);
 
     const res = await request(app)
       .get("/stats/public?featureSlug=feat-a")

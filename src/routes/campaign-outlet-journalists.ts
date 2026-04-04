@@ -4,6 +4,8 @@ import { z } from "zod";
 import { db } from "../db/index.js";
 import { campaignJournalists, journalists } from "../db/schema.js";
 import { resolveFeatureDynastySlugs } from "../lib/dynasty-client.js";
+import { checkEmailStatuses, consolidateStatus, type EmailGatewayStatusResult } from "../lib/email-gateway-client.js";
+import { type ServiceContext } from "../lib/service-context.js";
 
 const router = Router();
 
@@ -78,18 +80,82 @@ router.get("/campaign-outlet-journalists", async (req, res) => {
       whyNotRelevant: campaignJournalists.whyNotRelevant,
       articleUrls: campaignJournalists.articleUrls,
       status: campaignJournalists.status,
+      email: campaignJournalists.email,
       runId: campaignJournalists.runId,
       createdAt: campaignJournalists.createdAt,
       journalistName: journalists.journalistName,
       firstName: journalists.firstName,
       lastName: journalists.lastName,
       entityType: journalists.entityType,
+      apolloEmail: journalists.apolloEmail,
     })
     .from(campaignJournalists)
     .innerJoin(journalists, eq(campaignJournalists.journalistId, journalists.id))
     .where(and(...conditions));
 
-  res.json({ campaignJournalists: rows });
+  if (rows.length === 0) {
+    res.json({ campaignJournalists: [] });
+    return;
+  }
+
+  // Enrich with email-gateway statuses (fail-open)
+  const itemsWithEmail: Array<{ leadId: string; email: string }> = [];
+  for (const row of rows) {
+    const email = row.apolloEmail ?? row.email;
+    if (email) {
+      itemsWithEmail.push({ leadId: row.journalistId, email });
+    }
+  }
+
+  let emailStatusMap = new Map<string, EmailGatewayStatusResult>();
+  if (itemsWithEmail.length > 0) {
+    try {
+      const ctx: ServiceContext = {
+        orgId: (res.locals.orgId as string) || "",
+        userId: (res.locals.userId as string) || "",
+        runId: (res.locals.runId as string) || "",
+        featureSlug: (res.locals.featureSlug as string) || "",
+        campaignId: (res.locals.campaignId as string) || "",
+        brandIds: brand_id ? [brand_id] : [],
+        workflowSlug: (res.locals.workflowSlug as string) || "",
+      };
+      const results = await checkEmailStatuses(itemsWithEmail, campaign_id, ctx);
+      for (const result of results) {
+        emailStatusMap.set(result.leadId, result);
+      }
+    } catch (err) {
+      console.warn("[journalists-service] email-gateway enrichment failed for campaign-outlet-journalists (continuing without):", err);
+    }
+  }
+
+  const enrichedRows = rows.map((row) => {
+    const emailGatewayResult = emailStatusMap.get(row.journalistId) ?? null;
+    const statusTriplet = consolidateStatus(row.status, emailGatewayResult);
+    return {
+      id: row.id,
+      journalistId: row.journalistId,
+      campaignId: row.campaignId,
+      outletId: row.outletId,
+      orgId: row.orgId,
+      brandIds: row.brandIds,
+      featureSlug: row.featureSlug,
+      relevanceScore: row.relevanceScore,
+      whyRelevant: row.whyRelevant,
+      whyNotRelevant: row.whyNotRelevant,
+      articleUrls: row.articleUrls,
+      consolidatedStatus: statusTriplet.consolidatedStatus,
+      localStatus: statusTriplet.localStatus,
+      emailGatewayStatus: statusTriplet.emailGatewayStatus,
+      runId: row.runId,
+      createdAt: row.createdAt,
+      journalistName: row.journalistName,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      entityType: row.entityType,
+    };
+  });
+
+  res.json({ campaignJournalists: enrichedRows });
 });
 
 export default router;

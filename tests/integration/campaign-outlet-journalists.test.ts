@@ -20,6 +20,38 @@ const BRAND_ID = "44444444-4444-4444-4444-444444444444";
 const CAMPAIGN_ID = "55555555-5555-5555-5555-555555555555";
 const CAMPAIGN_ID_2 = "55555555-5555-5555-5555-666666666666";
 
+function mockEmailGatewayStatusEmpty() {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ results: [] }),
+  });
+}
+
+function mockEmailGatewayStatusForJournalists(statuses: Array<{ leadId: string; email: string; contacted: boolean; delivered: boolean; replied: boolean; replyClassification: string | null }>) {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      results: statuses.map((r) => ({
+        leadId: r.leadId,
+        email: r.email,
+        broadcast: {
+          campaign: {
+            lead: { contacted: r.contacted, delivered: r.delivered, replied: r.replied, replyClassification: r.replyClassification, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null },
+            email: { contacted: r.contacted, delivered: r.delivered, bounced: false, unsubscribed: false, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null },
+          },
+          brand: null,
+          global: { email: { bounced: false, unsubscribed: false } },
+        },
+        transactional: {
+          campaign: null,
+          brand: null,
+          global: { email: { bounced: false, unsubscribed: false } },
+        },
+      })),
+    }),
+  });
+}
+
 describe("GET /campaign-outlet-journalists", () => {
   beforeEach(async () => {
     await cleanTestData();
@@ -64,6 +96,11 @@ describe("GET /campaign-outlet-journalists", () => {
     // Should return brandIds as array
     expect(res.body.campaignJournalists[0]).toHaveProperty("brandIds");
     expect(Array.isArray(res.body.campaignJournalists[0].brandIds)).toBe(true);
+    // Status triplet
+    expect(res.body.campaignJournalists[0]).toHaveProperty("consolidatedStatus");
+    expect(res.body.campaignJournalists[0]).toHaveProperty("localStatus");
+    expect(res.body.campaignJournalists[0]).toHaveProperty("emailGatewayStatus");
+    expect(res.body.campaignJournalists[0].emailGatewayStatus).toBeNull();
   });
 
   it("filters by outlet_id when provided", async () => {
@@ -297,6 +334,70 @@ describe("GET /campaign-outlet-journalists", () => {
     expect(res.status).toBe(200);
     expect(res.body.campaignJournalists).toHaveLength(1);
     expect(res.body.campaignJournalists[0].journalistName).toBe("Dynasty Hit");
+  });
+
+  it("returns status triplet with email-gateway enrichment", async () => {
+    const j1 = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Triplet Reporter",
+      apolloEmail: "triplet@example.com",
+    });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      status: "served",
+      email: "triplet@example.com",
+    });
+
+    mockEmailGatewayStatusForJournalists([
+      { leadId: j1.id, email: "triplet@example.com", contacted: true, delivered: true, replied: false, replyClassification: null },
+    ]);
+
+    const res = await request(app)
+      .get(`/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}`)
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.campaignJournalists).toHaveLength(1);
+    const cj = res.body.campaignJournalists[0];
+    expect(cj.localStatus).toBe("served");
+    expect(cj.emailGatewayStatus).toBe("delivered");
+    expect(cj.consolidatedStatus).toBe("delivered");
+  });
+
+  it("falls back gracefully when email-gateway fails", async () => {
+    const j1 = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Fallback Reporter",
+      apolloEmail: "fallback@example.com",
+    });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      status: "served",
+      email: "fallback@example.com",
+    });
+
+    mockFetch.mockRejectedValueOnce(new Error("connection refused"));
+
+    const res = await request(app)
+      .get(`/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}`)
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.campaignJournalists).toHaveLength(1);
+    const cj = res.body.campaignJournalists[0];
+    expect(cj.localStatus).toBe("served");
+    expect(cj.emailGatewayStatus).toBeNull();
+    expect(cj.consolidatedStatus).toBe("served");
   });
 
   it("returns empty array when dynasty slug resolves to no slugs", async () => {

@@ -3,7 +3,7 @@ import { and, arrayContains, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { campaignJournalists, journalists } from "../db/schema.js";
 import { JournalistsListQuerySchema } from "../schemas.js";
-import { checkEmailStatuses, type EmailGatewayStatusResult } from "../lib/email-gateway-client.js";
+import { checkEmailStatuses, consolidateStatus, type EmailGatewayStatusResult } from "../lib/email-gateway-client.js";
 import { fetchBatchRunCosts, type BatchRunCost } from "../lib/runs-client.js";
 import { resolveFeatureDynastySlugs } from "../lib/dynasty-client.js";
 import { type ServiceContext } from "../lib/service-context.js";
@@ -239,21 +239,26 @@ router.get("/journalists/list", async (req, res) => {
               runCount: cost.runCount,
             }
           : null,
-        campaigns: group.campaigns.map((c) => ({
-          id: c.id,
-          campaignId: c.campaignId,
-          featureSlug: c.featureSlug,
-          workflowSlug: c.workflowSlug,
-          status: c.status,
-          relevanceScore: c.relevanceScore,
-          whyRelevant: c.whyRelevant,
-          whyNotRelevant: c.whyNotRelevant,
-          articleUrls: c.articleUrls,
-          email: c.campaignEmail,
-          apolloPersonId: c.campaignApolloPersonId,
-          runId: c.runId,
-          createdAt: c.createdAt,
-        })),
+        campaigns: group.campaigns.map((c) => {
+          const statusTriplet = consolidateStatus(c.status, emailStatus);
+          return {
+            id: c.id,
+            campaignId: c.campaignId,
+            featureSlug: c.featureSlug,
+            workflowSlug: c.workflowSlug,
+            consolidatedStatus: statusTriplet.consolidatedStatus,
+            localStatus: statusTriplet.localStatus,
+            emailGatewayStatus: statusTriplet.emailGatewayStatus,
+            relevanceScore: c.relevanceScore,
+            whyRelevant: c.whyRelevant,
+            whyNotRelevant: c.whyNotRelevant,
+            articleUrls: c.articleUrls,
+            email: c.campaignEmail,
+            apolloPersonId: c.campaignApolloPersonId,
+            runId: c.runId,
+            createdAt: c.createdAt,
+          };
+        }),
       };
     });
 
