@@ -940,7 +940,7 @@
     },
     "/campaign-outlet-journalists": {
       "get": {
-        "summary": "Get journalists associated with a campaign or brand, optionally filtered by outlet and/or run. Provide campaign_id, brand_id, or both.",
+        "summary": "Get journalists associated with a campaign or brand, optionally filtered by outlet, run, and/or feature dynasty slug. Provide campaign_id, brand_id, or both.",
         "security": [
           {
             "ApiKeyAuth": []
@@ -984,6 +984,15 @@
             },
             "required": false,
             "name": "run_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by feature dynasty slug — resolves to all versioned slugs in the dynasty via features-service."
+            },
+            "required": false,
+            "name": "feature_dynasty_slug",
             "in": "query"
           }
         ],
@@ -1355,7 +1364,7 @@
     },
     "/journalists/list": {
       "get": {
-        "summary": "List journalists grouped by identity with per-campaign details. Each journalist has global data (email, cost, emailStatus) and a campaigns[] array with per-campaign entries. Filter by featureSlugs (CSV) and/or workflowSlug.",
+        "summary": "List journalists grouped by identity with per-campaign details. Each journalist has global data (email, cost, emailStatus) and a campaigns[] array with per-campaign entries. Filter by featureSlugs (CSV), featureDynastySlug (resolves to versioned slugs), and/or workflowSlug.",
         "security": [
           {
             "ApiKeyAuth": []
@@ -1389,6 +1398,15 @@
             },
             "required": false,
             "name": "featureSlugs",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by feature dynasty slug — resolves to all versioned slugs in the dynasty via features-service. Takes priority over featureSlugs."
+            },
+            "required": false,
+            "name": "featureDynastySlug",
             "in": "query"
           },
           {

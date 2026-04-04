@@ -400,6 +400,84 @@ describe("GET /journalists/list", () => {
     }
   });
 
+  it("filters by featureDynastySlug — resolves dynasty to versioned slugs", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dynasty A" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dynasty B" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, featureSlug: "pr-outreach-v1",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, featureSlug: "cold-email-v1",
+    });
+
+    // Mock features-service dynasty resolution: "pr-outreach" -> ["pr-outreach-v1", "pr-outreach-v2"]
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ slugs: ["pr-outreach-v1", "pr-outreach-v2"] }),
+    });
+
+    const res = await request(app)
+      .get(`/journalists/list?brandId=${BRAND_ID}&featureDynastySlug=pr-outreach`)
+      .set(BASE_AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.journalists).toHaveLength(1);
+    expect(res.body.journalists[0].journalistName).toBe("Dynasty A");
+  });
+
+  it("returns empty list when dynasty slug resolves to no versioned slugs", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Orphan" });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, featureSlug: "some-feature",
+    });
+
+    // Mock features-service returning empty slugs for unknown dynasty
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ slugs: [] }),
+    });
+
+    const res = await request(app)
+      .get(`/journalists/list?brandId=${BRAND_ID}&featureDynastySlug=nonexistent-dynasty`)
+      .set(BASE_AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.journalists).toHaveLength(0);
+  });
+
+  it("featureDynastySlug takes priority over featureSlugs", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Priority A" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Priority B" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, featureSlug: "pr-outreach-v1",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, featureSlug: "cold-email-v1",
+    });
+
+    // Dynasty resolves to pr-outreach-v1 only
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ slugs: ["pr-outreach-v1"] }),
+    });
+
+    // Both featureSlugs and featureDynastySlug provided — dynasty wins
+    const res = await request(app)
+      .get(`/journalists/list?brandId=${BRAND_ID}&featureDynastySlug=pr-outreach&featureSlugs=cold-email-v1`)
+      .set(BASE_AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.journalists).toHaveLength(1);
+    expect(res.body.journalists[0].journalistName).toBe("Priority A");
+  });
+
   it("scopes by orgId from headers — does not return other org's journalists", async () => {
     const journalist = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Other Org" });
     await insertTestCampaignJournalist({
