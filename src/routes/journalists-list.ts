@@ -9,6 +9,79 @@ import { type ServiceContext } from "../lib/service-context.js";
 
 const router = Router();
 
+// Status priority for dedup: prefer the most "advanced" status
+const STATUS_PRIORITY: Record<string, number> = {
+  contacted: 1,
+  served: 2,
+  claimed: 3,
+  buffered: 4,
+  skipped: 5,
+};
+
+type JournalistRow = {
+  id: string;
+  journalistId: string;
+  campaignId: string;
+  outletId: string;
+  orgId: string;
+  brandIds: string[];
+  featureSlug: string | null;
+  workflowSlug: string | null;
+  relevanceScore: string;
+  whyRelevant: string;
+  whyNotRelevant: string;
+  articleUrls: string[] | null;
+  status: "buffered" | "claimed" | "served" | "contacted" | "skipped";
+  email: string | null;
+  runId: string | null;
+  createdAt: Date;
+  journalistName: string;
+  firstName: string | null;
+  lastName: string | null;
+  entityType: "individual" | "organization";
+};
+
+/**
+ * Deduplicate rows by journalist_id: keep the "best" row per journalist.
+ * Priority: status (contacted > served > claimed > buffered > skipped),
+ * then has email, then most recent.
+ */
+function deduplicateByJournalist(rows: JournalistRow[]): JournalistRow[] {
+  const byJournalist = new Map<string, JournalistRow>();
+
+  for (const row of rows) {
+    const existing = byJournalist.get(row.journalistId);
+    if (!existing) {
+      byJournalist.set(row.journalistId, row);
+      continue;
+    }
+
+    const existingPriority = STATUS_PRIORITY[existing.status] ?? 99;
+    const rowPriority = STATUS_PRIORITY[row.status] ?? 99;
+
+    // Better status wins
+    if (rowPriority < existingPriority) {
+      byJournalist.set(row.journalistId, row);
+      continue;
+    }
+    if (rowPriority > existingPriority) continue;
+
+    // Same status: prefer row with email
+    if (row.email && !existing.email) {
+      byJournalist.set(row.journalistId, row);
+      continue;
+    }
+    if (!row.email && existing.email) continue;
+
+    // Same status, same email presence: prefer most recent
+    if (new Date(row.createdAt).getTime() > new Date(existing.createdAt).getTime()) {
+      byJournalist.set(row.journalistId, row);
+    }
+  }
+
+  return Array.from(byJournalist.values());
+}
+
 function buildCtx(locals: Record<string, unknown>): ServiceContext {
   return {
     orgId: locals.orgId as string,
@@ -73,8 +146,13 @@ router.get("/journalists/list", async (req, res) => {
       return;
     }
 
+    // When querying across campaigns (no campaignId filter), deduplicate by journalist_id.
+    // Pick the "best" row per journalist: prefer contacted > served > claimed > buffered > skipped,
+    // then prefer rows with email, then most recent.
+    const deduped = campaignId ? rows : deduplicateByJournalist(rows);
+
     // 2. Enrich with email statuses from email-gateway (fail-open)
-    const itemsWithEmail = rows
+    const itemsWithEmail = deduped
       .filter((r) => r.email)
       .map((r) => ({ leadId: r.journalistId, email: r.email! }));
 
@@ -92,7 +170,7 @@ router.get("/journalists/list", async (req, res) => {
     }
 
     // 3. Enrich with costs from runs-service (fail-open)
-    const rowsWithRunId = rows.filter((r) => r.runId);
+    const rowsWithRunId = deduped.filter((r) => r.runId);
     const runToJournalists = new Map<string, string[]>();
     for (const row of rowsWithRunId) {
       const runId = row.runId!;
@@ -141,7 +219,7 @@ router.get("/journalists/list", async (req, res) => {
     }
 
     // 4. Build response
-    const enrichedJournalists = rows.map((row) => {
+    const enrichedJournalists = deduped.map((row) => {
       const emailStatus = emailStatusMap.get(row.journalistId) ?? null;
       const cost = journalistCostMap.get(row.journalistId) ?? null;
 

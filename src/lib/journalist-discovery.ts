@@ -1,6 +1,6 @@
-import { db } from "../db/index.js";
+import { db, sql as pgClient } from "../db/index.js";
 import { journalists, campaignJournalists } from "../db/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   discoverOutletArticles,
   type DiscoveredArticle,
@@ -200,13 +200,14 @@ export async function storeJournalists(
     const journalistName = `${j.firstName} ${j.lastName}`;
 
     // Journalist identity is global: unique per (outlet, name, entity_type)
+    // Case-insensitive lookup to prevent "Samantha McLean" vs "Samantha Mclean" duplicates
     const existing = await db
       .select()
       .from(journalists)
       .where(
         and(
           eq(journalists.outletId, outletId),
-          eq(journalists.journalistName, journalistName),
+          sql`lower(${journalists.journalistName}) = lower(${journalistName})`,
           eq(journalists.entityType, "individual")
         )
       );
