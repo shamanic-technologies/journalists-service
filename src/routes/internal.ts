@@ -141,7 +141,12 @@ router.post("/internal/outlets/status", async (req, res) => {
     }
 
     // 3. Call email-gateway for real-time statuses
-    const emailStatusMap = new Map<string, { contacted: boolean; delivered: boolean; replied: boolean }>();
+    const emailStatusMap = new Map<string, {
+      contacted: boolean;
+      delivered: boolean;
+      replied: boolean;
+      replyClassification: "positive" | "negative" | "neutral" | null;
+    }>();
     if (emailItems.length > 0) {
       const ctx: ServiceContext = {
         orgId,
@@ -166,17 +171,25 @@ router.post("/internal/outlets/status", async (req, res) => {
             contacted: scope.contacted,
             delivered: scope.delivered,
             replied: scope.replied,
+            replyClassification: scope.replyClassification,
           });
         }
       }
     }
 
     // 4. Build results per outlet
-    const results: Record<string, { status: string; journalistCount: number; contactedCount: number }> = {};
+    const CLASSIFICATION_RANK: Record<string, number> = { neutral: 0, negative: 1, positive: 2 };
+    const results: Record<string, {
+      status: string;
+      replyClassification: "positive" | "negative" | "neutral" | null;
+      journalistCount: number;
+      contactedCount: number;
+    }> = {};
 
     for (const outletId of outletIds) {
       const outletRows = byOutlet.get(outletId) ?? [];
       let highWatermark = "served";
+      let bestClassification: "positive" | "negative" | "neutral" | null = null;
       let contactedCount = 0;
 
       for (const row of outletRows) {
@@ -189,6 +202,12 @@ router.post("/internal/outlets/status", async (req, res) => {
           if (egStatus) {
             if (egStatus.replied) {
               enrichedStatus = higherStatus(enrichedStatus, "replied");
+              // Track best reply classification: positive > negative > neutral
+              if (egStatus.replyClassification) {
+                if (!bestClassification || CLASSIFICATION_RANK[egStatus.replyClassification] > CLASSIFICATION_RANK[bestClassification]) {
+                  bestClassification = egStatus.replyClassification;
+                }
+              }
             } else if (egStatus.delivered) {
               enrichedStatus = higherStatus(enrichedStatus, "delivered");
             } else if (egStatus.contacted) {
@@ -206,6 +225,7 @@ router.post("/internal/outlets/status", async (req, res) => {
 
       results[outletId] = {
         status: highWatermark,
+        replyClassification: highWatermark === "replied" ? bestClassification : null,
         journalistCount: outletRows.length,
         contactedCount,
       };
