@@ -528,6 +528,46 @@ describe("POST /discover", () => {
     expect(cjs[0].journalistId).not.toBe(FAKE_ID);
   });
 
+  it("falls through to name lookup when LLM returns non-UUID existingJournalistId", async () => {
+    setupDiscoverMocks();
+
+    // LLM returns "Journalist 1" (the prompt label) instead of a UUID
+    mockedChatComplete.mockResolvedValue({
+      content: "",
+      json: {
+        journalists: [
+          {
+            existingJournalistId: "Journalist 1",
+            firstName: "Sarah",
+            lastName: "Johnson",
+            relevanceScore: 92,
+            whyRelevant: "Covers SaaS and developer tools.",
+            whyNotRelevant: "Some consumer tech coverage.",
+            articleUrls: ["https://techcrunch.com/2026/01/15/top-saas-tools"],
+          },
+        ],
+      },
+      tokensInput: 1500,
+      tokensOutput: 500,
+      model: "claude-sonnet-4-6",
+    });
+
+    const res = await request(app)
+      .post("/discover")
+      .set(DISCOVER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    // Should NOT crash with PostgresError — should fall through to name lookup
+    expect(res.status).toBe(200);
+    expect(res.body.discovered).toBe(1);
+
+    const cjs = await db
+      .select()
+      .from(campaignJournalists)
+      .where(eq(campaignJournalists.campaignId, CAMPAIGN_ID));
+    expect(cjs).toHaveLength(1);
+  });
+
   it("returns 502 when runs-service fails", async () => {
     mockedCreateChildRun.mockRejectedValue(
       new Error("Runs-service unavailable")
