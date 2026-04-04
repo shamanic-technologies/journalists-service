@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import request from "supertest";
-import { createTestApp, AUTH_HEADERS } from "../helpers/test-app.js";
+import { createTestApp, AUTH_HEADERS, BASE_AUTH_HEADERS } from "../helpers/test-app.js";
 import {
   cleanTestData,
   insertTestJournalist,
@@ -465,6 +465,44 @@ describe("POST /internal/outlets/status", () => {
     expect(res.status).toBe(200);
     expect(res.body.results[OUTLET_A].status).toBe("replied");
     expect(res.body.results[OUTLET_A].replyClassification).toBeNull();
+  });
+
+  it("works with only base headers (no campaign/brand/feature/workflow)", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J1" });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_A,
+      status: "served",
+      email: "j1@test.com",
+    });
+
+    mockedCheckEmailStatuses.mockResolvedValue([
+      makeEmailGatewayResult(j1.id, "j1@test.com", { contacted: true, delivered: true }),
+    ]);
+
+    const res = await request(app)
+      .post("/internal/outlets/status")
+      .set(BASE_AUTH_HEADERS)
+      .send({ outletIds: [OUTLET_A] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[OUTLET_A]).toEqual({
+      status: "delivered",
+      replyClassification: null,
+    });
+  });
+
+  it("returns 400 when base headers are missing", async () => {
+    const res = await request(app)
+      .post("/internal/outlets/status")
+      .set({ "x-api-key": "test-api-key" })
+      .send({ outletIds: [OUTLET_A] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("x-org-id");
   });
 
   it("does not call email-gateway when no journalists have emails", async () => {
