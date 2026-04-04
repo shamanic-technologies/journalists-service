@@ -574,37 +574,19 @@
           "provisionedCostInUsdCents",
           "runCount"
         ],
-        "description": "Per-journalist cost from runs-service. Null if no runs or runs-service is unreachable."
+        "description": "Per-journalist cost aggregated across all campaigns. Null if no runs or runs-service is unreachable."
       },
-      "JournalistListItem": {
+      "JournalistCampaignEntry": {
         "type": "object",
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid"
-          },
-          "journalistId": {
-            "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "campaign_journalist row ID"
           },
           "campaignId": {
             "type": "string",
             "format": "uuid"
-          },
-          "outletId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "orgId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "brandIds": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            }
           },
           "featureSlug": {
             "type": "string",
@@ -613,6 +595,16 @@
           "workflowSlug": {
             "type": "string",
             "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "buffered",
+              "claimed",
+              "served",
+              "contacted",
+              "skipped"
+            ]
           },
           "relevanceScore": {
             "type": "string"
@@ -630,17 +622,12 @@
               "type": "string"
             }
           },
-          "status": {
-            "type": "string",
-            "enum": [
-              "buffered",
-              "claimed",
-              "served",
-              "contacted",
-              "skipped"
-            ]
-          },
           "email": {
+            "type": "string",
+            "nullable": true,
+            "description": "Per-campaign email (from campaign_journalists table)"
+          },
+          "apolloPersonId": {
             "type": "string",
             "nullable": true
           },
@@ -651,6 +638,30 @@
           },
           "createdAt": {
             "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "campaignId",
+          "featureSlug",
+          "workflowSlug",
+          "status",
+          "relevanceScore",
+          "whyRelevant",
+          "whyNotRelevant",
+          "articleUrls",
+          "email",
+          "apolloPersonId",
+          "runId",
+          "createdAt"
+        ]
+      },
+      "JournalistListItem": {
+        "type": "object",
+        "properties": {
+          "journalistId": {
+            "type": "string",
+            "format": "uuid"
           },
           "journalistName": {
             "type": "string"
@@ -670,36 +681,45 @@
               "organization"
             ]
           },
+          "outletId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true,
+            "description": "Global email (from journalists table apollo_email, fallback to best campaign email)"
+          },
+          "apolloPersonId": {
+            "type": "string",
+            "nullable": true
+          },
           "emailStatus": {
             "$ref": "#/components/schemas/JournalistEmailStatus"
           },
           "cost": {
             "$ref": "#/components/schemas/JournalistCost"
+          },
+          "campaigns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JournalistCampaignEntry"
+            },
+            "description": "Per-campaign entries for this journalist"
           }
         },
         "required": [
-          "id",
           "journalistId",
-          "campaignId",
-          "outletId",
-          "orgId",
-          "brandIds",
-          "featureSlug",
-          "workflowSlug",
-          "relevanceScore",
-          "whyRelevant",
-          "whyNotRelevant",
-          "articleUrls",
-          "status",
-          "email",
-          "runId",
-          "createdAt",
           "journalistName",
           "firstName",
           "lastName",
           "entityType",
+          "outletId",
+          "email",
+          "apolloPersonId",
           "emailStatus",
-          "cost"
+          "cost",
+          "campaigns"
         ]
       },
       "JournalistsListResponse": {
@@ -1335,7 +1355,7 @@
     },
     "/journalists/list": {
       "get": {
-        "summary": "List all journalists for an org+brand with email delivery statuses and costs. Enriches each journalist with broadcast/transactional delivery status from email-gateway and per-journalist cost from runs-service. Both enrichments are fail-open.",
+        "summary": "List journalists grouped by identity with per-campaign details. Each journalist has global data (email, cost, emailStatus) and a campaigns[] array with per-campaign entries. Filter by featureSlugs (CSV) and/or workflowSlug.",
         "security": [
           {
             "ApiKeyAuth": []
@@ -1361,11 +1381,29 @@
             "required": false,
             "name": "campaignId",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated feature slugs to filter campaign rows"
+            },
+            "required": false,
+            "name": "featureSlugs",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Optionally filter campaign rows by workflow slug"
+            },
+            "required": false,
+            "name": "workflowSlug",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "Enriched journalist list",
+            "description": "Grouped journalist list with per-campaign entries",
             "content": {
               "application/json": {
                 "schema": {

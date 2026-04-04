@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, arrayContains, eq, isNotNull } from "drizzle-orm";
+import { and, arrayContains, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { campaignJournalists, journalists } from "../db/schema.js";
 import { JournalistsListQuerySchema } from "../schemas.js";
@@ -8,79 +8,6 @@ import { fetchBatchRunCosts, type BatchRunCost } from "../lib/runs-client.js";
 import { type ServiceContext } from "../lib/service-context.js";
 
 const router = Router();
-
-// Status priority for dedup: prefer the most "advanced" status
-const STATUS_PRIORITY: Record<string, number> = {
-  contacted: 1,
-  served: 2,
-  claimed: 3,
-  buffered: 4,
-  skipped: 5,
-};
-
-type JournalistRow = {
-  id: string;
-  journalistId: string;
-  campaignId: string;
-  outletId: string;
-  orgId: string;
-  brandIds: string[];
-  featureSlug: string | null;
-  workflowSlug: string | null;
-  relevanceScore: string;
-  whyRelevant: string;
-  whyNotRelevant: string;
-  articleUrls: string[] | null;
-  status: "buffered" | "claimed" | "served" | "contacted" | "skipped";
-  email: string | null;
-  runId: string | null;
-  createdAt: Date;
-  journalistName: string;
-  firstName: string | null;
-  lastName: string | null;
-  entityType: "individual" | "organization";
-};
-
-/**
- * Deduplicate rows by journalist_id: keep the "best" row per journalist.
- * Priority: status (contacted > served > claimed > buffered > skipped),
- * then has email, then most recent.
- */
-function deduplicateByJournalist(rows: JournalistRow[]): JournalistRow[] {
-  const byJournalist = new Map<string, JournalistRow>();
-
-  for (const row of rows) {
-    const existing = byJournalist.get(row.journalistId);
-    if (!existing) {
-      byJournalist.set(row.journalistId, row);
-      continue;
-    }
-
-    const existingPriority = STATUS_PRIORITY[existing.status] ?? 99;
-    const rowPriority = STATUS_PRIORITY[row.status] ?? 99;
-
-    // Better status wins
-    if (rowPriority < existingPriority) {
-      byJournalist.set(row.journalistId, row);
-      continue;
-    }
-    if (rowPriority > existingPriority) continue;
-
-    // Same status: prefer row with email
-    if (row.email && !existing.email) {
-      byJournalist.set(row.journalistId, row);
-      continue;
-    }
-    if (!row.email && existing.email) continue;
-
-    // Same status, same email presence: prefer most recent
-    if (new Date(row.createdAt).getTime() > new Date(existing.createdAt).getTime()) {
-      byJournalist.set(row.journalistId, row);
-    }
-  }
-
-  return Array.from(byJournalist.values());
-}
 
 function buildCtx(locals: Record<string, unknown>): ServiceContext {
   return {
@@ -102,7 +29,7 @@ router.get("/journalists/list", async (req, res) => {
       return;
     }
 
-    const { brandId, campaignId } = parsed.data;
+    const { brandId, campaignId, featureSlugs, workflowSlug } = parsed.data;
     const orgId = res.locals.orgId as string;
 
     // 1. Query campaign_journalists + journalist details
@@ -113,6 +40,12 @@ router.get("/journalists/list", async (req, res) => {
     if (campaignId) {
       conditions.push(eq(campaignJournalists.campaignId, campaignId));
     }
+    if (featureSlugs && featureSlugs.length > 0) {
+      conditions.push(inArray(campaignJournalists.featureSlug, featureSlugs));
+    }
+    if (workflowSlug) {
+      conditions.push(eq(campaignJournalists.workflowSlug, workflowSlug));
+    }
 
     const rows = await db
       .select({
@@ -121,7 +54,6 @@ router.get("/journalists/list", async (req, res) => {
         campaignId: campaignJournalists.campaignId,
         outletId: campaignJournalists.outletId,
         orgId: campaignJournalists.orgId,
-        brandIds: campaignJournalists.brandIds,
         featureSlug: campaignJournalists.featureSlug,
         workflowSlug: campaignJournalists.workflowSlug,
         relevanceScore: campaignJournalists.relevanceScore,
@@ -129,13 +61,16 @@ router.get("/journalists/list", async (req, res) => {
         whyNotRelevant: campaignJournalists.whyNotRelevant,
         articleUrls: campaignJournalists.articleUrls,
         status: campaignJournalists.status,
-        email: campaignJournalists.email,
+        campaignEmail: campaignJournalists.email,
+        campaignApolloPersonId: campaignJournalists.apolloPersonId,
         runId: campaignJournalists.runId,
         createdAt: campaignJournalists.createdAt,
         journalistName: journalists.journalistName,
         firstName: journalists.firstName,
         lastName: journalists.lastName,
         entityType: journalists.entityType,
+        apolloEmail: journalists.apolloEmail,
+        apolloPersonId: journalists.apolloPersonId,
       })
       .from(campaignJournalists)
       .innerJoin(journalists, eq(campaignJournalists.journalistId, journalists.id))
@@ -146,15 +81,56 @@ router.get("/journalists/list", async (req, res) => {
       return;
     }
 
-    // When querying across campaigns (no campaignId filter), deduplicate by journalist_id.
-    // Pick the "best" row per journalist: prefer contacted > served > claimed > buffered > skipped,
-    // then prefer rows with email, then most recent.
-    const deduped = campaignId ? rows : deduplicateByJournalist(rows);
+    // 2. Group rows by journalistId
+    const grouped = new Map<string, {
+      journalistId: string;
+      journalistName: string;
+      firstName: string | null;
+      lastName: string | null;
+      entityType: "individual" | "organization";
+      outletId: string;
+      apolloEmail: string | null;
+      apolloPersonId: string | null;
+      campaigns: typeof rows;
+    }>();
 
-    // 2. Enrich with email statuses from email-gateway (fail-open)
-    const itemsWithEmail = deduped
-      .filter((r) => r.email)
-      .map((r) => ({ leadId: r.journalistId, email: r.email! }));
+    for (const row of rows) {
+      let group = grouped.get(row.journalistId);
+      if (!group) {
+        group = {
+          journalistId: row.journalistId,
+          journalistName: row.journalistName,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          entityType: row.entityType,
+          outletId: row.outletId,
+          apolloEmail: row.apolloEmail,
+          apolloPersonId: row.apolloPersonId,
+          campaigns: [],
+        };
+        grouped.set(row.journalistId, group);
+      }
+      group.campaigns.push(row);
+    }
+
+    // 3. Determine email for each journalist (global apollo_email, fallback to best campaign email)
+    const journalistEmails = new Map<string, string>();
+    for (const [journalistId, group] of grouped) {
+      if (group.apolloEmail) {
+        journalistEmails.set(journalistId, group.apolloEmail);
+      } else {
+        const campaignEmail = group.campaigns.find((c) => c.campaignEmail)?.campaignEmail;
+        if (campaignEmail) {
+          journalistEmails.set(journalistId, campaignEmail);
+        }
+      }
+    }
+
+    // 4. Enrich with email statuses from email-gateway (fail-open)
+    const itemsWithEmail = [...journalistEmails.entries()].map(([leadId, email]) => ({
+      leadId,
+      email,
+    }));
 
     let emailStatusMap = new Map<string, EmailGatewayStatusResult>();
     if (itemsWithEmail.length > 0) {
@@ -169,15 +145,14 @@ router.get("/journalists/list", async (req, res) => {
       }
     }
 
-    // 3. Enrich with costs from runs-service (fail-open)
-    const rowsWithRunId = deduped.filter((r) => r.runId);
+    // 5. Enrich with costs from runs-service (fail-open) — aggregate across ALL campaign rows
     const runToJournalists = new Map<string, string[]>();
-    for (const row of rowsWithRunId) {
-      const runId = row.runId!;
-      let list = runToJournalists.get(runId);
+    for (const row of rows) {
+      if (!row.runId) continue;
+      let list = runToJournalists.get(row.runId);
       if (!list) {
         list = [];
-        runToJournalists.set(runId, list);
+        runToJournalists.set(row.runId, list);
       }
       list.push(row.journalistId);
     }
@@ -218,32 +193,21 @@ router.get("/journalists/list", async (req, res) => {
       }
     }
 
-    // 4. Build response
-    const enrichedJournalists = deduped.map((row) => {
-      const emailStatus = emailStatusMap.get(row.journalistId) ?? null;
-      const cost = journalistCostMap.get(row.journalistId) ?? null;
+    // 6. Build response
+    const enrichedJournalists = [...grouped.values()].map((group) => {
+      const emailStatus = emailStatusMap.get(group.journalistId) ?? null;
+      const cost = journalistCostMap.get(group.journalistId) ?? null;
+      const email = journalistEmails.get(group.journalistId) ?? null;
 
       return {
-        id: row.id,
-        journalistId: row.journalistId,
-        campaignId: row.campaignId,
-        outletId: row.outletId,
-        orgId: row.orgId,
-        brandIds: row.brandIds,
-        featureSlug: row.featureSlug,
-        workflowSlug: row.workflowSlug,
-        relevanceScore: row.relevanceScore,
-        whyRelevant: row.whyRelevant,
-        whyNotRelevant: row.whyNotRelevant,
-        articleUrls: row.articleUrls,
-        status: row.status,
-        email: row.email,
-        runId: row.runId,
-        createdAt: row.createdAt,
-        journalistName: row.journalistName,
-        firstName: row.firstName,
-        lastName: row.lastName,
-        entityType: row.entityType,
+        journalistId: group.journalistId,
+        journalistName: group.journalistName,
+        firstName: group.firstName,
+        lastName: group.lastName,
+        entityType: group.entityType,
+        outletId: group.outletId,
+        email,
+        apolloPersonId: group.apolloPersonId,
         emailStatus: emailStatus
           ? {
               broadcast: emailStatus.broadcast,
@@ -258,6 +222,21 @@ router.get("/journalists/list", async (req, res) => {
               runCount: cost.runCount,
             }
           : null,
+        campaigns: group.campaigns.map((c) => ({
+          id: c.id,
+          campaignId: c.campaignId,
+          featureSlug: c.featureSlug,
+          workflowSlug: c.workflowSlug,
+          status: c.status,
+          relevanceScore: c.relevanceScore,
+          whyRelevant: c.whyRelevant,
+          whyNotRelevant: c.whyNotRelevant,
+          articleUrls: c.articleUrls,
+          email: c.campaignEmail,
+          apolloPersonId: c.campaignApolloPersonId,
+          runId: c.runId,
+          createdAt: c.createdAt,
+        })),
       };
     });
 
