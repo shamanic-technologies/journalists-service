@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import request from "supertest";
 import { createTestApp, AUTH_HEADERS } from "../helpers/test-app.js";
 import {
@@ -10,6 +10,9 @@ import {
 
 const app = createTestApp();
 
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
+
 const OUTLET_ID = "11111111-1111-1111-1111-111111111111";
 const OUTLET_ID_2 = "11111111-1111-1111-1111-222222222222";
 const ORG_ID = "22222222-2222-2222-2222-222222222222";
@@ -20,6 +23,7 @@ const CAMPAIGN_ID_2 = "55555555-5555-5555-5555-666666666666";
 describe("GET /campaign-outlet-journalists", () => {
   beforeEach(async () => {
     await cleanTestData();
+    mockFetch.mockReset();
   });
 
   afterAll(async () => {
@@ -265,5 +269,53 @@ describe("GET /campaign-outlet-journalists", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.campaignJournalists[0]).toHaveProperty("runId", RUN_ID);
+  });
+
+  it("filters by feature_dynasty_slug — resolves dynasty to versioned slugs", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dynasty Hit" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dynasty Miss" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, featureSlug: "pr-outreach-v2",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, featureSlug: "cold-email-v1",
+    });
+
+    // Mock features-service dynasty resolution
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ slugs: ["pr-outreach-v1", "pr-outreach-v2"] }),
+    });
+
+    const res = await request(app)
+      .get(`/campaign-outlet-journalists?brand_id=${BRAND_ID}&feature_dynasty_slug=pr-outreach`)
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.campaignJournalists).toHaveLength(1);
+    expect(res.body.campaignJournalists[0].journalistName).toBe("Dynasty Hit");
+  });
+
+  it("returns empty array when dynasty slug resolves to no slugs", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "No Match" });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, featureSlug: "some-feature",
+    });
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ slugs: [] }),
+    });
+
+    const res = await request(app)
+      .get(`/campaign-outlet-journalists?brand_id=${BRAND_ID}&feature_dynasty_slug=nonexistent`)
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.campaignJournalists).toHaveLength(0);
   });
 });

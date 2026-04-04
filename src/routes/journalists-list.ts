@@ -5,6 +5,7 @@ import { campaignJournalists, journalists } from "../db/schema.js";
 import { JournalistsListQuerySchema } from "../schemas.js";
 import { checkEmailStatuses, type EmailGatewayStatusResult } from "../lib/email-gateway-client.js";
 import { fetchBatchRunCosts, type BatchRunCost } from "../lib/runs-client.js";
+import { resolveFeatureDynastySlugs } from "../lib/dynasty-client.js";
 import { type ServiceContext } from "../lib/service-context.js";
 
 const router = Router();
@@ -29,10 +30,26 @@ router.get("/journalists/list", async (req, res) => {
       return;
     }
 
-    const { brandId, campaignId, featureSlugs, workflowSlug } = parsed.data;
+    const { brandId, campaignId, featureSlugs, featureDynastySlug, workflowSlug } = parsed.data;
     const orgId = res.locals.orgId as string;
 
-    // 1. Query campaign_journalists + journalist details
+    // 1. Resolve dynasty slug to versioned slugs (if provided)
+    const passthroughHeaders: Record<string, string> = {};
+    if (res.locals.orgId) passthroughHeaders["x-org-id"] = res.locals.orgId as string;
+    if (res.locals.userId) passthroughHeaders["x-user-id"] = res.locals.userId as string;
+    if (res.locals.runId) passthroughHeaders["x-run-id"] = res.locals.runId as string;
+
+    let resolvedFeatureSlugs: string[] | undefined = featureSlugs;
+    if (featureDynastySlug) {
+      const dynastySlugs = await resolveFeatureDynastySlugs(featureDynastySlug, passthroughHeaders);
+      if (dynastySlugs.length === 0) {
+        res.json({ journalists: [] });
+        return;
+      }
+      resolvedFeatureSlugs = dynastySlugs;
+    }
+
+    // 2. Query campaign_journalists + journalist details
     const conditions = [
       eq(campaignJournalists.orgId, orgId),
       arrayContains(campaignJournalists.brandIds, [brandId]),
@@ -40,8 +57,8 @@ router.get("/journalists/list", async (req, res) => {
     if (campaignId) {
       conditions.push(eq(campaignJournalists.campaignId, campaignId));
     }
-    if (featureSlugs && featureSlugs.length > 0) {
-      conditions.push(inArray(campaignJournalists.featureSlug, featureSlugs));
+    if (resolvedFeatureSlugs && resolvedFeatureSlugs.length > 0) {
+      conditions.push(inArray(campaignJournalists.featureSlug, resolvedFeatureSlugs));
     }
     if (workflowSlug) {
       conditions.push(eq(campaignJournalists.workflowSlug, workflowSlug));
