@@ -224,7 +224,21 @@
               "type": "string"
             }
           },
-          "status": {
+          "consolidatedStatus": {
+            "type": "string",
+            "enum": [
+              "buffered",
+              "claimed",
+              "served",
+              "contacted",
+              "delivered",
+              "replied",
+              "bounced",
+              "skipped"
+            ],
+            "description": "Consolidated status: email-gateway status when available, otherwise local DB status"
+          },
+          "localStatus": {
             "type": "string",
             "enum": [
               "buffered",
@@ -232,7 +246,19 @@
               "served",
               "contacted",
               "skipped"
-            ]
+            ],
+            "description": "Status from the local database"
+          },
+          "emailGatewayStatus": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "contacted",
+              "delivered",
+              "replied",
+              "bounced"
+            ],
+            "description": "Status derived from email-gateway. Null if no email-gateway data."
           },
           "runId": {
             "type": "string",
@@ -273,7 +299,9 @@
           "whyRelevant",
           "whyNotRelevant",
           "articleUrls",
-          "status",
+          "consolidatedStatus",
+          "localStatus",
+          "emailGatewayStatus",
           "runId",
           "createdAt",
           "journalistName",
@@ -301,7 +329,7 @@
         "additionalProperties": {
           "type": "number"
         },
-        "description": "Map of buffer status to journalist count. Possible keys: buffered, claimed, served, contacted, skipped. The 'contacted' key is enriched from lead-service."
+        "description": "Map of status to journalist count. Local statuses: buffered, claimed, served, skipped. Email-gateway enriched statuses: contacted, delivered, replied, bounced."
       },
       "GroupedEntry": {
         "type": "object",
@@ -596,7 +624,21 @@
             "type": "string",
             "nullable": true
           },
-          "status": {
+          "consolidatedStatus": {
+            "type": "string",
+            "enum": [
+              "buffered",
+              "claimed",
+              "served",
+              "contacted",
+              "delivered",
+              "replied",
+              "bounced",
+              "skipped"
+            ],
+            "description": "Consolidated status: email-gateway status when available, otherwise local DB status"
+          },
+          "localStatus": {
             "type": "string",
             "enum": [
               "buffered",
@@ -604,7 +646,19 @@
               "served",
               "contacted",
               "skipped"
-            ]
+            ],
+            "description": "Status from the local database"
+          },
+          "emailGatewayStatus": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "contacted",
+              "delivered",
+              "replied",
+              "bounced"
+            ],
+            "description": "Status derived from email-gateway. Null if no email-gateway data."
           },
           "relevanceScore": {
             "type": "string"
@@ -645,7 +699,9 @@
           "campaignId",
           "featureSlug",
           "workflowSlug",
-          "status",
+          "consolidatedStatus",
+          "localStatus",
+          "emailGatewayStatus",
           "relevanceScore",
           "whyRelevant",
           "whyNotRelevant",

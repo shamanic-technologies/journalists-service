@@ -10,8 +10,11 @@ import {
   fetchWorkflowDynasties,
   buildSlugToDynastyMap,
 } from "../lib/dynasty-client.js";
-import { fetchLeadStats, fetchLeadStatsGrouped } from "../lib/lead-client.js";
-import type { LeadStatsParams } from "../lib/lead-client.js";
+import {
+  fetchEmailGatewayStats,
+  fetchEmailGatewayStatsGrouped,
+  type EmailGatewayStatsParams,
+} from "../lib/email-gateway-client.js";
 
 const router = Router();
 
@@ -99,20 +102,22 @@ async function resolveFiltersAndQuery(
     total += row.count;
   }
 
-  // Enrich with contacted count from lead-service (fail-open)
-  const leadParams: LeadStatsParams = {
+  // Enrich with contacted/delivered/replied/bounced from email-gateway (fail-open)
+  const gwParams: EmailGatewayStatsParams = {
     campaignId: query.campaignId,
     brandId: query.brandId,
-    orgId: query.orgId,
     featureSlug: query.featureSlug,
     featureSlugs: query.featureSlugs,
     workflowSlug: query.workflowSlug,
     featureDynastySlug: query.featureDynastySlug,
     workflowDynastySlug: query.workflowDynastySlug,
   };
-  const leadStats = await fetchLeadStats(leadParams, passthroughHeaders);
-  if (leadStats && leadStats.contacted > 0) {
-    byStatus.contacted = leadStats.contacted;
+  const gwStats = await fetchEmailGatewayStats(gwParams, passthroughHeaders);
+  if (gwStats) {
+    if (gwStats.emailsContacted > 0) byStatus.contacted = gwStats.emailsContacted;
+    if (gwStats.emailsDelivered > 0) byStatus.delivered = gwStats.emailsDelivered;
+    if (gwStats.emailsReplied > 0) byStatus.replied = gwStats.emailsReplied;
+    if (gwStats.emailsBounced > 0) byStatus.bounced = gwStats.emailsBounced;
   }
 
   const result: StatsResult = { totalJournalists: total, byStatus };
@@ -158,13 +163,16 @@ async function resolveFiltersAndQuery(
       entry.totalJournalists += row.count;
     }
 
-    // Enrich grouped results with contacted from lead-service
-    const leadGrouped = await fetchLeadStatsGrouped(leadParams, groupBy, passthroughHeaders);
-    if (leadGrouped) {
-      for (const group of leadGrouped.groups) {
+    // Enrich grouped results with email-gateway stats
+    const gwGrouped = await fetchEmailGatewayStatsGrouped(gwParams, groupBy, passthroughHeaders);
+    if (gwGrouped) {
+      for (const group of gwGrouped.groups) {
         const entry = dynastyMap.get(group.key);
-        if (entry && group.contacted > 0) {
-          entry.byStatus.contacted = group.contacted;
+        if (entry && group.broadcast) {
+          if (group.broadcast.emailsContacted > 0) entry.byStatus.contacted = group.broadcast.emailsContacted;
+          if (group.broadcast.emailsDelivered > 0) entry.byStatus.delivered = group.broadcast.emailsDelivered;
+          if (group.broadcast.emailsReplied > 0) entry.byStatus.replied = group.broadcast.emailsReplied;
+          if (group.broadcast.emailsBounced > 0) entry.byStatus.bounced = group.broadcast.emailsBounced;
         }
       }
     }
@@ -195,13 +203,16 @@ async function resolveFiltersAndQuery(
       entry.totalJournalists += row.count;
     }
 
-    // Enrich grouped results with contacted from lead-service
-    const leadGrouped = await fetchLeadStatsGrouped(leadParams, groupBy, passthroughHeaders);
-    if (leadGrouped) {
-      for (const group of leadGrouped.groups) {
+    // Enrich grouped results with email-gateway stats
+    const gwGrouped = await fetchEmailGatewayStatsGrouped(gwParams, groupBy, passthroughHeaders);
+    if (gwGrouped) {
+      for (const group of gwGrouped.groups) {
         const entry = slugMap.get(group.key);
-        if (entry && group.contacted > 0) {
-          entry.byStatus.contacted = group.contacted;
+        if (entry && group.broadcast) {
+          if (group.broadcast.emailsContacted > 0) entry.byStatus.contacted = group.broadcast.emailsContacted;
+          if (group.broadcast.emailsDelivered > 0) entry.byStatus.delivered = group.broadcast.emailsDelivered;
+          if (group.broadcast.emailsReplied > 0) entry.byStatus.replied = group.broadcast.emailsReplied;
+          if (group.broadcast.emailsBounced > 0) entry.byStatus.bounced = group.broadcast.emailsBounced;
         }
       }
     }
