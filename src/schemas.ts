@@ -186,6 +186,8 @@ export const JournalistsListQuerySchema = z
   .object({
     brandId: z.string().uuid().openapi({ description: "Brand ID (required). Returns journalists whose brand_ids array contains this brand." }),
     campaignId: z.string().uuid().optional().openapi({ description: "Optionally narrow to a single campaign" }),
+    featureSlugs: z.string().optional().openapi({ description: "Comma-separated feature slugs to filter campaign rows" }).transform((val) => val ? val.split(",").map((s) => s.trim()).filter(Boolean) : undefined),
+    workflowSlug: z.string().optional().openapi({ description: "Optionally filter campaign rows by workflow slug" }),
   })
   .openapi("JournalistsListQuery");
 
@@ -233,29 +235,34 @@ const JournalistCostSchema = z.object({
   runCount: z.number().openapi({ description: "Number of distinct runs contributing to this cost" }),
 }).openapi("JournalistCost");
 
-const JournalistListItemSchema = z.object({
-  id: z.string().uuid(),
-  journalistId: z.string().uuid(),
+const JournalistCampaignEntrySchema = z.object({
+  id: z.string().uuid().openapi({ description: "campaign_journalist row ID" }),
   campaignId: z.string().uuid(),
-  outletId: z.string().uuid(),
-  orgId: z.string().uuid(),
-  brandIds: z.array(z.string().uuid()),
   featureSlug: z.string().nullable(),
   workflowSlug: z.string().nullable(),
+  status: z.enum(["buffered", "claimed", "served", "contacted", "skipped"]),
   relevanceScore: z.string(),
   whyRelevant: z.string(),
   whyNotRelevant: z.string(),
   articleUrls: z.array(z.string()).nullable(),
-  status: z.enum(["buffered", "claimed", "served", "contacted", "skipped"]),
-  email: z.string().nullable(),
+  email: z.string().nullable().openapi({ description: "Per-campaign email (from campaign_journalists table)" }),
+  apolloPersonId: z.string().nullable(),
   runId: z.string().uuid().nullable(),
   createdAt: z.string(),
+}).openapi("JournalistCampaignEntry");
+
+const JournalistListItemSchema = z.object({
+  journalistId: z.string().uuid(),
   journalistName: z.string(),
   firstName: z.string().nullable(),
   lastName: z.string().nullable(),
   entityType: z.enum(["individual", "organization"]),
+  outletId: z.string().uuid(),
+  email: z.string().nullable().openapi({ description: "Global email (from journalists table apollo_email, fallback to best campaign email)" }),
+  apolloPersonId: z.string().nullable(),
   emailStatus: JournalistEmailStatusSchema.nullable().openapi({ description: "Email delivery statuses from email-gateway. Null if journalist has no email or email-gateway is unreachable." }),
-  cost: JournalistCostSchema.nullable().openapi({ description: "Per-journalist cost from runs-service. Null if no runs or runs-service is unreachable." }),
+  cost: JournalistCostSchema.nullable().openapi({ description: "Per-journalist cost aggregated across all campaigns. Null if no runs or runs-service is unreachable." }),
+  campaigns: z.array(JournalistCampaignEntrySchema).openapi({ description: "Per-campaign entries for this journalist" }),
 }).openapi("JournalistListItem");
 
 export const JournalistsListResponseSchema = z.object({
@@ -312,7 +319,7 @@ registry.registerPath({ method: "get", path: "/stats/public", summary: "Get jour
 registry.registerPath({ method: "get", path: "/journalists/stats/costs", summary: "Get cost stats for journalist discovery runs. Returns aggregated costs from runs-service, distributed per journalist. Requires x-org-id to scope costs to the requesting org.", security: [{ [apiKeyAuth.name]: [] }], request: { query: CostStatsQuerySchema }, responses: { 200: { description: "Cost stats (flat or grouped by journalistId)", content: { "application/json": { schema: CostStatsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Journalists List
-registry.registerPath({ method: "get", path: "/journalists/list", summary: "List all journalists for an org+brand with email delivery statuses and costs. Enriches each journalist with broadcast/transactional delivery status from email-gateway and per-journalist cost from runs-service. Both enrichments are fail-open.", security: [{ [apiKeyAuth.name]: [] }], request: { query: JournalistsListQuerySchema }, responses: { 200: { description: "Enriched journalist list", content: { "application/json": { schema: JournalistsListResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+registry.registerPath({ method: "get", path: "/journalists/list", summary: "List journalists grouped by identity with per-campaign details. Each journalist has global data (email, cost, emailStatus) and a campaigns[] array with per-campaign entries. Filter by featureSlugs (CSV) and/or workflowSlug.", security: [{ [apiKeyAuth.name]: [] }], request: { query: JournalistsListQuerySchema }, responses: { 200: { description: "Grouped journalist list with per-campaign entries", content: { "application/json": { schema: JournalistsListResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Internal — Outlet blocked check
 registry.registerPath({ method: "get", path: "/internal/outlets/blocked", summary: "Check if an outlet is blocked for a brand+org. Uses full dedup logic: checks lead-service for prior contacts, reply classification, 30-day no-reply cooldown, and 12-month expiry.", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ org_id: z.string().uuid().openapi({ description: "Organization ID" }), brand_ids: z.string().openapi({ description: "Comma-separated brand UUIDs", example: "uuid1,uuid2" }), outlet_id: z.string().uuid().openapi({ description: "Outlet ID to check" }) }) }, responses: { 200: { description: "Outlet blocked status", content: { "application/json": { schema: z.object({ blocked: z.boolean().openapi({ description: "Whether this outlet is blocked for the given brand+org" }), reason: z.string().optional().openapi({ description: "Human-readable reason when blocked" }) }).openapi("OutletBlockedResponse") } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });

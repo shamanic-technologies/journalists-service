@@ -222,6 +222,68 @@ async function mergeByApolloPersonId(
   }
 }
 
+// ── Global journalist merge by Apollo email ─────────────────────────
+
+/**
+ * When Apollo resolves two journalist records at the same outlet to the same
+ * email, they are the same person under different name variants.
+ * Merge: keep the older record (canonical), reassign campaign_journalists
+ * from the duplicate, delete the duplicate.
+ */
+async function mergeByApolloEmail(
+  currentJournalistId: string,
+  apolloEmail: string,
+  outletId: string
+): Promise<void> {
+  // Find all journalists at this outlet with the same apollo_email
+  const matches = await db
+    .select({ id: journalists.id, createdAt: journalists.createdAt })
+    .from(journalists)
+    .where(
+      and(
+        eq(journalists.outletId, outletId),
+        eq(journalists.apolloEmail, apolloEmail)
+      )
+    );
+
+  if (matches.length <= 1) return; // No duplicates
+
+  // Canonical = oldest record
+  matches.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  const canonicalId = matches[0].id;
+  const duplicateIds = matches.slice(1).map((m) => m.id);
+
+  for (const dupId of duplicateIds) {
+    console.log(
+      `[journalists-service] Merging journalist ${dupId} into ${canonicalId} (same apollo_email=${apolloEmail})`
+    );
+
+    // Reassign campaign_journalists, skipping conflicts (same campaign+outlet+journalist)
+    await pgClient`
+      UPDATE campaign_journalists
+      SET journalist_id = ${canonicalId}
+      WHERE journalist_id = ${dupId}
+        AND NOT EXISTS (
+          SELECT 1 FROM campaign_journalists existing
+          WHERE existing.journalist_id = ${canonicalId}
+            AND existing.campaign_id = campaign_journalists.campaign_id
+            AND existing.outlet_id = campaign_journalists.outlet_id
+        )
+    `;
+
+    // Delete any remaining campaign_journalists pointing to the duplicate
+    // (these are the conflicting rows — canonical already has an entry for that campaign)
+    await db
+      .delete(campaignJournalists)
+      .where(eq(campaignJournalists.journalistId, dupId));
+
+    // Delete the duplicate journalist record
+    await db
+      .delete(journalists)
+      .where(eq(journalists.id, dupId));
+  }
+}
+
 // ── Resolve email via Apollo + email-gateway dedup ──────────────────
 
 interface ResolvedEmail {
@@ -395,6 +457,14 @@ async function resolveAndCheckEmail(
       await mergeByApolloPersonId(
         claimed.journalistId,
         apolloResult.person.id,
+        cached.outletId
+      );
+    }
+
+    if (apolloResult.person?.email && cached?.outletId) {
+      await mergeByApolloEmail(
+        claimed.journalistId,
+        apolloResult.person.email,
         cached.outletId
       );
     }
