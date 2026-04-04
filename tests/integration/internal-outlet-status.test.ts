@@ -35,9 +35,14 @@ const OUTLET_C = "aaaa0000-0000-0000-0000-000000000003";
 function makeEmailGatewayResult(
   leadId: string,
   email: string,
-  overrides: { contacted?: boolean; delivered?: boolean; replied?: boolean } = {}
+  overrides: {
+    contacted?: boolean;
+    delivered?: boolean;
+    replied?: boolean;
+    replyClassification?: "positive" | "negative" | "neutral" | null;
+  } = {}
 ): EmailGatewayStatusResult {
-  const { contacted = false, delivered = false, replied = false } = overrides;
+  const { contacted = false, delivered = false, replied = false, replyClassification = null } = overrides;
   return {
     leadId,
     email,
@@ -47,7 +52,7 @@ function makeEmailGatewayResult(
           contacted,
           delivered,
           replied,
-          replyClassification: null,
+          replyClassification,
           lastDeliveredAt: null,
         },
         email: {
@@ -101,6 +106,7 @@ describe("POST /internal/outlets/status", () => {
     expect(res.status).toBe(200);
     expect(res.body.results[OUTLET_A]).toEqual({
       status: "served",
+      replyClassification: null,
       journalistCount: 1,
       contactedCount: 0,
     });
@@ -130,6 +136,7 @@ describe("POST /internal/outlets/status", () => {
     expect(res.status).toBe(200);
     expect(res.body.results[OUTLET_A]).toEqual({
       status: "contacted",
+      replyClassification: null,
       journalistCount: 1,
       contactedCount: 1,
     });
@@ -159,6 +166,7 @@ describe("POST /internal/outlets/status", () => {
     expect(res.status).toBe(200);
     expect(res.body.results[OUTLET_A]).toEqual({
       status: "delivered",
+      replyClassification: null,
       journalistCount: 1,
       contactedCount: 1,
     });
@@ -177,7 +185,7 @@ describe("POST /internal/outlets/status", () => {
     });
 
     mockedCheckEmailStatuses.mockResolvedValue([
-      makeEmailGatewayResult(j1.id, "j1@test.com", { contacted: true, delivered: true, replied: true }),
+      makeEmailGatewayResult(j1.id, "j1@test.com", { contacted: true, delivered: true, replied: true, replyClassification: "negative" }),
     ]);
 
     const res = await request(app)
@@ -188,6 +196,7 @@ describe("POST /internal/outlets/status", () => {
     expect(res.status).toBe(200);
     expect(res.body.results[OUTLET_A]).toEqual({
       status: "replied",
+      replyClassification: "negative",
       journalistCount: 1,
       contactedCount: 1,
     });
@@ -218,7 +227,7 @@ describe("POST /internal/outlets/status", () => {
 
     mockedCheckEmailStatuses.mockResolvedValue([
       makeEmailGatewayResult(j1.id, "j1@test.com", { contacted: true }),
-      makeEmailGatewayResult(j2.id, "j2@test.com", { contacted: true, delivered: true, replied: true }),
+      makeEmailGatewayResult(j2.id, "j2@test.com", { contacted: true, delivered: true, replied: true, replyClassification: "neutral" }),
     ]);
 
     const res = await request(app)
@@ -229,6 +238,7 @@ describe("POST /internal/outlets/status", () => {
     expect(res.status).toBe(200);
     expect(res.body.results[OUTLET_A]).toEqual({
       status: "replied",
+      replyClassification: "neutral",
       journalistCount: 2,
       contactedCount: 2,
     });
@@ -268,11 +278,13 @@ describe("POST /internal/outlets/status", () => {
     expect(res.status).toBe(200);
     expect(res.body.results[OUTLET_A]).toEqual({
       status: "delivered",
+      replyClassification: null,
       journalistCount: 1,
       contactedCount: 1,
     });
     expect(res.body.results[OUTLET_B]).toEqual({
       status: "served",
+      replyClassification: null,
       journalistCount: 1,
       contactedCount: 0,
     });
@@ -289,6 +301,7 @@ describe("POST /internal/outlets/status", () => {
     expect(res.status).toBe(200);
     expect(res.body.results[OUTLET_C]).toEqual({
       status: "served",
+      replyClassification: null,
       journalistCount: 0,
       contactedCount: 0,
     });
@@ -354,6 +367,122 @@ describe("POST /internal/outlets/status", () => {
       .send({ outletIds: [OUTLET_A] });
 
     expect(res.status).toBe(502);
+  });
+
+  it("returns best replyClassification across journalists (positive > negative > neutral)", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J2" });
+    const j3 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J3" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_A,
+      status: "served",
+      email: "j1@test.com",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_A,
+      status: "served",
+      email: "j2@test.com",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j3.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_A,
+      status: "served",
+      email: "j3@test.com",
+    });
+
+    mockedCheckEmailStatuses.mockResolvedValue([
+      makeEmailGatewayResult(j1.id, "j1@test.com", { contacted: true, delivered: true, replied: true, replyClassification: "neutral" }),
+      makeEmailGatewayResult(j2.id, "j2@test.com", { contacted: true, delivered: true, replied: true, replyClassification: "negative" }),
+      makeEmailGatewayResult(j3.id, "j3@test.com", { contacted: true, delivered: true, replied: true, replyClassification: "positive" }),
+    ]);
+
+    const res = await request(app)
+      .post("/internal/outlets/status")
+      .set(AUTH_HEADERS)
+      .send({ outletIds: [OUTLET_A] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[OUTLET_A]).toEqual({
+      status: "replied",
+      replyClassification: "positive",
+      journalistCount: 3,
+      contactedCount: 3,
+    });
+  });
+
+  it("returns negative over neutral for replyClassification", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J2" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_A,
+      status: "served",
+      email: "j1@test.com",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_A,
+      status: "served",
+      email: "j2@test.com",
+    });
+
+    mockedCheckEmailStatuses.mockResolvedValue([
+      makeEmailGatewayResult(j1.id, "j1@test.com", { contacted: true, delivered: true, replied: true, replyClassification: "neutral" }),
+      makeEmailGatewayResult(j2.id, "j2@test.com", { contacted: true, delivered: true, replied: true, replyClassification: "negative" }),
+    ]);
+
+    const res = await request(app)
+      .post("/internal/outlets/status")
+      .set(AUTH_HEADERS)
+      .send({ outletIds: [OUTLET_A] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[OUTLET_A].replyClassification).toBe("negative");
+  });
+
+  it("replyClassification is null when replied but no classification available", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J1" });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_A,
+      status: "served",
+      email: "j1@test.com",
+    });
+
+    mockedCheckEmailStatuses.mockResolvedValue([
+      makeEmailGatewayResult(j1.id, "j1@test.com", { contacted: true, delivered: true, replied: true }),
+    ]);
+
+    const res = await request(app)
+      .post("/internal/outlets/status")
+      .set(AUTH_HEADERS)
+      .send({ outletIds: [OUTLET_A] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[OUTLET_A].status).toBe("replied");
+    expect(res.body.results[OUTLET_A].replyClassification).toBeNull();
   });
 
   it("does not call email-gateway when no journalists have emails", async () => {

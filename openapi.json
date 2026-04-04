@@ -771,6 +771,16 @@
           "status": {
             "$ref": "#/components/schemas/EnrichedStatus"
           },
+          "replyClassification": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "positive",
+              "negative",
+              "neutral"
+            ],
+            "description": "Best reply classification across all journalists when status is replied. Hierarchy: positive > negative > neutral. Null when status is not replied."
+          },
           "journalistCount": {
             "type": "integer",
             "description": "Total journalists associated with this outlet"
@@ -782,6 +792,7 @@
         },
         "required": [
           "status",
+          "replyClassification",
           "journalistCount",
           "contactedCount"
         ]
