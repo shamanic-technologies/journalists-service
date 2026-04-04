@@ -107,8 +107,6 @@ describe("POST /internal/outlets/status", () => {
     expect(res.body.results[OUTLET_A]).toEqual({
       status: "served",
       replyClassification: null,
-      journalistCount: 1,
-      contactedCount: 0,
     });
   });
 
@@ -137,8 +135,6 @@ describe("POST /internal/outlets/status", () => {
     expect(res.body.results[OUTLET_A]).toEqual({
       status: "contacted",
       replyClassification: null,
-      journalistCount: 1,
-      contactedCount: 1,
     });
   });
 
@@ -167,8 +163,6 @@ describe("POST /internal/outlets/status", () => {
     expect(res.body.results[OUTLET_A]).toEqual({
       status: "delivered",
       replyClassification: null,
-      journalistCount: 1,
-      contactedCount: 1,
     });
   });
 
@@ -197,8 +191,6 @@ describe("POST /internal/outlets/status", () => {
     expect(res.body.results[OUTLET_A]).toEqual({
       status: "replied",
       replyClassification: "negative",
-      journalistCount: 1,
-      contactedCount: 1,
     });
   });
 
@@ -239,8 +231,6 @@ describe("POST /internal/outlets/status", () => {
     expect(res.body.results[OUTLET_A]).toEqual({
       status: "replied",
       replyClassification: "neutral",
-      journalistCount: 2,
-      contactedCount: 2,
     });
   });
 
@@ -279,14 +269,10 @@ describe("POST /internal/outlets/status", () => {
     expect(res.body.results[OUTLET_A]).toEqual({
       status: "delivered",
       replyClassification: null,
-      journalistCount: 1,
-      contactedCount: 1,
     });
     expect(res.body.results[OUTLET_B]).toEqual({
       status: "served",
       replyClassification: null,
-      journalistCount: 1,
-      contactedCount: 0,
     });
   });
 
@@ -302,8 +288,6 @@ describe("POST /internal/outlets/status", () => {
     expect(res.body.results[OUTLET_C]).toEqual({
       status: "served",
       replyClassification: null,
-      journalistCount: 0,
-      contactedCount: 0,
     });
   });
 
@@ -417,8 +401,6 @@ describe("POST /internal/outlets/status", () => {
     expect(res.body.results[OUTLET_A]).toEqual({
       status: "replied",
       replyClassification: "positive",
-      journalistCount: 3,
-      contactedCount: 3,
     });
   });
 
