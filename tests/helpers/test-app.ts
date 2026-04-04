@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import healthRoutes from "../../src/routes/health.js";
 import internalRoutes from "../../src/routes/internal.js";
+import internalOutletStatusRoutes from "../../src/routes/internal-outlet-status.js";
 import bufferNextRoutes from "../../src/routes/buffer-next.js";
 import discoverRoutes from "../../src/routes/discover.js";
 import campaignOutletJournalistsRoutes from "../../src/routes/campaign-outlet-journalists.js";
@@ -24,6 +25,7 @@ export function createTestApp() {
   dashboardRouter.use(statsRoutes);
   dashboardRouter.use(statsCostsRoutes);
   dashboardRouter.use(journalistsListRoutes);
+  dashboardRouter.use(internalOutletStatusRoutes);
   app.use(dashboardRouter);
   // Private routes — require all identity headers
   app.use(requireIdentityHeaders);

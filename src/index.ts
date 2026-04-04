@@ -8,6 +8,7 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { db } from "./db/index.js";
 import healthRoutes from "./routes/health.js";
 import internalRoutes from "./routes/internal.js";
+import internalOutletStatusRoutes from "./routes/internal-outlet-status.js";
 import bufferNextRoutes from "./routes/buffer-next.js";
 import discoverRoutes from "./routes/discover.js";
 import campaignOutletJournalistsRoutes from "./routes/campaign-outlet-journalists.js";
@@ -53,6 +54,7 @@ dashboardRouter.use(requireBaseHeaders);
 dashboardRouter.use(statsRoutes);
 dashboardRouter.use(statsCostsRoutes);
 dashboardRouter.use(journalistsListRoutes);
+dashboardRouter.use(internalOutletStatusRoutes);
 app.use(dashboardRouter);
 
 // Private routes — require all identity headers
