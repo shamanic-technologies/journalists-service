@@ -205,6 +205,8 @@ export async function storeJournalists(
 ): Promise<StoredJournalist[]> {
   const stored: StoredJournalist[] = [];
 
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
   for (const j of llmJournalists) {
     const journalistName = `${j.firstName} ${j.lastName}`;
 
@@ -213,7 +215,8 @@ export async function storeJournalists(
     let matched = false;
 
     // If LLM matched to an existing journalist, use that directly
-    if (j.existingJournalistId) {
+    // Guard: LLM sometimes returns labels like "Journalist 1" instead of a UUID
+    if (j.existingJournalistId && UUID_RE.test(j.existingJournalistId)) {
       const existingById = await db
         .select()
         .from(journalists)
