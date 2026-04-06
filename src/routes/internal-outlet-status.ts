@@ -41,6 +41,8 @@ router.post("/orgs/outlets/status", async (req, res) => {
   const campaignId = (res.locals.campaignId as string) || "";
   const brandIds = (res.locals.brandIds as string[]) || [];
 
+  console.log(`[journalists-service] POST /orgs/outlets/status INPUT: outletIds=${JSON.stringify(outletIds)}, headers: orgId=${orgId}, campaignId=${campaignId || "(empty)"}, brandIds=${JSON.stringify(brandIds)}, userId=${res.locals.userId ?? "(none)"}, runId=${res.locals.runId ?? "(none)"}`);
+
   try {
     // 1. Get all campaign_journalists for these outlets, scoped by org (+ campaign when provided)
     const conditions = [
@@ -71,6 +73,8 @@ router.post("/orgs/outlets/status", async (req, res) => {
       list.push(row);
       byOutlet.set(row.outletId, list);
     }
+
+    console.log(`[journalists-service] POST /orgs/outlets/status DB: ${rows.length} campaign_journalists found, rows: ${JSON.stringify(rows.map(r => ({ cjId: r.cjId, outletId: r.outletId, journalistId: r.journalistId, status: r.status, campaignEmail: r.email, apolloEmail: r.apolloEmail })))}`);
 
     // 2. Collect all journalists with emails for email-gateway batch call
     // Resolve email: apollo_email (global) takes priority, fallback to campaign email
@@ -107,11 +111,15 @@ router.post("/orgs/outlets/status", async (req, res) => {
         workflowSlug: res.locals.workflowSlug as string | undefined,
       };
 
+      console.log(`[journalists-service] POST /orgs/outlets/status EMAIL-GATEWAY REQUEST: ${emailItems.length} items: ${JSON.stringify(emailItems.map(i => ({ leadId: i.leadId, email: i.email })))}, campaignId=${campaignId || "(none)"}, ctx.brandIds=${JSON.stringify(brandIds)}`);
+
       const gatewayResults = await checkEmailStatuses(
         emailItems.map(({ leadId, email }) => ({ leadId, email })),
         campaignId || undefined,
         ctx
       );
+
+      console.log(`[journalists-service] POST /orgs/outlets/status EMAIL-GATEWAY RESPONSE: ${gatewayResults.length} results: ${JSON.stringify(gatewayResults.map(r => ({ email: r.email, leadId: r.leadId, broadcastCampaign: r.broadcast?.campaign, broadcastBrand: r.broadcast?.brand })))}`);
 
       for (const result of gatewayResults) {
         const scope = result.broadcast?.campaign ?? result.broadcast?.brand;
@@ -171,9 +179,7 @@ router.post("/orgs/outlets/status", async (req, res) => {
       };
     }
 
-    console.log(
-      `[journalists-service] POST /orgs/outlets/status: ${outletIds.length} outlets, ${rows.length} journalists (orgId=${orgId}${campaignId ? ` campaignId=${campaignId}` : ""})`
-    );
+    console.log(`[journalists-service] POST /orgs/outlets/status OUTPUT: ${JSON.stringify(results)}`);
 
     res.json({ results });
   } catch (err) {
