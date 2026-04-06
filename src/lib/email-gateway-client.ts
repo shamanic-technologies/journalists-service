@@ -41,7 +41,7 @@ export interface EmailGatewayStatusResult {
 }
 
 /**
- * Batch check email delivery status via email-gateway POST /status.
+ * Batch check email delivery status via email-gateway POST /orgs/status.
  * Brand scope comes from x-brand-id header (set by buildServiceHeaders).
  */
 export async function checkEmailStatuses(
@@ -55,7 +55,7 @@ export async function checkEmailStatuses(
   const body: Record<string, unknown> = { items };
   if (campaignId) body.campaignId = campaignId;
 
-  const response = await fetch(`${url}/status`, {
+  const response = await fetch(`${url}/orgs/status`, {
     method: "POST",
     headers: { ...headers, "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -64,7 +64,7 @@ export async function checkEmailStatuses(
   if (!response.ok) {
     const text = await response.text();
     throw new Error(
-      `[journalists-service] email-gateway POST /status failed (${response.status}): ${text}`
+      `[journalists-service] email-gateway POST /orgs/status failed (${response.status}): ${text}`
     );
   }
 
@@ -102,7 +102,7 @@ export interface EmailGatewayStatsParams {
 }
 
 /**
- * Fetch aggregated broadcast stats from email-gateway GET /stats?type=broadcast.
+ * Fetch aggregated broadcast stats from email-gateway GET /orgs/stats or /public/stats.
  * Fail-open: returns null if email-gateway is unreachable.
  */
 export async function fetchEmailGatewayStats(
@@ -122,12 +122,13 @@ export async function fetchEmailGatewayStats(
     if (params.featureDynastySlug) qs.set("featureDynastySlug", params.featureDynastySlug);
     if (params.workflowDynastySlug) qs.set("workflowDynastySlug", params.workflowDynastySlug);
 
-    const res = await fetch(`${url}/stats?${qs.toString()}`, {
+    const statsPath = passthroughHeaders["x-org-id"] ? "/orgs/stats" : "/public/stats";
+    const res = await fetch(`${url}${statsPath}?${qs.toString()}`, {
       headers: { "x-api-key": apiKey, ...passthroughHeaders },
     });
 
     if (!res.ok) {
-      console.warn(`[journalists-service] email-gateway GET /stats failed (${res.status})`);
+      console.warn(`[journalists-service] email-gateway GET ${statsPath} failed (${res.status})`);
       return null;
     }
 
@@ -147,7 +148,7 @@ export interface EmailGatewayStatsGroupedResponse {
 }
 
 /**
- * Fetch aggregated broadcast stats from email-gateway GET /stats with groupBy.
+ * Fetch aggregated broadcast stats from email-gateway GET /orgs/stats or /public/stats with groupBy.
  * Fail-open: returns null if email-gateway is unreachable.
  */
 export async function fetchEmailGatewayStatsGrouped(
@@ -169,12 +170,13 @@ export async function fetchEmailGatewayStatsGrouped(
     if (params.workflowDynastySlug) qs.set("workflowDynastySlug", params.workflowDynastySlug);
     qs.set("groupBy", groupBy);
 
-    const res = await fetch(`${url}/stats?${qs.toString()}`, {
+    const statsPath = passthroughHeaders["x-org-id"] ? "/orgs/stats" : "/public/stats";
+    const res = await fetch(`${url}${statsPath}?${qs.toString()}`, {
       headers: { "x-api-key": apiKey, ...passthroughHeaders },
     });
 
     if (!res.ok) {
-      console.warn(`[journalists-service] email-gateway GET /stats?groupBy=${groupBy} failed (${res.status})`);
+      console.warn(`[journalists-service] email-gateway GET ${statsPath}?groupBy=${groupBy} failed (${res.status})`);
       return null;
     }
 
