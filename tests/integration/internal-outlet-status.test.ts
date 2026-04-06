@@ -499,6 +499,40 @@ describe("POST /internal/outlets/status", () => {
     expect(res.body.error).toContain("x-org-id");
   });
 
+  it("uses apollo_email from journalists table when campaign_journalists.email is null", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J1", apolloEmail: "j1-apollo@test.com" });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_A,
+      status: "served",
+      // no email on campaign_journalists
+    });
+
+    mockedCheckEmailStatuses.mockResolvedValue([
+      makeEmailGatewayResult(j1.id, "j1-apollo@test.com", { contacted: true, delivered: true }),
+    ]);
+
+    const res = await request(app)
+      .post("/orgs/outlets/status")
+      .set(AUTH_HEADERS)
+      .send({ outletIds: [OUTLET_A] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[OUTLET_A]).toEqual({
+      status: "delivered",
+      replyClassification: null,
+    });
+    // Verify email-gateway was called with the apollo email
+    expect(mockedCheckEmailStatuses).toHaveBeenCalledWith(
+      [{ leadId: j1.id, email: "j1-apollo@test.com" }],
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
   it("does not call email-gateway when no journalists have emails", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J1" });
     await insertTestCampaignJournalist({
