@@ -6,7 +6,7 @@ import {
   type DiscoveredArticle,
 } from "./articles-client.js";
 import { chatComplete } from "./chat-client.js";
-import type { ServiceContext } from "./service-context.js";
+import type { OrgContext } from "./service-context.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -104,7 +104,7 @@ export async function scoreJournalists(
   brandDescription: string,
   featureInputs: Record<string, string>,
   existingJournalists: Array<{ id: string; journalistName: string }>,
-  ctx: ServiceContext
+  ctx: OrgContext
 ): Promise<LlmJournalist[]> {
   if (authors.length === 0) return [];
 
@@ -338,7 +338,7 @@ export async function refillBuffer(opts: {
   maxArticles: number;
   orgId: string;
   brandIds: string[];
-  ctx: ServiceContext;
+  ctx: OrgContext;
   runId?: string | null;
 }): Promise<number> {
   const articlesResponse = await discoverOutletArticles(
@@ -369,8 +369,8 @@ export async function refillBuffer(opts: {
     opts.campaignId,
     opts.orgId,
     opts.brandIds,
-    opts.ctx.featureSlug,
-    opts.ctx.workflowSlug,
+    opts.ctx.featureSlug ?? null,
+    opts.ctx.workflowSlug ?? null,
     opts.runId ?? null
   );
 

@@ -1,4 +1,4 @@
-import { type ServiceContext, buildServiceHeaders } from "./service-context.js";
+import { type OrgContext, buildServiceHeaders } from "./service-context.js";
 
 const BRAND_SERVICE_URL = process.env.BRAND_SERVICE_URL;
 const BRAND_SERVICE_API_KEY = process.env.BRAND_SERVICE_API_KEY;
@@ -47,12 +47,12 @@ export interface ExtractFieldsResponse {
  */
 export async function extractBrandFields(
   fields: FieldRequest[],
-  ctx: ServiceContext
+  ctx: OrgContext
 ): Promise<ExtractFieldsResponse> {
   const { url, apiKey } = getConfig();
 
   const headers = {
-    ...buildServiceHeaders(ctx, apiKey),
+    ...buildServiceHeaders(apiKey, ctx),
     "Content-Type": "application/json",
   };
 

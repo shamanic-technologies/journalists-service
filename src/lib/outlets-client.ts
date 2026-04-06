@@ -1,4 +1,4 @@
-import { type ServiceContext, buildServiceHeaders } from "./service-context.js";
+import { type OrgContext, buildServiceHeaders } from "./service-context.js";
 
 const OUTLETS_SERVICE_URL = process.env.OUTLETS_SERVICE_URL;
 const OUTLETS_SERVICE_API_KEY = process.env.OUTLETS_SERVICE_API_KEY;
@@ -18,11 +18,11 @@ export interface OutletInfo {
 
 export async function fetchOutlet(
   outletId: string,
-  ctx: ServiceContext
+  ctx: OrgContext
 ): Promise<OutletInfo> {
   const { url, apiKey } = getConfig();
 
-  const headers = buildServiceHeaders(ctx, apiKey);
+  const headers = buildServiceHeaders(apiKey, ctx);
 
   const response = await fetch(`${url}/outlets/${outletId}`, { headers });
 
@@ -52,11 +52,11 @@ export interface PulledOutlet {
  * Returns null if no outlets are available.
  */
 export async function pullNextOutlet(
-  ctx: ServiceContext,
+  ctx: OrgContext,
   idempotencyKey?: string
 ): Promise<PulledOutlet | null> {
   const { url, apiKey } = getConfig();
-  const headers = buildServiceHeaders(ctx, apiKey);
+  const headers = buildServiceHeaders(apiKey, ctx);
 
   const body: Record<string, unknown> = { count: 1 };
   if (idempotencyKey) body.idempotencyKey = idempotencyKey;

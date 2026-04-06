@@ -1,4 +1,4 @@
-import { type ServiceContext, buildServiceHeaders } from "./service-context.js";
+import { type OrgContext, buildServiceHeaders } from "./service-context.js";
 
 const ARTICLES_SERVICE_URL = process.env.ARTICLES_SERVICE_URL;
 const ARTICLES_SERVICE_API_KEY = process.env.ARTICLES_SERVICE_API_KEY;
@@ -30,12 +30,12 @@ export interface DiscoverOutletArticlesResponse {
 export async function discoverOutletArticles(
   outletDomain: string,
   maxArticles: number,
-  ctx: ServiceContext
+  ctx: OrgContext
 ): Promise<DiscoverOutletArticlesResponse> {
   const { url, apiKey } = getConfig();
 
   const headers = {
-    ...buildServiceHeaders(ctx, apiKey),
+    ...buildServiceHeaders(apiKey, ctx),
     "Content-Type": "application/json",
   };
 

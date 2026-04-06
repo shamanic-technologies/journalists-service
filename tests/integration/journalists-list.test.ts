@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import request from "supertest";
-import { createTestApp, BASE_AUTH_HEADERS } from "../helpers/test-app.js";
+import { createTestApp, ORG_AUTH_HEADERS } from "../helpers/test-app.js";
 import {
   cleanTestData,
   insertTestJournalist,
@@ -65,16 +65,16 @@ describe("GET /journalists/list", () => {
 
   it("returns 400 when brandId is missing", async () => {
     const res = await request(app)
-      .get("/journalists/list")
-      .set(BASE_AUTH_HEADERS);
+      .get("/orgs/journalists/list")
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(400);
   });
 
   it("returns empty list when no journalists match", async () => {
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toEqual([]);
@@ -97,8 +97,8 @@ describe("GET /journalists/list", () => {
     });
 
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(1);
@@ -146,8 +146,8 @@ describe("GET /journalists/list", () => {
     ]);
 
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     // ONE journalist entry with TWO campaigns
@@ -186,8 +186,8 @@ describe("GET /journalists/list", () => {
     ]);
 
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     const j = res.body.journalists[0];
@@ -219,8 +219,8 @@ describe("GET /journalists/list", () => {
     ]);
 
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     const j = res.body.journalists[0];
@@ -245,8 +245,8 @@ describe("GET /journalists/list", () => {
     });
 
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     const c = res.body.journalists[0].campaigns[0];
@@ -277,8 +277,8 @@ describe("GET /journalists/list", () => {
     ]);
 
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(1);
@@ -309,8 +309,8 @@ describe("GET /journalists/list", () => {
     ]);
 
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     const j = res.body.journalists[0];
@@ -347,8 +347,8 @@ describe("GET /journalists/list", () => {
     });
 
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}&campaignId=${CAMPAIGN_ID}`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}&campaignId=${CAMPAIGN_ID}`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(1);
@@ -374,8 +374,8 @@ describe("GET /journalists/list", () => {
     });
 
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}&featureSlugs=pr-outreach,cold-email`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}&featureSlugs=pr-outreach,cold-email`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(2);
@@ -397,8 +397,8 @@ describe("GET /journalists/list", () => {
     });
 
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}&workflowSlug=pitch-v1`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}&workflowSlug=pitch-v1`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(1);
@@ -425,8 +425,8 @@ describe("GET /journalists/list", () => {
     mockFetch.mockRejectedValueOnce(new Error("connection refused"));
 
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(1);
@@ -451,8 +451,8 @@ describe("GET /journalists/list", () => {
     ]);
 
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(2);
@@ -484,8 +484,8 @@ describe("GET /journalists/list", () => {
     });
 
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}&featureDynastySlug=pr-outreach`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}&featureDynastySlug=pr-outreach`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(1);
@@ -506,8 +506,8 @@ describe("GET /journalists/list", () => {
     });
 
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}&featureDynastySlug=nonexistent-dynasty`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}&featureDynastySlug=nonexistent-dynasty`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(0);
@@ -534,8 +534,8 @@ describe("GET /journalists/list", () => {
 
     // Both featureSlugs and featureDynastySlug provided — dynasty wins
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}&featureDynastySlug=pr-outreach&featureSlugs=cold-email-v1`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}&featureDynastySlug=pr-outreach&featureSlugs=cold-email-v1`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(1);
@@ -553,8 +553,8 @@ describe("GET /journalists/list", () => {
     });
 
     const res = await request(app)
-      .get(`/journalists/list?brandId=${BRAND_ID}`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(0);

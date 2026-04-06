@@ -23,7 +23,7 @@ const BLOCKED_HEADERS = {
   "x-campaign-id": CAMPAIGN_ID,
 };
 
-describe("GET /internal/outlets/blocked", () => {
+describe("GET /orgs/outlets/blocked", () => {
   beforeEach(async () => {
     await cleanTestData();
   });
@@ -37,16 +37,16 @@ describe("GET /internal/outlets/blocked", () => {
 
   it("returns 400 with missing required headers", async () => {
     const res = await request(app)
-      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .get(`/orgs/outlets/blocked?outlet_id=${OUTLET_ID}`)
       .set({ "x-api-key": "test-api-key" });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain("Missing required headers");
+    expect(res.body.error).toContain("Missing required header: x-org-id");
   });
 
   it("returns 400 with missing outlet_id query param", async () => {
     const res = await request(app)
-      .get("/internal/outlets/blocked")
+      .get("/orgs/outlets/blocked")
       .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(400);
@@ -56,7 +56,7 @@ describe("GET /internal/outlets/blocked", () => {
 
   it("returns blocked=false when no buffered journalists exist (may need discovery)", async () => {
     const res = await request(app)
-      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .get(`/orgs/outlets/blocked?outlet_id=${OUTLET_ID}`)
       .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
@@ -99,7 +99,7 @@ describe("GET /internal/outlets/blocked", () => {
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .get(`/orgs/outlets/blocked?outlet_id=${OUTLET_ID}`)
       .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
@@ -141,7 +141,7 @@ describe("GET /internal/outlets/blocked", () => {
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .get(`/orgs/outlets/blocked?outlet_id=${OUTLET_ID}`)
       .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
@@ -182,7 +182,7 @@ describe("GET /internal/outlets/blocked", () => {
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .get(`/orgs/outlets/blocked?outlet_id=${OUTLET_ID}`)
       .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
@@ -224,7 +224,7 @@ describe("GET /internal/outlets/blocked", () => {
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .get(`/orgs/outlets/blocked?outlet_id=${OUTLET_ID}`)
       .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
@@ -263,7 +263,7 @@ describe("GET /internal/outlets/blocked", () => {
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .get(`/orgs/outlets/blocked?outlet_id=${OUTLET_ID}`)
       .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
@@ -304,7 +304,7 @@ describe("GET /internal/outlets/blocked", () => {
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .get(`/orgs/outlets/blocked?outlet_id=${OUTLET_ID}`)
       .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
@@ -334,7 +334,7 @@ describe("GET /internal/outlets/blocked", () => {
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .get(`/orgs/outlets/blocked?outlet_id=${OUTLET_ID}`)
       .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
@@ -363,7 +363,7 @@ describe("GET /internal/outlets/blocked", () => {
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .get(`/orgs/outlets/blocked?outlet_id=${OUTLET_ID}`)
       .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
@@ -392,7 +392,7 @@ describe("GET /internal/outlets/blocked", () => {
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .get(`/orgs/outlets/blocked?outlet_id=${OUTLET_ID}`)
       .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);
@@ -448,7 +448,7 @@ describe("GET /internal/outlets/blocked", () => {
     });
 
     const res = await request(app)
-      .get(`/internal/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .get(`/orgs/outlets/blocked?outlet_id=${OUTLET_ID}`)
       .set(BLOCKED_HEADERS);
 
     expect(res.status).toBe(200);

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import request from "supertest";
-import { createTestApp, AUTH_HEADERS, BASE_AUTH_HEADERS } from "../helpers/test-app.js";
+import { createTestApp, AUTH_HEADERS, ORG_AUTH_HEADERS } from "../helpers/test-app.js";
 import {
   cleanTestData,
   insertTestJournalist,
@@ -118,7 +118,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStats(0);
 
     const res = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -149,7 +149,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStats(2);
 
     const res = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -169,7 +169,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStats(0);
 
     const res = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -186,7 +186,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStatsFailure();
 
     const res = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -212,7 +212,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStats(0);
 
     const res = await request(app)
-      .get(`/stats?brandId=${BRAND_ID}`)
+      .get(`/orgs/stats?brandId=${BRAND_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -232,7 +232,7 @@ describe("GET /stats", () => {
 
     // Filter by first brand
     const res1 = await request(app)
-      .get(`/stats?brandId=${BRAND_ID}`)
+      .get(`/orgs/stats?brandId=${BRAND_ID}`)
       .set(AUTH_HEADERS);
     expect(res1.body.totalJournalists).toBe(1);
 
@@ -240,7 +240,7 @@ describe("GET /stats", () => {
 
     // Filter by second brand
     const res2 = await request(app)
-      .get(`/stats?brandId=${BRAND_ID_2}`)
+      .get(`/orgs/stats?brandId=${BRAND_ID_2}`)
       .set(AUTH_HEADERS);
     expect(res2.body.totalJournalists).toBe(1);
   });
@@ -261,7 +261,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStats(0);
 
     const res = await request(app)
-      .get("/stats?featureSlug=feat-a")
+      .get("/orgs/stats?featureSlug=feat-a")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -284,7 +284,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStats(0);
 
     const res = await request(app)
-      .get("/stats?workflowSlug=wf-a")
+      .get("/orgs/stats?workflowSlug=wf-a")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -313,7 +313,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStats(0);
 
     const res = await request(app)
-      .get("/stats?featureDynastySlug=feat-alpha")
+      .get("/orgs/stats?featureDynastySlug=feat-alpha")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -337,7 +337,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStats(0);
 
     const res = await request(app)
-      .get("/stats?workflowDynastySlug=cold-email")
+      .get("/orgs/stats?workflowDynastySlug=cold-email")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -355,7 +355,7 @@ describe("GET /stats", () => {
     // No email-gateway call expected: emptyStats() is returned early
 
     const res = await request(app)
-      .get("/stats?featureDynastySlug=nonexistent")
+      .get("/orgs/stats?featureDynastySlug=nonexistent")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -380,7 +380,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStats(0);
 
     const res = await request(app)
-      .get(`/stats?featureDynastySlug=feat-alpha&campaignId=${CAMPAIGN_ID}`)
+      .get(`/orgs/stats?featureDynastySlug=feat-alpha&campaignId=${CAMPAIGN_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -410,7 +410,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStatsGrouped([]);
 
     const res = await request(app)
-      .get("/stats?groupBy=featureSlug")
+      .get("/orgs/stats?groupBy=featureSlug")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -437,7 +437,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStatsGrouped([]);
 
     const res = await request(app)
-      .get("/stats?groupBy=workflowSlug")
+      .get("/orgs/stats?groupBy=workflowSlug")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -471,7 +471,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStatsGrouped([]);
 
     const res = await request(app)
-      .get("/stats?groupBy=featureDynastySlug")
+      .get("/orgs/stats?groupBy=featureDynastySlug")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -507,7 +507,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStatsGrouped([]);
 
     const res = await request(app)
-      .get("/stats?groupBy=workflowDynastySlug")
+      .get("/orgs/stats?groupBy=workflowDynastySlug")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -536,7 +536,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStats(1);
 
     const res = await request(app)
-      .get("/stats?workflowSlugs=wf-a,wf-b")
+      .get("/orgs/stats?workflowSlugs=wf-a,wf-b")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -571,7 +571,7 @@ describe("GET /stats", () => {
     ]);
 
     const res = await request(app)
-      .get("/stats?workflowSlugs=wf-a,wf-b&groupBy=workflowSlug")
+      .get("/orgs/stats?workflowSlugs=wf-a,wf-b&groupBy=workflowSlug")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -605,7 +605,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStats(1);
 
     const res = await request(app)
-      .get("/stats?featureSlugs=pr-journalist-outreach,pr-journalist-outreach-v2")
+      .get("/orgs/stats?featureSlugs=pr-journalist-outreach,pr-journalist-outreach-v2")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -640,7 +640,7 @@ describe("GET /stats", () => {
     ]);
 
     const res = await request(app)
-      .get("/stats?featureSlugs=pr-journalist-outreach,pr-journalist-outreach-v2&groupBy=featureSlug")
+      .get("/orgs/stats?featureSlugs=pr-journalist-outreach,pr-journalist-outreach-v2&groupBy=featureSlug")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -669,7 +669,7 @@ describe("GET /stats", () => {
     mockEmailGatewayStatsGrouped([]);
 
     const res = await request(app)
-      .get("/stats?groupBy=featureDynastySlug")
+      .get("/orgs/stats?groupBy=featureDynastySlug")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -699,8 +699,8 @@ describe("GET /stats (base headers only — no workflow context)", () => {
     mockEmailGatewayStats(0);
 
     const res = await request(app)
-      .get(`/stats?campaignId=${CAMPAIGN_ID}`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/stats?campaignId=${CAMPAIGN_ID}`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(2);
@@ -710,7 +710,7 @@ describe("GET /stats (base headers only — no workflow context)", () => {
 
   it("rejects when base headers are missing", async () => {
     const res = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set({ "x-api-key": "test-api-key" });
 
     expect(res.status).toBe(400);
@@ -718,7 +718,7 @@ describe("GET /stats (base headers only — no workflow context)", () => {
   });
 });
 
-describe("GET /stats/public", () => {
+describe("GET /public/stats", () => {
   beforeEach(async () => {
     await cleanTestData();
     mockFetch.mockReset();
@@ -734,7 +734,7 @@ describe("GET /stats/public", () => {
     mockEmailGatewayStats(0);
 
     const res = await request(app)
-      .get("/stats/public")
+      .get("/public/stats")
       .set({ "x-api-key": "test-api-key" });
 
     expect(res.status).toBe(200);
@@ -757,7 +757,7 @@ describe("GET /stats/public", () => {
     mockEmailGatewayStats(0);
 
     const res = await request(app)
-      .get("/stats/public?featureSlug=feat-a")
+      .get("/public/stats?featureSlug=feat-a")
       .set({ "x-api-key": "test-api-key" });
 
     expect(res.status).toBe(200);

@@ -1,4 +1,4 @@
-import { type ServiceContext, buildServiceHeaders } from "./service-context.js";
+import { type OrgContext, buildServiceHeaders } from "./service-context.js";
 
 const CHAT_SERVICE_URL = process.env.CHAT_SERVICE_URL;
 const CHAT_SERVICE_API_KEY = process.env.CHAT_SERVICE_API_KEY;
@@ -29,12 +29,12 @@ export interface CompleteResponse {
 
 export async function chatComplete(
   request: CompleteRequest,
-  ctx: ServiceContext
+  ctx: OrgContext
 ): Promise<CompleteResponse> {
   const { url, apiKey } = getConfig();
 
   const headers = {
-    ...buildServiceHeaders(ctx, apiKey),
+    ...buildServiceHeaders(apiKey, ctx),
     "Content-Type": "application/json",
   };
 

@@ -3,7 +3,7 @@ import { eq, and, isNotNull, arrayContains } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { campaignJournalists } from "../db/schema.js";
 import { fetchBatchRunCosts, type BatchRunCost } from "../lib/runs-client.js";
-import { type ServiceContext } from "../lib/service-context.js";
+import { type OrgContext } from "../lib/service-context.js";
 import { CostStatsQuerySchema } from "../schemas.js";
 
 const router = Router();
@@ -16,19 +16,19 @@ interface CostGroup {
   runCount: number;
 }
 
-function buildCtx(locals: Record<string, unknown>): ServiceContext {
+function buildCtx(locals: Record<string, unknown>): OrgContext {
   return {
     orgId: locals.orgId as string,
-    userId: locals.userId as string,
-    runId: locals.runId as string,
-    featureSlug: locals.featureSlug as string,
-    campaignId: locals.campaignId as string,
-    brandIds: locals.brandIds as string[],
-    workflowSlug: locals.workflowSlug as string,
+    userId: locals.userId as string | undefined,
+    runId: locals.runId as string | undefined,
+    featureSlug: locals.featureSlug as string | undefined,
+    campaignId: locals.campaignId as string | undefined,
+    brandIds: (locals.brandIds as string[]) || [],
+    workflowSlug: locals.workflowSlug as string | undefined,
   };
 }
 
-router.get("/journalists/stats/costs", async (req, res) => {
+router.get("/orgs/journalists/stats/costs", async (req, res) => {
   try {
     const parsed = CostStatsQuerySchema.safeParse(req.query);
     if (!parsed.success) {

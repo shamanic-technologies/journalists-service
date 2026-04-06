@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import request from "supertest";
-import { createTestApp, AUTH_HEADERS, BASE_AUTH_HEADERS } from "../helpers/test-app.js";
+import { createTestApp, AUTH_HEADERS, ORG_AUTH_HEADERS } from "../helpers/test-app.js";
 import {
   cleanTestData,
   insertTestJournalist,
@@ -99,7 +99,7 @@ describe("POST /internal/outlets/status", () => {
     mockedCheckEmailStatuses.mockResolvedValue([]);
 
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: [OUTLET_A] });
 
@@ -127,7 +127,7 @@ describe("POST /internal/outlets/status", () => {
     ]);
 
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: [OUTLET_A] });
 
@@ -155,7 +155,7 @@ describe("POST /internal/outlets/status", () => {
     ]);
 
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: [OUTLET_A] });
 
@@ -183,7 +183,7 @@ describe("POST /internal/outlets/status", () => {
     ]);
 
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: [OUTLET_A] });
 
@@ -223,7 +223,7 @@ describe("POST /internal/outlets/status", () => {
     ]);
 
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: [OUTLET_A] });
 
@@ -261,7 +261,7 @@ describe("POST /internal/outlets/status", () => {
     ]);
 
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: [OUTLET_A, OUTLET_B] });
 
@@ -280,7 +280,7 @@ describe("POST /internal/outlets/status", () => {
     mockedCheckEmailStatuses.mockResolvedValue([]);
 
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: [OUTLET_C] });
 
@@ -305,7 +305,7 @@ describe("POST /internal/outlets/status", () => {
     mockedCheckEmailStatuses.mockResolvedValue([]);
 
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: [OUTLET_A] });
 
@@ -315,7 +315,7 @@ describe("POST /internal/outlets/status", () => {
 
   it("returns 400 for empty outletIds", async () => {
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: [] });
 
@@ -324,7 +324,7 @@ describe("POST /internal/outlets/status", () => {
 
   it("returns 400 for invalid UUID in outletIds", async () => {
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: ["not-a-uuid"] });
 
@@ -346,7 +346,7 @@ describe("POST /internal/outlets/status", () => {
     mockedCheckEmailStatuses.mockRejectedValue(new Error("email-gateway POST /status failed (500)"));
 
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: [OUTLET_A] });
 
@@ -393,7 +393,7 @@ describe("POST /internal/outlets/status", () => {
     ]);
 
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: [OUTLET_A] });
 
@@ -433,7 +433,7 @@ describe("POST /internal/outlets/status", () => {
     ]);
 
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: [OUTLET_A] });
 
@@ -458,7 +458,7 @@ describe("POST /internal/outlets/status", () => {
     ]);
 
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: [OUTLET_A] });
 
@@ -484,8 +484,8 @@ describe("POST /internal/outlets/status", () => {
     ]);
 
     const res = await request(app)
-      .post("/internal/outlets/status")
-      .set(BASE_AUTH_HEADERS)
+      .post("/orgs/outlets/status")
+      .set(ORG_AUTH_HEADERS)
       .send({ outletIds: [OUTLET_A] });
 
     expect(res.status).toBe(200);
@@ -497,7 +497,7 @@ describe("POST /internal/outlets/status", () => {
 
   it("returns 400 when base headers are missing", async () => {
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set({ "x-api-key": "test-api-key" })
       .send({ outletIds: [OUTLET_A] });
 
@@ -517,7 +517,7 @@ describe("POST /internal/outlets/status", () => {
     });
 
     const res = await request(app)
-      .post("/internal/outlets/status")
+      .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: [OUTLET_A] });
 

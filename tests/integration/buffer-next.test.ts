@@ -241,7 +241,7 @@ describe("POST /buffer/next", () => {
   it("returns 400 without x-campaign-id header", async () => {
     const { "x-campaign-id": _, ...headersWithoutCampaign } = AUTH_HEADERS;
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(headersWithoutCampaign)
       .send({ outletId: OUTLET_ID });
 
@@ -252,7 +252,7 @@ describe("POST /buffer/next", () => {
   it("returns 400 without x-brand-id header", async () => {
     const { "x-brand-id": _, ...headersWithoutBrand } = AUTH_HEADERS;
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(headersWithoutBrand)
       .send({ outletId: OUTLET_ID });
 
@@ -262,7 +262,7 @@ describe("POST /buffer/next", () => {
 
   it("returns 401 without auth", async () => {
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .send({ outletId: OUTLET_ID });
 
     expect(res.status).toBe(401);
@@ -273,7 +273,7 @@ describe("POST /buffer/next", () => {
     mockedPullNextOutlet.mockResolvedValue(null);
 
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({});
 
@@ -308,7 +308,7 @@ describe("POST /buffer/next", () => {
     setupEmailGatewayNotContacted();
 
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -397,7 +397,7 @@ describe("POST /buffer/next", () => {
     setupEmailGatewayNotContacted();
 
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -444,7 +444,7 @@ describe("POST /buffer/next", () => {
     setupEmailGatewayNotContacted();
 
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -483,7 +483,7 @@ describe("POST /buffer/next", () => {
     await seedDiscoveryCache();
 
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -521,7 +521,7 @@ describe("POST /buffer/next", () => {
     setupEmailGatewayNotContacted();
 
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -571,7 +571,7 @@ describe("POST /buffer/next", () => {
     await seedDiscoveryCache();
 
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -615,7 +615,7 @@ describe("POST /buffer/next", () => {
     });
 
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -669,7 +669,7 @@ describe("POST /buffer/next", () => {
       setupBaseMocks();
 
       const res = await request(app)
-        .post("/buffer/next")
+        .post("/orgs/buffer/next")
         .set(BUFFER_HEADERS)
         .send({ outletId: OUTLET_ID });
 
@@ -715,7 +715,7 @@ describe("POST /buffer/next", () => {
       setupBaseMocks();
 
       const res = await request(app)
-        .post("/buffer/next")
+        .post("/orgs/buffer/next")
         .set(BUFFER_HEADERS)
         .send({ outletId: OUTLET_ID });
 
@@ -761,7 +761,7 @@ describe("POST /buffer/next", () => {
       setupEmailGatewayNotContacted();
 
       const res = await request(app)
-        .post("/buffer/next")
+        .post("/orgs/buffer/next")
         .set(BUFFER_HEADERS)
         .send({ outletId: OUTLET_ID });
 
@@ -866,7 +866,7 @@ describe("POST /buffer/next", () => {
       setupEmailGatewayNotContacted();
 
       const res = await request(app)
-        .post("/buffer/next")
+        .post("/orgs/buffer/next")
         .set(BUFFER_HEADERS)
         .send({ outletId: OUTLET_ID });
 
@@ -974,7 +974,7 @@ describe("POST /buffer/next", () => {
       setupEmailGatewayNotContacted();
 
       const res = await request(app)
-        .post("/buffer/next")
+        .post("/orgs/buffer/next")
         .set(BUFFER_HEADERS)
         .send({ outletId: OUTLET_ID });
 
@@ -1028,7 +1028,7 @@ describe("POST /buffer/next", () => {
       ]);
 
       const res = await request(app)
-        .post("/buffer/next")
+        .post("/orgs/buffer/next")
         .set(BUFFER_HEADERS)
         .send({ outletId: OUTLET_ID });
 
@@ -1076,7 +1076,7 @@ describe("POST /buffer/next", () => {
       ]);
 
       const res = await request(app)
-        .post("/buffer/next")
+        .post("/orgs/buffer/next")
         .set(BUFFER_HEADERS)
         .send({ outletId: OUTLET_ID });
 
@@ -1092,7 +1092,7 @@ describe("POST /buffer/next", () => {
     setupEmailGatewayNotContacted();
 
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -1144,7 +1144,7 @@ describe("POST /buffer/next", () => {
     });
 
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({});
 
@@ -1251,7 +1251,7 @@ describe("POST /buffer/next", () => {
       });
 
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({});
 
@@ -1267,7 +1267,7 @@ describe("POST /buffer/next", () => {
     mockedPullNextOutlet.mockResolvedValue(null);
 
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({});
 
@@ -1303,7 +1303,7 @@ describe("POST /buffer/next", () => {
     const idempotencyKey = "test-idem-key-123";
 
     const res1 = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({ outletId: OUTLET_ID, idempotencyKey });
 
@@ -1314,7 +1314,7 @@ describe("POST /buffer/next", () => {
     vi.resetAllMocks();
 
     const res2 = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({ outletId: OUTLET_ID, idempotencyKey });
 
@@ -1338,7 +1338,7 @@ describe("POST /buffer/next", () => {
     mockedCheckEmailStatuses.mockResolvedValue([]);
 
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -1370,7 +1370,7 @@ describe("POST /buffer/next", () => {
     );
 
     const res = await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(BUFFER_HEADERS)
       .send({ outletId: OUTLET_ID });
 

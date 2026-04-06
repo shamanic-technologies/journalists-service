@@ -19,7 +19,7 @@ describe("Auth middleware logging", () => {
   it("logs a warning when x-api-key is missing", async () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    await request(app).post("/buffer/next").send({ outletId: "11111111-1111-1111-1111-111111111111" });
+    await request(app).post("/orgs/buffer/next").send({ outletId: "11111111-1111-1111-1111-111111111111" });
 
     expect(spy).toHaveBeenCalledWith(
       expect.stringContaining("no x-api-key header")
@@ -30,7 +30,7 @@ describe("Auth middleware logging", () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set({ "x-api-key": "wrong-key" })
       .send({ outletId: "11111111-1111-1111-1111-111111111111" });
 
@@ -43,12 +43,12 @@ describe("Auth middleware logging", () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set({ "x-api-key": "test-api-key" })
       .send({ outletId: "11111111-1111-1111-1111-111111111111" });
 
     expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining("Missing required headers")
+      expect.stringContaining("Missing required header x-org-id")
     );
   });
 
@@ -58,7 +58,7 @@ describe("Auth middleware logging", () => {
     // POST /buffer/next with valid auth but empty body — fails on Zod validation (400)
     // before reaching any DB calls, which is enough to verify auth doesn't warn
     await request(app)
-      .post("/buffer/next")
+      .post("/orgs/buffer/next")
       .set(AUTH_HEADERS)
       .send({});
 
@@ -66,7 +66,7 @@ describe("Auth middleware logging", () => {
       expect.stringContaining("[journalists-service] Auth rejected")
     );
     expect(spy).not.toHaveBeenCalledWith(
-      expect.stringContaining("Missing required headers")
+      expect.stringContaining("Missing required header x-org-id")
     );
   });
 });

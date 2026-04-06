@@ -1,4 +1,4 @@
-import { type ServiceContext, buildServiceHeaders } from "./service-context.js";
+import { type OrgContext, buildServiceHeaders } from "./service-context.js";
 
 const RUNS_SERVICE_URL = process.env.RUNS_SERVICE_URL;
 const RUNS_SERVICE_API_KEY = process.env.RUNS_SERVICE_API_KEY;
@@ -17,13 +17,13 @@ export interface CreateRunResponse {
 }
 
 export async function createChildRun(
-  request: { parentRunId: string; serviceName: string; taskName: string },
-  ctx: ServiceContext
+  request: { parentRunId: string | undefined; serviceName: string; taskName: string },
+  ctx: OrgContext
 ): Promise<CreateRunResponse> {
   const { url, apiKey } = getRunsConfig();
 
   const headers = {
-    ...buildServiceHeaders({ ...ctx, runId: request.parentRunId }, apiKey),
+    ...buildServiceHeaders(apiKey, { ...ctx, runId: request.parentRunId }),
     "Content-Type": "application/json",
   };
 
@@ -49,12 +49,12 @@ export async function createChildRun(
 export async function closeRun(
   runId: string,
   status: "completed" | "failed",
-  ctx: ServiceContext
+  ctx: OrgContext
 ): Promise<void> {
   const { url, apiKey } = getRunsConfig();
 
   const headers = {
-    ...buildServiceHeaders({ ...ctx, runId }, apiKey),
+    ...buildServiceHeaders(apiKey, { ...ctx, runId }),
     "Content-Type": "application/json",
   };
 
@@ -82,11 +82,11 @@ export interface RunWithCosts {
 
 export async function fetchRunWithCosts(
   runId: string,
-  ctx: ServiceContext
+  ctx: OrgContext
 ): Promise<RunWithCosts> {
   const { url, apiKey } = getRunsConfig();
 
-  const headers = buildServiceHeaders({ ...ctx, runId }, apiKey);
+  const headers = buildServiceHeaders(apiKey, { ...ctx, runId });
 
   const response = await fetch(`${url}/v1/runs/${runId}`, { headers });
 
@@ -109,14 +109,14 @@ export interface BatchRunCost {
 
 export async function fetchBatchRunCosts(
   runIds: string[],
-  ctx: ServiceContext
+  ctx: OrgContext
 ): Promise<BatchRunCost[]> {
   if (runIds.length === 0) return [];
 
   const { url, apiKey } = getRunsConfig();
 
   const headers = {
-    ...buildServiceHeaders(ctx, apiKey),
+    ...buildServiceHeaders(apiKey, ctx),
     "Content-Type": "application/json",
   };
 
