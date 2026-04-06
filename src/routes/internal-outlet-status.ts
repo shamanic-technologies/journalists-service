@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { inArray, and, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { campaignJournalists } from "../db/schema.js";
+import { campaignJournalists, journalists } from "../db/schema.js";
 import { checkEmailStatuses } from "../lib/email-gateway-client.js";
 import { type OrgContext } from "../lib/service-context.js";
 import { OutletStatusRequestSchema } from "../schemas.js";
@@ -58,8 +58,10 @@ router.post("/orgs/outlets/status", async (req, res) => {
         journalistId: campaignJournalists.journalistId,
         status: campaignJournalists.status,
         email: campaignJournalists.email,
+        apolloEmail: journalists.apolloEmail,
       })
       .from(campaignJournalists)
+      .innerJoin(journalists, eq(campaignJournalists.journalistId, journalists.id))
       .where(and(...conditions));
 
     // Group by outlet
@@ -71,12 +73,16 @@ router.post("/orgs/outlets/status", async (req, res) => {
     }
 
     // 2. Collect all journalists with emails for email-gateway batch call
+    // Resolve email: apollo_email (global) takes priority, fallback to campaign email
+    const resolvedEmails = new Map<string, string>(); // cjId → email
     const emailItems: Array<{ leadId: string; email: string; outletId: string; cjId: string }> = [];
     for (const row of rows) {
-      if (row.email) {
+      const email = row.apolloEmail ?? row.email;
+      if (email) {
+        resolvedEmails.set(row.cjId, email);
         emailItems.push({
           leadId: row.journalistId,
-          email: row.email,
+          email,
           outletId: row.outletId,
           cjId: row.cjId,
         });
@@ -137,8 +143,9 @@ router.post("/orgs/outlets/status", async (req, res) => {
         let enrichedStatus: string = row.status;
 
         // Enrich with email-gateway if available
-        if (row.email) {
-          const egStatus = emailStatusMap.get(row.email);
+        const resolvedEmail = resolvedEmails.get(row.cjId);
+        if (resolvedEmail) {
+          const egStatus = emailStatusMap.get(resolvedEmail);
           if (egStatus) {
             if (egStatus.replied) {
               enrichedStatus = higherStatus(enrichedStatus, "replied");
