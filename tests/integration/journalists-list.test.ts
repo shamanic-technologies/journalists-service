@@ -229,6 +229,52 @@ describe("GET /journalists/list", () => {
     expect(c.consolidatedStatus).toBe("replied");
   });
 
+  it("falls back to brand scope when campaign scope is null (no campaignId filter)", async () => {
+    const journalist = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Brand Scope Fallback",
+      apolloEmail: "brand-fallback@example.com",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: journalist.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      status: "served",
+    });
+
+    // email-gateway returns campaign: null, brand: { contacted: true }
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [{
+          leadId: journalist.id,
+          email: "brand-fallback@example.com",
+          broadcast: {
+            campaign: null,
+            brand: { contacted: true, delivered: true, opened: false, replied: false, replyClassification: null, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-04-01T00:00:00Z" },
+            global: { email: { bounced: false, unsubscribed: false } },
+          },
+          transactional: { campaign: null, brand: null, global: { email: { bounced: false, unsubscribed: false } } },
+        }],
+      }),
+    });
+
+    // runs-service
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ costs: [] }) });
+
+    const res = await request(app)
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    const c = res.body.journalists[0].campaigns[0];
+    expect(c.localStatus).toBe("served");
+    expect(c.emailGatewayStatus).toBe("delivered");
+    expect(c.consolidatedStatus).toBe("delivered");
+  });
+
   it("keeps localStatus as consolidatedStatus when no email-gateway data", async () => {
     const journalist = await insertTestJournalist({
       outletId: OUTLET_ID,

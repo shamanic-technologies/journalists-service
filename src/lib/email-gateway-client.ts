@@ -197,12 +197,12 @@ export function consolidateStatus(
   let emailGatewayStatus: ConsolidatedStatusValue | null = null;
 
   if (emailGatewayResult) {
-    const campaign = emailGatewayResult.broadcast.campaign;
-    if (campaign) {
-      if (campaign.replied) emailGatewayStatus = "replied";
-      else if (campaign.bounced) emailGatewayStatus = "bounced";
-      else if (campaign.delivered) emailGatewayStatus = "delivered";
-      else if (campaign.contacted) emailGatewayStatus = "contacted";
+    const scope = emailGatewayResult.broadcast.campaign ?? emailGatewayResult.broadcast.brand;
+    if (scope) {
+      if (scope.replied) emailGatewayStatus = "replied";
+      else if (scope.bounced) emailGatewayStatus = "bounced";
+      else if (scope.delivered) emailGatewayStatus = "delivered";
+      else if (scope.contacted) emailGatewayStatus = "contacted";
     }
   }
 
