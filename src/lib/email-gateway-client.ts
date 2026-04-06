@@ -9,33 +9,28 @@ function getConfig() {
   return { url: EMAIL_GATEWAY_SERVICE_URL, apiKey: EMAIL_GATEWAY_SERVICE_API_KEY };
 }
 
-interface EmailStatusScope {
+export interface EmailScopeStatus {
   contacted: boolean;
   delivered: boolean;
+  opened: boolean;
   replied: boolean;
   replyClassification: "positive" | "negative" | "neutral" | null;
-  lastDeliveredAt: string | null;
-}
-
-interface EmailAddressScope {
-  contacted: boolean;
-  delivered: boolean;
   bounced: boolean;
   unsubscribed: boolean;
   lastDeliveredAt: string | null;
 }
 
 export interface EmailGatewayStatusResult {
-  leadId: string;
+  leadId: string | null;
   email: string;
   broadcast: {
-    campaign: { lead: EmailStatusScope; email: EmailAddressScope } | null;
-    brand: { lead: EmailStatusScope; email: EmailAddressScope } | null;
+    campaign: EmailScopeStatus | null;
+    brand: EmailScopeStatus | null;
     global: { email: { bounced: boolean; unsubscribed: boolean } };
   };
   transactional: {
-    campaign: { lead: EmailStatusScope; email: EmailAddressScope } | null;
-    brand: { lead: EmailStatusScope; email: EmailAddressScope } | null;
+    campaign: EmailScopeStatus | null;
+    brand: EmailScopeStatus | null;
     global: { email: { bounced: boolean; unsubscribed: boolean } };
   };
 }
@@ -204,10 +199,10 @@ export function consolidateStatus(
   if (emailGatewayResult) {
     const campaign = emailGatewayResult.broadcast.campaign;
     if (campaign) {
-      if (campaign.lead.replied) emailGatewayStatus = "replied";
-      else if (campaign.email.bounced) emailGatewayStatus = "bounced";
-      else if (campaign.lead.delivered) emailGatewayStatus = "delivered";
-      else if (campaign.lead.contacted) emailGatewayStatus = "contacted";
+      if (campaign.replied) emailGatewayStatus = "replied";
+      else if (campaign.bounced) emailGatewayStatus = "bounced";
+      else if (campaign.delivered) emailGatewayStatus = "delivered";
+      else if (campaign.contacted) emailGatewayStatus = "contacted";
     }
   }
 
