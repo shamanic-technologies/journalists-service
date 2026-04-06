@@ -29,8 +29,7 @@ function mockEmailGatewayStatus(results: Array<{ leadId: string; email: string; 
         email: r.email,
         broadcast: {
           campaign: {
-            lead: { contacted: r.contacted, delivered: r.delivered, replied: r.replied, replyClassification: r.replyClassification, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null },
-            email: { contacted: r.contacted, delivered: r.delivered, bounced: false, unsubscribed: false, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null },
+            contacted: r.contacted, delivered: r.delivered, opened: false, replied: r.replied, replyClassification: r.replyClassification, bounced: false, unsubscribed: false, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null,
           },
           brand: null,
           global: { email: { bounced: false, unsubscribed: false } },
@@ -284,7 +283,7 @@ describe("GET /journalists/list", () => {
     expect(res.body.journalists).toHaveLength(1);
     const j = res.body.journalists[0];
     expect(j.emailStatus).not.toBeNull();
-    expect(j.emailStatus.broadcast.campaign.lead.contacted).toBe(true);
+    expect(j.emailStatus.broadcast.campaign.contacted).toBe(true);
   });
 
   it("enriches with costs from runs-service", async () => {

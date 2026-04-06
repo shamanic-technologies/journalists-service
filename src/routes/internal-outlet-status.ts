@@ -108,9 +108,9 @@ router.post("/orgs/outlets/status", async (req, res) => {
       );
 
       for (const result of gatewayResults) {
-        const scope = result.broadcast?.campaign?.lead ?? result.broadcast?.brand?.lead;
+        const scope = result.broadcast?.campaign ?? result.broadcast?.brand;
         if (scope) {
-          emailStatusMap.set(`${result.leadId}:${result.email}`, {
+          emailStatusMap.set(result.email, {
             contacted: scope.contacted,
             delivered: scope.delivered,
             replied: scope.replied,
@@ -138,7 +138,7 @@ router.post("/orgs/outlets/status", async (req, res) => {
 
         // Enrich with email-gateway if available
         if (row.email) {
-          const egStatus = emailStatusMap.get(`${row.journalistId}:${row.email}`);
+          const egStatus = emailStatusMap.get(row.email);
           if (egStatus) {
             if (egStatus.replied) {
               enrichedStatus = higherStatus(enrichedStatus, "replied");

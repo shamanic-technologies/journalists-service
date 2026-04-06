@@ -36,8 +36,7 @@ function mockEmailGatewayStatusForJournalists(statuses: Array<{ leadId: string; 
         email: r.email,
         broadcast: {
           campaign: {
-            lead: { contacted: r.contacted, delivered: r.delivered, replied: r.replied, replyClassification: r.replyClassification, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null },
-            email: { contacted: r.contacted, delivered: r.delivered, bounced: false, unsubscribed: false, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null },
+            contacted: r.contacted, delivered: r.delivered, opened: false, replied: r.replied, replyClassification: r.replyClassification, bounced: false, unsubscribed: false, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null,
           },
           brand: null,
           global: { email: { bounced: false, unsubscribed: false } },

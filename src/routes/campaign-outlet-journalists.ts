@@ -121,7 +121,7 @@ router.get("/orgs/campaign-outlet-journalists", async (req, res) => {
       };
       const results = await checkEmailStatuses(itemsWithEmail, campaign_id, ctx);
       for (const result of results) {
-        emailStatusMap.set(result.leadId, result);
+        emailStatusMap.set(result.email, result);
       }
     } catch (err) {
       console.warn("[journalists-service] email-gateway enrichment failed for campaign-outlet-journalists (continuing without):", err);
@@ -129,7 +129,8 @@ router.get("/orgs/campaign-outlet-journalists", async (req, res) => {
   }
 
   const enrichedRows = rows.map((row) => {
-    const emailGatewayResult = emailStatusMap.get(row.journalistId) ?? null;
+    const rowEmail = row.apolloEmail ?? row.email;
+    const emailGatewayResult = rowEmail ? (emailStatusMap.get(rowEmail) ?? null) : null;
     const statusTriplet = consolidateStatus(row.status, emailGatewayResult);
     return {
       id: row.id,

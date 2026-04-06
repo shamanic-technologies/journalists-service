@@ -155,7 +155,7 @@ router.get("/orgs/journalists/list", async (req, res) => {
         const ctx = buildCtx({ ...res.locals, brandIds: [brandId] });
         const results = await checkEmailStatuses(itemsWithEmail, campaignId, ctx);
         for (const result of results) {
-          emailStatusMap.set(result.leadId, result);
+          emailStatusMap.set(result.email, result);
         }
       } catch (err) {
         console.warn("[journalists-service] email-gateway enrichment failed (continuing without):", err);
@@ -212,9 +212,9 @@ router.get("/orgs/journalists/list", async (req, res) => {
 
     // 6. Build response
     const enrichedJournalists = [...grouped.values()].map((group) => {
-      const emailStatus = emailStatusMap.get(group.journalistId) ?? null;
-      const cost = journalistCostMap.get(group.journalistId) ?? null;
       const email = journalistEmails.get(group.journalistId) ?? null;
+      const emailStatus = email ? (emailStatusMap.get(email) ?? null) : null;
+      const cost = journalistCostMap.get(group.journalistId) ?? null;
 
       return {
         journalistId: group.journalistId,

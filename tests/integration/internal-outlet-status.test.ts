@@ -48,20 +48,14 @@ function makeEmailGatewayResult(
     email,
     broadcast: {
       campaign: {
-        lead: {
-          contacted,
-          delivered,
-          replied,
-          replyClassification,
-          lastDeliveredAt: null,
-        },
-        email: {
-          contacted,
-          delivered,
-          bounced: false,
-          unsubscribed: false,
-          lastDeliveredAt: null,
-        },
+        contacted,
+        delivered,
+        opened: false,
+        replied,
+        replyClassification,
+        bounced: false,
+        unsubscribed: false,
+        lastDeliveredAt: null,
       },
       brand: null,
       global: { email: { bounced: false, unsubscribed: false } },

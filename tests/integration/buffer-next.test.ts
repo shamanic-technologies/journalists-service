@@ -207,16 +207,14 @@ function setupEmailGatewayNotContacted() {
       broadcast: {
         campaign: null,
         brand: {
-          lead: { contacted: false, delivered: false, replied: false, replyClassification: null, lastDeliveredAt: null },
-          email: { contacted: false, delivered: false, bounced: false, unsubscribed: false, lastDeliveredAt: null },
+          contacted: false, delivered: false, opened: false, replied: false, replyClassification: null, bounced: false, unsubscribed: false, lastDeliveredAt: null,
         },
         global: { email: { bounced: false, unsubscribed: false } },
       },
       transactional: {
         campaign: null,
         brand: {
-          lead: { contacted: false, delivered: false, replied: false, replyClassification: null, lastDeliveredAt: null },
-          email: { contacted: false, delivered: false, bounced: false, unsubscribed: false, lastDeliveredAt: null },
+          contacted: false, delivered: false, opened: false, replied: false, replyClassification: null, bounced: false, unsubscribed: false, lastDeliveredAt: null,
         },
         global: { email: { bounced: false, unsubscribed: false } },
       },
