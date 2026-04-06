@@ -3,7 +3,7 @@ import { inArray, and, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { campaignJournalists } from "../db/schema.js";
 import { checkEmailStatuses } from "../lib/email-gateway-client.js";
-import { type ServiceContext } from "../lib/service-context.js";
+import { type OrgContext } from "../lib/service-context.js";
 import { OutletStatusRequestSchema } from "../schemas.js";
 
 const router = Router();
@@ -29,7 +29,7 @@ function higherStatus(a: string, b: string): string {
   return statusRank(a) >= statusRank(b) ? a : b;
 }
 
-router.post("/internal/outlets/status", async (req, res) => {
+router.post("/orgs/outlets/status", async (req, res) => {
   const parsed = OutletStatusRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues.map((i) => i.message).join(", ") });
@@ -38,8 +38,8 @@ router.post("/internal/outlets/status", async (req, res) => {
 
   const { outletIds } = parsed.data;
   const orgId = res.locals.orgId as string;
-  const campaignId = res.locals.campaignId as string; // empty string when not provided
-  const brandIds = (res.locals.brandIds as string[]) ?? [];
+  const campaignId = (res.locals.campaignId as string) || "";
+  const brandIds = (res.locals.brandIds as string[]) || [];
 
   try {
     // 1. Get all campaign_journalists for these outlets, scoped by org (+ campaign when provided)
@@ -91,14 +91,14 @@ router.post("/internal/outlets/status", async (req, res) => {
       replyClassification: "positive" | "negative" | "neutral" | null;
     }>();
     if (emailItems.length > 0) {
-      const ctx: ServiceContext = {
+      const ctx: OrgContext = {
         orgId,
-        userId: res.locals.userId as string,
-        runId: res.locals.runId as string,
-        campaignId,
+        userId: res.locals.userId as string | undefined,
+        runId: res.locals.runId as string | undefined,
+        campaignId: campaignId || undefined,
         brandIds,
-        featureSlug: (res.locals.featureSlug as string) ?? "",
-        workflowSlug: (res.locals.workflowSlug as string) ?? "",
+        featureSlug: res.locals.featureSlug as string | undefined,
+        workflowSlug: res.locals.workflowSlug as string | undefined,
       };
 
       const gatewayResults = await checkEmailStatuses(
@@ -165,7 +165,7 @@ router.post("/internal/outlets/status", async (req, res) => {
     }
 
     console.log(
-      `[journalists-service] POST /internal/outlets/status: ${outletIds.length} outlets, ${rows.length} journalists (orgId=${orgId}${campaignId ? ` campaignId=${campaignId}` : ""})`
+      `[journalists-service] POST /orgs/outlets/status: ${outletIds.length} outlets, ${rows.length} journalists (orgId=${orgId}${campaignId ? ` campaignId=${campaignId}` : ""})`
     );
 
     res.json({ results });

@@ -16,7 +16,8 @@ import {
   type EmailGatewayStatsParams,
 } from "../lib/email-gateway-client.js";
 
-const router = Router();
+export const publicStatsRouter = Router();
+export const orgStatsRouter = Router();
 
 // ── Shared stats logic ──────────────────────────────────────────────
 
@@ -223,9 +224,9 @@ async function resolveFiltersAndQuery(
   return result;
 }
 
-// ── Private stats: requires identity headers ────────────────────────
+// ── Org-scoped stats: requires x-org-id ─────────────────────────────
 
-router.get("/stats", async (req, res) => {
+orgStatsRouter.get("/orgs/stats", async (req, res) => {
   try {
     const parsed = StatsQuerySchema.safeParse(req.query);
     if (!parsed.success) {
@@ -242,9 +243,9 @@ router.get("/stats", async (req, res) => {
   }
 });
 
-// ── Public stats: only requires API key ─────────────────────────────
+// ─��� Protected public stats: only requires API key ───────────────────
 
-router.get("/stats/public", async (req, res) => {
+publicStatsRouter.get("/public/stats", async (req, res) => {
   try {
     const parsed = StatsQuerySchema.safeParse(req.query);
     if (!parsed.success) {
@@ -261,4 +262,8 @@ router.get("/stats/public", async (req, res) => {
   }
 });
 
+// default export kept for backwards compat in tests (exports both routers merged)
+const router = Router();
+router.use(publicStatsRouter);
+router.use(orgStatsRouter);
 export default router;

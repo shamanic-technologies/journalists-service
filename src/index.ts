@@ -8,14 +8,15 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { db } from "./db/index.js";
 import healthRoutes from "./routes/health.js";
 import internalRoutes from "./routes/internal.js";
-import internalOutletStatusRoutes from "./routes/internal-outlet-status.js";
+import outletStatusRoutes from "./routes/internal-outlet-status.js";
 import bufferNextRoutes from "./routes/buffer-next.js";
 import discoverRoutes from "./routes/discover.js";
 import campaignOutletJournalistsRoutes from "./routes/campaign-outlet-journalists.js";
-import statsRoutes from "./routes/stats.js";
+// stats routes are imported inline below (publicStatsRouter, orgStatsRouter)
 import statsCostsRoutes from "./routes/stats-costs.js";
 import journalistsListRoutes from "./routes/journalists-list.js";
-import { requireApiKey, requireBaseHeaders, requireIdentityHeaders } from "./middleware/auth.js";
+import outletBlockedRoutes from "./routes/outlet-blocked.js";
+import { apiKeyAuth, requireOrgId } from "./middleware/auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -41,28 +42,29 @@ app.get("/openapi.json", (_req, res) => {
 // Public
 app.use(healthRoutes);
 
-// Protected routes (API key required)
-app.use(requireApiKey);
+// All routes below require API key
+app.use(apiKeyAuth);
 
-// Public stats — API key only, no identity headers needed
-app.get("/stats/public", statsRoutes);
+// Protected public — API key only, no org context
+// Stats has both /public/stats and /orgs/stats — only /public/* matches here
+import { publicStatsRouter, orgStatsRouter } from "./routes/stats.js";
+app.use(publicStatsRouter);
 
-// Stats/read endpoints — only require base headers (x-org-id, x-user-id, x-run-id)
-// Workflow-context headers are optional since these are called from dashboard outside workflow execution
-const dashboardRouter = express.Router();
-dashboardRouter.use(requireBaseHeaders);
-dashboardRouter.use(statsRoutes);
-dashboardRouter.use(statsCostsRoutes);
-dashboardRouter.use(journalistsListRoutes);
-dashboardRouter.use(internalOutletStatusRoutes);
-app.use(dashboardRouter);
-
-// Private routes — require all identity headers
-app.use(requireIdentityHeaders);
-app.use(bufferNextRoutes);
-app.use(discoverRoutes);
-app.use(campaignOutletJournalistsRoutes);
+// Internal — API key only, service-to-service
 app.use(internalRoutes);
+
+// Org-scoped — API key + x-org-id required
+const orgRouter = express.Router();
+orgRouter.use(requireOrgId);
+orgRouter.use(orgStatsRouter);
+orgRouter.use(statsCostsRoutes);
+orgRouter.use(journalistsListRoutes);
+orgRouter.use(outletStatusRoutes);
+orgRouter.use(bufferNextRoutes);
+orgRouter.use(discoverRoutes);
+orgRouter.use(campaignOutletJournalistsRoutes);
+orgRouter.use(outletBlockedRoutes);
+app.use(orgRouter);
 
 // 404
 app.use((_req: express.Request, res: express.Response) => {

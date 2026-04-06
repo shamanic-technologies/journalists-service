@@ -1,4 +1,4 @@
-import { type ServiceContext, buildServiceHeaders } from "./service-context.js";
+import { type OrgContext, buildServiceHeaders } from "./service-context.js";
 
 const CAMPAIGN_SERVICE_URL = process.env.CAMPAIGN_SERVICE_URL;
 const CAMPAIGN_SERVICE_API_KEY = process.env.CAMPAIGN_SERVICE_API_KEY;
@@ -21,14 +21,14 @@ const campaignCache = new Map<string, CampaignInfo>();
 
 export async function fetchCampaign(
   campaignId: string,
-  ctx: ServiceContext
+  ctx: OrgContext
 ): Promise<CampaignInfo> {
   const cached = campaignCache.get(campaignId);
   if (cached) return cached;
 
   const { url, apiKey } = getConfig();
 
-  const headers = buildServiceHeaders(ctx, apiKey);
+  const headers = buildServiceHeaders(apiKey, ctx);
 
   const response = await fetch(`${url}/campaigns/${campaignId}`, { headers });
 

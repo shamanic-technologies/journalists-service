@@ -166,7 +166,7 @@ describe("POST /discover", () => {
 
   it("returns 400 for invalid request body", async () => {
     const res = await request(app)
-      .post("/discover")
+      .post("/orgs/discover")
       .set(DISCOVER_HEADERS)
       .send({});
 
@@ -176,7 +176,7 @@ describe("POST /discover", () => {
   it("returns 400 without x-campaign-id header", async () => {
     const { "x-campaign-id": _, ...headersWithoutCampaign } = AUTH_HEADERS;
     const res = await request(app)
-      .post("/discover")
+      .post("/orgs/discover")
       .set(headersWithoutCampaign)
       .send({ outletId: OUTLET_ID });
 
@@ -187,7 +187,7 @@ describe("POST /discover", () => {
   it("returns 400 without x-brand-id header", async () => {
     const { "x-brand-id": _, ...headersWithoutBrand } = AUTH_HEADERS;
     const res = await request(app)
-      .post("/discover")
+      .post("/orgs/discover")
       .set(headersWithoutBrand)
       .send({ outletId: OUTLET_ID });
 
@@ -197,7 +197,7 @@ describe("POST /discover", () => {
 
   it("returns 401 without auth", async () => {
     const res = await request(app)
-      .post("/discover")
+      .post("/orgs/discover")
       .send({ outletId: OUTLET_ID });
 
     expect(res.status).toBe(401);
@@ -209,7 +209,7 @@ describe("POST /discover", () => {
     setupDiscoverMocks();
 
     const res = await request(app)
-      .post("/discover")
+      .post("/orgs/discover")
       .set(DISCOVER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -242,7 +242,7 @@ describe("POST /discover", () => {
     const BRAND_ID_2 = "44444444-4444-4444-4444-555555555555";
 
     const res = await request(app)
-      .post("/discover")
+      .post("/orgs/discover")
       .set({ ...DISCOVER_HEADERS, "x-brand-id": `${BRAND_ID},${BRAND_ID_2}` })
       .send({ outletId: OUTLET_ID });
 
@@ -262,7 +262,7 @@ describe("POST /discover", () => {
     mockedDiscoverOutletArticles.mockResolvedValue({ articles: [] });
 
     const res = await request(app)
-      .post("/discover")
+      .post("/orgs/discover")
       .set(DISCOVER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -297,7 +297,7 @@ describe("POST /discover", () => {
     });
 
     const res = await request(app)
-      .post("/discover")
+      .post("/orgs/discover")
       .set(DISCOVER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -326,7 +326,7 @@ describe("POST /discover", () => {
     });
 
     const res = await request(app)
-      .post("/discover")
+      .post("/orgs/discover")
       .set(DISCOVER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -353,7 +353,7 @@ describe("POST /discover", () => {
     );
 
     const res = await request(app)
-      .post("/discover")
+      .post("/orgs/discover")
       .set(DISCOVER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -408,7 +408,7 @@ describe("POST /discover", () => {
     });
 
     const res = await request(app)
-      .post("/discover")
+      .post("/orgs/discover")
       .set(DISCOVER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -468,7 +468,7 @@ describe("POST /discover", () => {
     });
 
     const res = await request(app)
-      .post("/discover")
+      .post("/orgs/discover")
       .set(DISCOVER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -510,7 +510,7 @@ describe("POST /discover", () => {
     });
 
     const res = await request(app)
-      .post("/discover")
+      .post("/orgs/discover")
       .set(DISCOVER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -553,7 +553,7 @@ describe("POST /discover", () => {
     });
 
     const res = await request(app)
-      .post("/discover")
+      .post("/orgs/discover")
       .set(DISCOVER_HEADERS)
       .send({ outletId: OUTLET_ID });
 
@@ -574,7 +574,7 @@ describe("POST /discover", () => {
     );
 
     const res = await request(app)
-      .post("/discover")
+      .post("/orgs/discover")
       .set(DISCOVER_HEADERS)
       .send({ outletId: OUTLET_ID });
 

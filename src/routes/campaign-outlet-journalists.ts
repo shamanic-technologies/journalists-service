@@ -5,7 +5,7 @@ import { db } from "../db/index.js";
 import { campaignJournalists, journalists } from "../db/schema.js";
 import { resolveFeatureDynastySlugs } from "../lib/dynasty-client.js";
 import { checkEmailStatuses, consolidateStatus, type EmailGatewayStatusResult } from "../lib/email-gateway-client.js";
-import { type ServiceContext } from "../lib/service-context.js";
+import { type OrgContext } from "../lib/service-context.js";
 
 const router = Router();
 
@@ -20,7 +20,7 @@ const querySchema = z.object({
 // GET /campaign-outlet-journalists?campaign_id=...&outlet_id=...&run_id=...
 // GET /campaign-outlet-journalists?brand_id=...&outlet_id=...
 // GET /campaign-outlet-journalists?brand_id=...&feature_dynasty_slug=pr-journalist-outreach
-router.get("/campaign-outlet-journalists", async (req, res) => {
+router.get("/orgs/campaign-outlet-journalists", async (req, res) => {
   const parsed = querySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: "campaign_id or brand_id (uuid) is required" });
@@ -110,14 +110,14 @@ router.get("/campaign-outlet-journalists", async (req, res) => {
   let emailStatusMap = new Map<string, EmailGatewayStatusResult>();
   if (itemsWithEmail.length > 0) {
     try {
-      const ctx: ServiceContext = {
-        orgId: (res.locals.orgId as string) || "",
-        userId: (res.locals.userId as string) || "",
-        runId: (res.locals.runId as string) || "",
-        featureSlug: (res.locals.featureSlug as string) || "",
-        campaignId: (res.locals.campaignId as string) || "",
+      const ctx: OrgContext = {
+        orgId: res.locals.orgId as string,
+        userId: res.locals.userId as string | undefined,
+        runId: res.locals.runId as string | undefined,
+        featureSlug: res.locals.featureSlug as string | undefined,
+        campaignId: res.locals.campaignId as string | undefined,
         brandIds: brand_id ? [brand_id] : [],
-        workflowSlug: (res.locals.workflowSlug as string) || "",
+        workflowSlug: res.locals.workflowSlug as string | undefined,
       };
       const results = await checkEmailStatuses(itemsWithEmail, campaign_id, ctx);
       for (const result of results) {

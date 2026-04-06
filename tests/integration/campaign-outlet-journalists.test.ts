@@ -85,7 +85,7 @@ describe("GET /campaign-outlet-journalists", () => {
     });
 
     const res = await request(app)
-      .get(`/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}`)
+      .get(`/orgs/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -123,7 +123,7 @@ describe("GET /campaign-outlet-journalists", () => {
     });
 
     const res = await request(app)
-      .get(`/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}&outlet_id=${OUTLET_ID}`)
+      .get(`/orgs/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}&outlet_id=${OUTLET_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -133,7 +133,7 @@ describe("GET /campaign-outlet-journalists", () => {
 
   it("returns empty array for campaign with no journalists", async () => {
     const res = await request(app)
-      .get(`/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID_2}`)
+      .get(`/orgs/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID_2}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -162,7 +162,7 @@ describe("GET /campaign-outlet-journalists", () => {
     });
 
     const res = await request(app)
-      .get(`/campaign-outlet-journalists?brand_id=${BRAND_ID}`)
+      .get(`/orgs/campaign-outlet-journalists?brand_id=${BRAND_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -185,7 +185,7 @@ describe("GET /campaign-outlet-journalists", () => {
     });
 
     const res = await request(app)
-      .get(`/campaign-outlet-journalists?brand_id=${BRAND_ID_2}`)
+      .get(`/orgs/campaign-outlet-journalists?brand_id=${BRAND_ID_2}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -213,7 +213,7 @@ describe("GET /campaign-outlet-journalists", () => {
     });
 
     const res = await request(app)
-      .get(`/campaign-outlet-journalists?brand_id=${BRAND_ID}&outlet_id=${OUTLET_ID}`)
+      .get(`/orgs/campaign-outlet-journalists?brand_id=${BRAND_ID}&outlet_id=${OUTLET_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -223,7 +223,7 @@ describe("GET /campaign-outlet-journalists", () => {
 
   it("returns 400 without campaign_id or brand_id", async () => {
     const res = await request(app)
-      .get("/campaign-outlet-journalists")
+      .get("/orgs/campaign-outlet-journalists")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(400);
@@ -231,7 +231,7 @@ describe("GET /campaign-outlet-journalists", () => {
 
   it("returns 400 with only outlet_id (no campaign_id or brand_id)", async () => {
     const res = await request(app)
-      .get(`/campaign-outlet-journalists?outlet_id=${OUTLET_ID}`)
+      .get(`/orgs/campaign-outlet-journalists?outlet_id=${OUTLET_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(400);
@@ -239,7 +239,7 @@ describe("GET /campaign-outlet-journalists", () => {
 
   it("returns 400 with invalid campaign_id", async () => {
     const res = await request(app)
-      .get("/campaign-outlet-journalists?campaign_id=not-a-uuid")
+      .get("/orgs/campaign-outlet-journalists?campaign_id=not-a-uuid")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(400);
@@ -247,7 +247,7 @@ describe("GET /campaign-outlet-journalists", () => {
 
   it("returns 400 with invalid brand_id", async () => {
     const res = await request(app)
-      .get("/campaign-outlet-journalists?brand_id=not-a-uuid")
+      .get("/orgs/campaign-outlet-journalists?brand_id=not-a-uuid")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(400);
@@ -278,7 +278,7 @@ describe("GET /campaign-outlet-journalists", () => {
     });
 
     const res = await request(app)
-      .get(`/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}&run_id=${RUN_ID_A}`)
+      .get(`/orgs/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}&run_id=${RUN_ID_A}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -301,7 +301,7 @@ describe("GET /campaign-outlet-journalists", () => {
     });
 
     const res = await request(app)
-      .get(`/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}`)
+      .get(`/orgs/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -328,7 +328,7 @@ describe("GET /campaign-outlet-journalists", () => {
     });
 
     const res = await request(app)
-      .get(`/campaign-outlet-journalists?brand_id=${BRAND_ID}&feature_dynasty_slug=pr-outreach`)
+      .get(`/orgs/campaign-outlet-journalists?brand_id=${BRAND_ID}&feature_dynasty_slug=pr-outreach`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -358,7 +358,7 @@ describe("GET /campaign-outlet-journalists", () => {
     ]);
 
     const res = await request(app)
-      .get(`/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}`)
+      .get(`/orgs/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -389,7 +389,7 @@ describe("GET /campaign-outlet-journalists", () => {
     mockFetch.mockRejectedValueOnce(new Error("connection refused"));
 
     const res = await request(app)
-      .get(`/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}`)
+      .get(`/orgs/campaign-outlet-journalists?campaign_id=${CAMPAIGN_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -413,7 +413,7 @@ describe("GET /campaign-outlet-journalists", () => {
     });
 
     const res = await request(app)
-      .get(`/campaign-outlet-journalists?brand_id=${BRAND_ID}&feature_dynasty_slug=nonexistent`)
+      .get(`/orgs/campaign-outlet-journalists?brand_id=${BRAND_ID}&feature_dynasty_slug=nonexistent`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);

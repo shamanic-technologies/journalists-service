@@ -959,7 +959,7 @@
         }
       }
     },
-    "/buffer/next": {
+    "/orgs/buffer/next": {
       "post": {
         "summary": "Pull next best journalist with verified email. When outletId is provided, searches that outlet only. When omitted, pulls outlets from outlets-service and loops until finding a journalist with a valid email. Resolves email via Apollo, checks dedup via email-gateway.",
         "security": [
@@ -1010,7 +1010,7 @@
         }
       }
     },
-    "/discover": {
+    "/orgs/discover": {
       "post": {
         "summary": "Discover new journalists for a campaign+outlet. Creates a run, scrapes articles, scores journalists via LLM, and stores them as buffered. The x-brand-id header supports CSV format (e.g. uuid1,uuid2).",
         "security": [
@@ -1061,7 +1061,7 @@
         }
       }
     },
-    "/campaign-outlet-journalists": {
+    "/orgs/campaign-outlet-journalists": {
       "get": {
         "summary": "Get journalists associated with a campaign or brand, optionally filtered by outlet, run, and/or feature dynasty slug. Provide campaign_id, brand_id, or both.",
         "security": [
@@ -1143,7 +1143,7 @@
         }
       }
     },
-    "/stats": {
+    "/orgs/stats": {
       "get": {
         "summary": "Get journalist stats with optional dynasty-aware filtering and grouping",
         "security": [
@@ -1281,7 +1281,7 @@
         }
       }
     },
-    "/stats/public": {
+    "/public/stats": {
       "get": {
         "summary": "Get journalist stats (public). Same filters as /stats but does not require identity headers.",
         "security": [
@@ -1419,7 +1419,7 @@
         }
       }
     },
-    "/journalists/stats/costs": {
+    "/orgs/journalists/stats/costs": {
       "get": {
         "summary": "Get cost stats for journalist discovery runs. Returns aggregated costs from runs-service, distributed per journalist. Requires x-org-id to scope costs to the requesting org.",
         "security": [
@@ -1485,7 +1485,7 @@
         }
       }
     },
-    "/journalists/list": {
+    "/orgs/journalists/list": {
       "get": {
         "summary": "List journalists grouped by identity with per-campaign details. Each journalist has global data (email, cost, emailStatus) and a campaigns[] array with per-campaign entries. Filter by featureSlugs (CSV), featureDynastySlug (resolves to versioned slugs), and/or workflowSlug.",
         "security": [
@@ -1566,7 +1566,7 @@
         }
       }
     },
-    "/internal/outlets/blocked": {
+    "/orgs/outlets/blocked": {
       "get": {
         "summary": "Check if an outlet is blocked for a brand+org. Uses full dedup logic: checks lead-service for prior contacts, reply classification, 30-day no-reply cooldown, and 12-month expiry.",
         "security": [
@@ -1640,7 +1640,7 @@
         }
       }
     },
-    "/internal/outlets/status": {
+    "/orgs/outlets/status": {
       "post": {
         "summary": "Batch outlet status enriched from email-gateway. Returns the high watermark status across all journalists for each outlet, combining DB status with real-time email-gateway data.",
         "security": [

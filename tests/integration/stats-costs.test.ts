@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import request from "supertest";
-import { createTestApp, AUTH_HEADERS, BASE_AUTH_HEADERS } from "../helpers/test-app.js";
+import { createTestApp, AUTH_HEADERS, ORG_AUTH_HEADERS } from "../helpers/test-app.js";
 import {
   cleanTestData,
   insertTestJournalist,
@@ -53,7 +53,7 @@ describe("GET /journalists/stats/costs", () => {
 
   it("requires brandId query param", async () => {
     const res = await request(app)
-      .get("/journalists/stats/costs")
+      .get("/orgs/journalists/stats/costs")
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(400);
@@ -61,7 +61,7 @@ describe("GET /journalists/stats/costs", () => {
 
   it("returns empty groups when no journalists exist", async () => {
     const res = await request(app)
-      .get(`/journalists/stats/costs?brandId=${BRAND_ID}`)
+      .get(`/orgs/journalists/stats/costs?brandId=${BRAND_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -86,7 +86,7 @@ describe("GET /journalists/stats/costs", () => {
     ]);
 
     const res = await request(app)
-      .get(`/journalists/stats/costs?brandId=${BRAND_ID}`)
+      .get(`/orgs/journalists/stats/costs?brandId=${BRAND_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -111,7 +111,7 @@ describe("GET /journalists/stats/costs", () => {
     ]);
 
     const res = await request(app)
-      .get(`/journalists/stats/costs?brandId=${BRAND_ID_2}`)
+      .get(`/orgs/journalists/stats/costs?brandId=${BRAND_ID_2}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -138,7 +138,7 @@ describe("GET /journalists/stats/costs", () => {
     ]);
 
     const res = await request(app)
-      .get(`/journalists/stats/costs?brandId=${BRAND_ID}`)
+      .get(`/orgs/journalists/stats/costs?brandId=${BRAND_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -165,7 +165,7 @@ describe("GET /journalists/stats/costs", () => {
     ]);
 
     const res = await request(app)
-      .get(`/journalists/stats/costs?brandId=${BRAND_ID}&groupBy=journalistId`)
+      .get(`/orgs/journalists/stats/costs?brandId=${BRAND_ID}&groupBy=journalistId`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -202,7 +202,7 @@ describe("GET /journalists/stats/costs", () => {
     ]);
 
     const res = await request(app)
-      .get(`/journalists/stats/costs?brandId=${BRAND_ID}&campaignId=${CAMPAIGN_ID}`)
+      .get(`/orgs/journalists/stats/costs?brandId=${BRAND_ID}&campaignId=${CAMPAIGN_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -231,7 +231,7 @@ describe("GET /journalists/stats/costs", () => {
     ]);
 
     const res = await request(app)
-      .get(`/journalists/stats/costs?brandId=${BRAND_ID}`)
+      .get(`/orgs/journalists/stats/costs?brandId=${BRAND_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -260,7 +260,7 @@ describe("GET /journalists/stats/costs", () => {
     ]);
 
     const res = await request(app)
-      .get(`/journalists/stats/costs?brandId=${BRAND_ID}&groupBy=journalistId`)
+      .get(`/orgs/journalists/stats/costs?brandId=${BRAND_ID}&groupBy=journalistId`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
@@ -279,7 +279,7 @@ describe("GET /journalists/stats/costs", () => {
     mockBatchRunCostsFailure();
 
     const res = await request(app)
-      .get(`/journalists/stats/costs?brandId=${BRAND_ID}`)
+      .get(`/orgs/journalists/stats/costs?brandId=${BRAND_ID}`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(500);
@@ -298,8 +298,8 @@ describe("GET /journalists/stats/costs", () => {
     ]);
 
     const res = await request(app)
-      .get(`/journalists/stats/costs?brandId=${BRAND_ID}`)
-      .set(BASE_AUTH_HEADERS);
+      .get(`/orgs/journalists/stats/costs?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.groups).toHaveLength(1);
@@ -317,7 +317,7 @@ describe("GET /journalists/stats/costs", () => {
     mockBatchRunCosts([]);
 
     const res = await request(app)
-      .get(`/journalists/stats/costs?brandId=${BRAND_ID}&groupBy=journalistId`)
+      .get(`/orgs/journalists/stats/costs?brandId=${BRAND_ID}&groupBy=journalistId`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);

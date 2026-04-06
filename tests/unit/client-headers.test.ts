@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ServiceContext } from "../../src/lib/service-context.js";
+import type { OrgContext } from "../../src/lib/service-context.js";
 
 // Capture fetch calls to inspect headers
 const fetchSpy = vi.fn();
@@ -19,7 +19,7 @@ process.env.OUTLETS_SERVICE_API_KEY = "outlets-key";
 process.env.CAMPAIGN_SERVICE_URL = "http://campaign";
 process.env.CAMPAIGN_SERVICE_API_KEY = "campaign-key";
 
-const FULL_CTX: ServiceContext = {
+const FULL_CTX: OrgContext = {
   orgId: "org-1",
   userId: "user-1",
   runId: "run-1",
@@ -162,7 +162,7 @@ describe("all 7 headers forwarded by every client", () => {
       mockOkResponse({ content: "ok", tokensInput: 1, tokensOutput: 1, model: "test" })
     );
 
-    const fullCtx: ServiceContext = {
+    const fullCtx: OrgContext = {
       orgId: "org-1",
       userId: "user-1",
       runId: "run-1",
@@ -190,7 +190,7 @@ describe("all 7 headers forwarded by every client", () => {
       mockOkResponse({ content: "ok", tokensInput: 1, tokensOutput: 1, model: "test" })
     );
 
-    const baseOnlyCtx: ServiceContext = {
+    const baseOnlyCtx: OrgContext = {
       orgId: "org-1",
       userId: "user-1",
       runId: "run-1",
@@ -218,7 +218,7 @@ describe("all 7 headers forwarded by every client", () => {
       mockOkResponse({ content: "ok", tokensInput: 1, tokensOutput: 1, model: "test" })
     );
 
-    const multiBrandCtx: ServiceContext = {
+    const multiBrandCtx: OrgContext = {
       orgId: "org-1",
       userId: "user-1",
       runId: "run-1",

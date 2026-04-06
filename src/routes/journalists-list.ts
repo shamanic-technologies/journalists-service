@@ -6,23 +6,23 @@ import { JournalistsListQuerySchema } from "../schemas.js";
 import { checkEmailStatuses, consolidateStatus, type EmailGatewayStatusResult } from "../lib/email-gateway-client.js";
 import { fetchBatchRunCosts, type BatchRunCost } from "../lib/runs-client.js";
 import { resolveFeatureDynastySlugs } from "../lib/dynasty-client.js";
-import { type ServiceContext } from "../lib/service-context.js";
+import { type OrgContext } from "../lib/service-context.js";
 
 const router = Router();
 
-function buildCtx(locals: Record<string, unknown>): ServiceContext {
+function buildCtx(locals: Record<string, unknown>): OrgContext {
   return {
     orgId: locals.orgId as string,
-    userId: locals.userId as string,
-    runId: locals.runId as string,
-    featureSlug: (locals.featureSlug as string) || "",
-    campaignId: (locals.campaignId as string) || "",
+    userId: locals.userId as string | undefined,
+    runId: locals.runId as string | undefined,
+    featureSlug: locals.featureSlug as string | undefined,
+    campaignId: locals.campaignId as string | undefined,
     brandIds: (locals.brandIds as string[]) || [],
-    workflowSlug: (locals.workflowSlug as string) || "",
+    workflowSlug: locals.workflowSlug as string | undefined,
   };
 }
 
-router.get("/journalists/list", async (req, res) => {
+router.get("/orgs/journalists/list", async (req, res) => {
   try {
     const parsed = JournalistsListQuerySchema.safeParse(req.query);
     if (!parsed.success) {

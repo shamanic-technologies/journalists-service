@@ -1,12 +1,24 @@
 import { Request, Response, NextFunction } from "express";
 
-export function requireApiKey(
+const API_KEY_ENV = "JOURNALISTS_SERVICE_API_KEY";
+
+// Crash at startup if the API key env var is missing
+const apiKeyValue = process.env[API_KEY_ENV];
+if (!apiKeyValue && process.env.NODE_ENV !== "test") {
+  console.error(
+    `[journalists-service] FATAL: ${API_KEY_ENV} env var is missing — refusing to start`
+  );
+  process.exit(1);
+}
+
+export function apiKeyAuth(
   req: Request,
   res: Response,
   next: NextFunction
 ): void {
   const apiKey = req.headers["x-api-key"] as string;
-  if (!apiKey || apiKey !== process.env.JOURNALISTS_SERVICE_API_KEY) {
+  const expected = process.env[API_KEY_ENV];
+  if (!apiKey || apiKey !== expected) {
     console.warn(
       `[journalists-service] Auth rejected ${req.method} ${req.path} — ` +
         (apiKey ? "api key mismatch" : "no x-api-key header")
@@ -24,94 +36,30 @@ function parseBrandIds(raw: string | undefined): string[] {
 }
 
 /**
- * Read/stats endpoints only require the 3 base identity headers.
- * The 4 workflow-context headers are read if present but not required.
+ * Requires x-org-id. Parses all other identity headers as optional
+ * and stores them in res.locals as an OrgContext shape.
  */
-export function requireBaseHeaders(
+export function requireOrgId(
   req: Request,
   res: Response,
   next: NextFunction
 ): void {
   const orgId = req.headers["x-org-id"] as string | undefined;
-  const userId = req.headers["x-user-id"] as string | undefined;
-  const runId = req.headers["x-run-id"] as string | undefined;
 
-  const missing = [
-    !orgId && "x-org-id",
-    !userId && "x-user-id",
-    !runId && "x-run-id",
-  ].filter(Boolean);
-
-  if (missing.length > 0) {
+  if (!orgId) {
     console.warn(
-      `[journalists-service] Missing required headers on ${req.method} ${req.path}: ${missing.join(", ")}`
+      `[journalists-service] Missing required header x-org-id on ${req.method} ${req.path}`
     );
-    res
-      .status(400)
-      .json({ error: `Missing required headers: ${missing.join(", ")}` });
+    res.status(400).json({ error: "Missing required header: x-org-id" });
     return;
   }
 
-  const campaignId = req.headers["x-campaign-id"] as string | undefined;
-  const brandIdRaw = req.headers["x-brand-id"] as string | undefined;
-  const featureSlug = req.headers["x-feature-slug"] as string | undefined;
-  const workflowSlug = req.headers["x-workflow-slug"] as string | undefined;
-
   res.locals.orgId = orgId;
-  res.locals.userId = userId;
-  res.locals.runId = runId;
-  res.locals.campaignId = campaignId ?? "";
-  res.locals.brandIds = parseBrandIds(brandIdRaw);
-  res.locals.featureSlug = featureSlug ?? "";
-  res.locals.workflowSlug = workflowSlug ?? "";
-  next();
-}
-
-/**
- * All authenticated endpoints require ALL 6 contextual headers.
- * Returns 400 listing which ones are missing.
- */
-export function requireIdentityHeaders(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
-  const orgId = req.headers["x-org-id"] as string | undefined;
-  const userId = req.headers["x-user-id"] as string | undefined;
-  const runId = req.headers["x-run-id"] as string | undefined;
-  const campaignId = req.headers["x-campaign-id"] as string | undefined;
-  const brandIdRaw = req.headers["x-brand-id"] as string | undefined;
-  const featureSlug = req.headers["x-feature-slug"] as string | undefined;
-  const workflowSlug = req.headers["x-workflow-slug"] as string | undefined;
-
-  const missing = [
-    !orgId && "x-org-id",
-    !userId && "x-user-id",
-    !runId && "x-run-id",
-    !campaignId && "x-campaign-id",
-    !brandIdRaw && "x-brand-id",
-    !featureSlug && "x-feature-slug",
-    !workflowSlug && "x-workflow-slug",
-  ].filter(Boolean);
-
-  if (missing.length > 0) {
-    console.warn(
-      `[journalists-service] Missing required headers on ${req.method} ${req.path}: ${missing.join(", ")}`
-    );
-    res
-      .status(400)
-      .json({ error: `Missing required headers: ${missing.join(", ")}` });
-    return;
-  }
-
-  const brandIds = parseBrandIds(brandIdRaw);
-
-  res.locals.orgId = orgId;
-  res.locals.userId = userId;
-  res.locals.runId = runId;
-  res.locals.campaignId = campaignId;
-  res.locals.brandIds = brandIds;
-  res.locals.featureSlug = featureSlug;
-  res.locals.workflowSlug = workflowSlug;
+  res.locals.userId = (req.headers["x-user-id"] as string) || undefined;
+  res.locals.runId = (req.headers["x-run-id"] as string) || undefined;
+  res.locals.campaignId = (req.headers["x-campaign-id"] as string) || undefined;
+  res.locals.brandIds = parseBrandIds(req.headers["x-brand-id"] as string | undefined);
+  res.locals.featureSlug = (req.headers["x-feature-slug"] as string) || undefined;
+  res.locals.workflowSlug = (req.headers["x-workflow-slug"] as string) || undefined;
   next();
 }

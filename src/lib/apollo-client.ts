@@ -1,4 +1,4 @@
-import { type ServiceContext, buildServiceHeaders } from "./service-context.js";
+import { type OrgContext, buildServiceHeaders } from "./service-context.js";
 
 const APOLLO_SERVICE_URL = process.env.APOLLO_SERVICE_URL;
 const APOLLO_SERVICE_API_KEY = process.env.APOLLO_SERVICE_API_KEY;
@@ -34,10 +34,10 @@ export async function matchPerson(
   firstName: string,
   lastName: string,
   organizationDomain: string,
-  ctx: ServiceContext
+  ctx: OrgContext
 ): Promise<ApolloMatchResult> {
   const { url, apiKey } = getConfig();
-  const headers = buildServiceHeaders(ctx, apiKey);
+  const headers = buildServiceHeaders(apiKey, ctx);
 
   const response = await fetch(`${url}/match`, {
     method: "POST",

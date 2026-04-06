@@ -23,7 +23,7 @@ import {
 import { matchPerson } from "../lib/apollo-client.js";
 import { checkEmailStatuses } from "../lib/email-gateway-client.js";
 import { BufferNextSchema } from "../schemas.js";
-import type { ServiceContext } from "../lib/service-context.js";
+import type { OrgContext } from "../lib/service-context.js";
 
 const router = Router();
 
@@ -37,15 +37,15 @@ const CLEANUP_PROBABILITY = 0.01;
 // Email statuses that indicate a usable email
 const VALID_EMAIL_STATUSES = new Set(["verified", "guessed", "unavailable"]);
 
-function getCtx(locals: Record<string, unknown>): ServiceContext {
+function getCtx(locals: Record<string, unknown>): OrgContext {
   return {
     orgId: locals.orgId as string,
-    userId: locals.userId as string,
-    runId: locals.runId as string,
-    featureSlug: locals.featureSlug as string,
-    campaignId: locals.campaignId as string,
-    brandIds: locals.brandIds as string[],
-    workflowSlug: locals.workflowSlug as string,
+    userId: locals.userId as string | undefined,
+    runId: locals.runId as string | undefined,
+    featureSlug: locals.featureSlug as string | undefined,
+    campaignId: locals.campaignId as string | undefined,
+    brandIds: (locals.brandIds as string[]) || [],
+    workflowSlug: locals.workflowSlug as string | undefined,
   };
 }
 
@@ -379,7 +379,7 @@ async function resolveAndCheckEmail(
   outletDomain: string,
   orgId: string,
   brandIds: string[],
-  ctx: ServiceContext
+  ctx: OrgContext
 ): Promise<ResolvedEmail | null> {
   const firstName = claimed.firstName || "";
   const lastName = claimed.lastName || "";
@@ -546,7 +546,7 @@ async function processOutlet(
   campaignId: string,
   brandIds: string[],
   maxArticles: number,
-  ctx: ServiceContext
+  ctx: OrgContext
 ): Promise<BufferNextResponse> {
   // ── Relevance gate ─────────────────────────────────────────
   const blocked = await checkOutletBlocked(outlet.outletId, campaignId, ctx.orgId, brandIds);
@@ -573,7 +573,7 @@ async function processOutlet(
     },
     ctx
   );
-  const childCtx: ServiceContext = { ...ctx, runId: childRun.id };
+  const childCtx: OrgContext = { ...ctx, runId: childRun.id };
 
   let hasAttemptedRefill = false;
 
@@ -738,7 +738,7 @@ async function processOutlet(
 
 // ── Route handler ───────────────────────────────────────────────────
 
-router.post("/buffer/next", async (req, res) => {
+router.post("/orgs/buffer/next", async (req, res) => {
   const parsed = BufferNextSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -747,6 +747,16 @@ router.post("/buffer/next", async (req, res) => {
 
   const { outletId, maxArticles, idempotencyKey } = parsed.data;
   const ctx = getCtx(res.locals);
+
+  if (!ctx.campaignId) {
+    res.status(400).json({ error: "x-campaign-id header is required" });
+    return;
+  }
+  if (ctx.brandIds.length === 0) {
+    res.status(400).json({ error: "x-brand-id header is required" });
+    return;
+  }
+
   const campaignId = ctx.campaignId;
   const brandIds = ctx.brandIds;
 

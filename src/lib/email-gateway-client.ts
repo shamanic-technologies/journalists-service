@@ -1,4 +1,4 @@
-import { type ServiceContext, buildServiceHeaders } from "./service-context.js";
+import { type OrgContext, buildServiceHeaders } from "./service-context.js";
 
 const EMAIL_GATEWAY_SERVICE_URL = process.env.EMAIL_GATEWAY_SERVICE_URL;
 const EMAIL_GATEWAY_SERVICE_API_KEY = process.env.EMAIL_GATEWAY_SERVICE_API_KEY;
@@ -47,10 +47,10 @@ export interface EmailGatewayStatusResult {
 export async function checkEmailStatuses(
   items: Array<{ leadId: string; email: string }>,
   campaignId: string | undefined,
-  ctx: ServiceContext
+  ctx: OrgContext
 ): Promise<EmailGatewayStatusResult[]> {
   const { url, apiKey } = getConfig();
-  const headers = buildServiceHeaders(ctx, apiKey);
+  const headers = buildServiceHeaders(apiKey, ctx);
 
   const body: Record<string, unknown> = { items };
   if (campaignId) body.campaignId = campaignId;
