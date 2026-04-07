@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { checkOutletBlocked } from "../lib/outlet-blocked.js";
+import type { OrgContext } from "../lib/service-context.js";
 
 const router = Router();
 
@@ -23,8 +24,18 @@ router.get("/orgs/outlets/blocked", async (req, res) => {
   const orgId = res.locals.orgId as string;
   const brandIds = res.locals.brandIds as string[];
 
+  const ctx: OrgContext = {
+    orgId,
+    userId: res.locals.userId as string | undefined,
+    runId: res.locals.runId as string | undefined,
+    campaignId: campaignId || undefined,
+    brandIds,
+    featureSlug: res.locals.featureSlug as string | undefined,
+    workflowSlug: res.locals.workflowSlug as string | undefined,
+  };
+
   try {
-    const result = await checkOutletBlocked(outlet_id, campaignId, orgId, brandIds);
+    const result = await checkOutletBlocked(outlet_id, campaignId, orgId, brandIds, ctx);
     if (result.blocked) {
       console.log(
         `[journalists-service] GET /orgs/outlets/blocked: ${result.reason} (outletId=${outlet_id} campaignId=${campaignId} orgId=${orgId})`

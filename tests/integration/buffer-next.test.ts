@@ -1081,6 +1081,57 @@ describe("POST /buffer/next", () => {
       expect(res.status).toBe(200);
       expect(res.body.found).toBe(false);
     });
+    it("skips journalist whose email is already contacted at brand scope", { timeout: 15000 }, async () => {
+      const sarah = await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: "Sarah Johnson",
+        firstName: "Sarah",
+        lastName: "Johnson",
+      });
+
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: CAMPAIGN_ID,
+        outletId: OUTLET_ID,
+        relevanceScore: "92.00",
+        status: "buffered",
+      });
+
+      await seedDiscoveryCache();
+      setupBaseMocks();
+      setupApolloMock("sarah@techcrunch.com");
+
+      mockedCheckEmailStatuses.mockResolvedValue([
+        {
+          leadId: sarah.id,
+          email: "sarah@techcrunch.com",
+          broadcast: {
+            campaign: null,
+            brand: {
+              contacted: true, delivered: true, opened: false, replied: false,
+              replyClassification: null, bounced: false, unsubscribed: false,
+              lastDeliveredAt: new Date().toISOString(),
+            },
+            global: { email: { bounced: false, unsubscribed: false } },
+          },
+          transactional: {
+            campaign: null,
+            brand: null,
+            global: { email: { bounced: false, unsubscribed: false } },
+          },
+        },
+      ]);
+
+      const res = await request(app)
+        .post("/orgs/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(false);
+    });
   });
 
   // ── Refill on empty buffer ──────────────────────────────────────────

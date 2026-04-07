@@ -519,6 +519,12 @@ async function resolveAndCheckEmail(
       );
       return null;
     }
+    if (result.broadcast?.brand?.contacted) {
+      console.log(
+        `[journalists-service] Email ${email} already contacted at brand scope`
+      );
+      return null;
+    }
   }
 
   return {
@@ -549,7 +555,7 @@ async function processOutlet(
   ctx: OrgContext
 ): Promise<BufferNextResponse> {
   // ── Relevance gate ─────────────────────────────────────────
-  const blocked = await checkOutletBlocked(outlet.outletId, campaignId, ctx.orgId, brandIds);
+  const blocked = await checkOutletBlocked(outlet.outletId, campaignId, ctx.orgId, brandIds, ctx);
   if (blocked.blocked) {
     await pgClient`
       UPDATE campaign_journalists
