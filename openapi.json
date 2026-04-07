@@ -741,6 +741,16 @@
             "type": "string",
             "format": "uuid"
           },
+          "outletName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Outlet display name from outlets-service. Null if outlets-service is unreachable."
+          },
+          "outletDomain": {
+            "type": "string",
+            "nullable": true,
+            "description": "Outlet domain from outlets-service — used for logo resolution. Null if outlets-service is unreachable."
+          },
           "email": {
             "type": "string",
             "nullable": true,
@@ -771,6 +781,8 @@
           "lastName",
           "entityType",
           "outletId",
+          "outletName",
+          "outletDomain",
           "email",
           "apolloPersonId",
           "emailStatus",
