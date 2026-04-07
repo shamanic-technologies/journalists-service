@@ -24,11 +24,11 @@ export async function fetchOutlet(
 
   const headers = buildServiceHeaders(apiKey, ctx);
 
-  const response = await fetch(`${url}/outlets/${outletId}`, { headers });
+  const response = await fetch(`${url}/orgs/outlets/${outletId}`, { headers });
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`Outlets service GET /outlets/${outletId} failed (${response.status}): ${body}`);
+    throw new Error(`Outlets service GET /orgs/outlets/${outletId} failed (${response.status}): ${body}`);
   }
 
   const data = (await response.json()) as OutletInfo;
@@ -95,7 +95,7 @@ export async function pullNextOutlet(
   const body: Record<string, unknown> = { count: 1 };
   if (idempotencyKey) body.idempotencyKey = idempotencyKey;
 
-  const response = await fetch(`${url}/buffer/next`, {
+  const response = await fetch(`${url}/orgs/buffer/next`, {
     method: "POST",
     headers: { ...headers, "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -104,7 +104,7 @@ export async function pullNextOutlet(
   if (!response.ok) {
     const text = await response.text();
     throw new Error(
-      `[journalists-service] Outlets service POST /buffer/next failed (${response.status}): ${text}`
+      `[journalists-service] Outlets service POST /orgs/buffer/next failed (${response.status}): ${text}`
     );
   }
 
