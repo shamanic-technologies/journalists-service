@@ -44,6 +44,13 @@ function mockEmailGatewayStatus(results: Array<{ leadId: string; email: string; 
   });
 }
 
+function mockOutletsService(outlets: Array<{ id: string; outletName: string; outletDomain: string }>) {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ outlets }),
+  });
+}
+
 function mockRunCosts(costs: Array<{ runId: string; totalCostInUsdCents: string; actualCostInUsdCents: string; provisionedCostInUsdCents: string }>) {
   mockFetch.mockResolvedValueOnce({
     ok: true,
@@ -95,6 +102,8 @@ describe("GET /journalists/list", () => {
       status: "buffered",
     });
 
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
+
     const res = await request(app)
       .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
       .set(ORG_AUTH_HEADERS);
@@ -143,6 +152,7 @@ describe("GET /journalists/list", () => {
     mockEmailGatewayStatus([
       { leadId: journalist.id, email: "samantha@example.com", contacted: true, delivered: true, replied: false, replyClassification: null },
     ]);
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
 
     const res = await request(app)
       .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
@@ -183,6 +193,7 @@ describe("GET /journalists/list", () => {
     mockEmailGatewayStatus([
       { leadId: journalist.id, email: "bob@global.com", contacted: true, delivered: true, replied: false, replyClassification: null },
     ]);
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
 
     const res = await request(app)
       .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
@@ -216,6 +227,7 @@ describe("GET /journalists/list", () => {
     mockEmailGatewayStatus([
       { leadId: journalist.id, email: "status@example.com", contacted: true, delivered: true, replied: true, replyClassification: "positive" },
     ]);
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
 
     const res = await request(app)
       .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
@@ -261,6 +273,9 @@ describe("GET /journalists/list", () => {
       }),
     });
 
+    // outlets-service
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
+
     // runs-service
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ costs: [] }) });
 
@@ -288,6 +303,8 @@ describe("GET /journalists/list", () => {
       outletId: OUTLET_ID,
       status: "buffered",
     });
+
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
 
     const res = await request(app)
       .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
@@ -320,6 +337,7 @@ describe("GET /journalists/list", () => {
     mockEmailGatewayStatus([
       { leadId: journalist.id, email: "bob@example.com", contacted: true, delivered: true, replied: false, replyClassification: null },
     ]);
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
 
     const res = await request(app)
       .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
@@ -349,6 +367,7 @@ describe("GET /journalists/list", () => {
       runId: RUN_ID,
     });
 
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
     mockRunCosts([
       { runId: RUN_ID, totalCostInUsdCents: "100", actualCostInUsdCents: "80", provisionedCostInUsdCents: "20" },
     ]);
@@ -391,6 +410,8 @@ describe("GET /journalists/list", () => {
       outletId: OUTLET_ID,
     });
 
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
+
     const res = await request(app)
       .get(`/orgs/journalists/list?brandId=${BRAND_ID}&campaignId=${CAMPAIGN_ID}`)
       .set(ORG_AUTH_HEADERS);
@@ -418,6 +439,8 @@ describe("GET /journalists/list", () => {
       campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, featureSlug: "warm-intro",
     });
 
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
+
     const res = await request(app)
       .get(`/orgs/journalists/list?brandId=${BRAND_ID}&featureSlugs=pr-outreach,cold-email`)
       .set(ORG_AUTH_HEADERS);
@@ -440,6 +463,8 @@ describe("GET /journalists/list", () => {
       journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, workflowSlug: "pitch-v2",
     });
+
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
 
     const res = await request(app)
       .get(`/orgs/journalists/list?brandId=${BRAND_ID}&workflowSlug=pitch-v1`)
@@ -468,6 +493,7 @@ describe("GET /journalists/list", () => {
     });
 
     mockFetch.mockRejectedValueOnce(new Error("connection refused"));
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
 
     const res = await request(app)
       .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
@@ -491,6 +517,7 @@ describe("GET /journalists/list", () => {
       campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, runId: RUN_ID,
     });
 
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
     mockRunCosts([
       { runId: RUN_ID, totalCostInUsdCents: "200", actualCostInUsdCents: "160", provisionedCostInUsdCents: "40" },
     ]);
@@ -527,6 +554,7 @@ describe("GET /journalists/list", () => {
       ok: true,
       json: async () => ({ slugs: ["pr-outreach-v1", "pr-outreach-v2"] }),
     });
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
 
     const res = await request(app)
       .get(`/orgs/journalists/list?brandId=${BRAND_ID}&featureDynastySlug=pr-outreach`)
@@ -576,6 +604,7 @@ describe("GET /journalists/list", () => {
       ok: true,
       json: async () => ({ slugs: ["pr-outreach-v1"] }),
     });
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
 
     // Both featureSlugs and featureDynastySlug provided — dynasty wins
     const res = await request(app)
@@ -585,6 +614,59 @@ describe("GET /journalists/list", () => {
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(1);
     expect(res.body.journalists[0].journalistName).toBe("Priority A");
+  });
+
+  it("enriches with outletName and outletDomain from outlets-service", async () => {
+    const journalist = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Outlet Enrichment Test",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: journalist.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      status: "buffered",
+    });
+
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
+
+    const res = await request(app)
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    const j = res.body.journalists[0];
+    expect(j.outletName).toBe("TechCrunch");
+    expect(j.outletDomain).toBe("techcrunch.com");
+  });
+
+  it("returns null outletName/outletDomain when outlets-service fails", async () => {
+    const journalist = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Outlet Fail Test",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: journalist.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      status: "buffered",
+    });
+
+    mockFetch.mockRejectedValueOnce(new Error("outlets-service down"));
+
+    const res = await request(app)
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    const j = res.body.journalists[0];
+    expect(j.outletId).toBe(OUTLET_ID);
+    expect(j.outletName).toBeNull();
+    expect(j.outletDomain).toBeNull();
   });
 
   it("scopes by orgId from headers — does not return other org's journalists", async () => {

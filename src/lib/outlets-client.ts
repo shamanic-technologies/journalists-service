@@ -35,6 +35,40 @@ export async function fetchOutlet(
   return data;
 }
 
+export interface OutletBasic {
+  id: string;
+  outletName: string;
+  outletDomain: string;
+}
+
+export async function fetchOutletsBatch(
+  outletIds: string[]
+): Promise<Map<string, OutletBasic>> {
+  const { url, apiKey } = getConfig();
+
+  const response = await fetch(
+    `${url}/internal/outlets?ids=${outletIds.join(",")}`,
+    { headers: { "x-api-key": apiKey } }
+  );
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(
+      `[journalists-service] Outlets service GET /internal/outlets failed (${response.status}): ${body}`
+    );
+  }
+
+  const data = (await response.json()) as {
+    outlets: Array<{ id: string; outletName: string; outletDomain: string }>;
+  };
+
+  const map = new Map<string, OutletBasic>();
+  for (const o of data.outlets) {
+    map.set(o.id, { id: o.id, outletName: o.outletName, outletDomain: o.outletDomain });
+  }
+  return map;
+}
+
 export interface PulledOutlet {
   outletId: string;
   outletName: string;

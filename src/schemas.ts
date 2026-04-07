@@ -263,6 +263,8 @@ const JournalistListItemSchema = z.object({
   lastName: z.string().nullable(),
   entityType: z.enum(["individual", "organization"]),
   outletId: z.string().uuid(),
+  outletName: z.string().nullable().openapi({ description: "Outlet display name from outlets-service. Null if outlets-service is unreachable." }),
+  outletDomain: z.string().nullable().openapi({ description: "Outlet domain from outlets-service — used for logo resolution. Null if outlets-service is unreachable." }),
   email: z.string().nullable().openapi({ description: "Global email (from journalists table apollo_email, fallback to best campaign email)" }),
   apolloPersonId: z.string().nullable(),
   emailStatus: JournalistEmailStatusSchema.nullable().openapi({ description: "Email delivery statuses from email-gateway. Null if journalist has no email or email-gateway is unreachable." }),

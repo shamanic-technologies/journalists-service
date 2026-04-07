@@ -4,6 +4,7 @@ import { db } from "../db/index.js";
 import { campaignJournalists, journalists } from "../db/schema.js";
 import { JournalistsListQuerySchema } from "../schemas.js";
 import { checkEmailStatuses, consolidateStatus, type EmailGatewayStatusResult } from "../lib/email-gateway-client.js";
+import { fetchOutletsBatch, type OutletBasic } from "../lib/outlets-client.js";
 import { fetchBatchRunCosts, type BatchRunCost } from "../lib/runs-client.js";
 import { resolveFeatureDynastySlugs } from "../lib/dynasty-client.js";
 import { type OrgContext } from "../lib/service-context.js";
@@ -162,7 +163,18 @@ router.get("/orgs/journalists/list", async (req, res) => {
       }
     }
 
-    // 5. Enrich with costs from runs-service (fail-open) — aggregate across ALL campaign rows
+    // 5. Enrich with outlet info from outlets-service (fail-open)
+    let outletMap = new Map<string, OutletBasic>();
+    const uniqueOutletIds = [...new Set(rows.map((r) => r.outletId))];
+    if (uniqueOutletIds.length > 0) {
+      try {
+        outletMap = await fetchOutletsBatch(uniqueOutletIds);
+      } catch (err) {
+        console.warn("[journalists-service] outlets-service enrichment failed (continuing without):", err);
+      }
+    }
+
+    // 6. Enrich with costs from runs-service (fail-open) — aggregate across ALL campaign rows
     const runToJournalists = new Map<string, string[]>();
     for (const row of rows) {
       if (!row.runId) continue;
@@ -210,11 +222,12 @@ router.get("/orgs/journalists/list", async (req, res) => {
       }
     }
 
-    // 6. Build response
+    // 7. Build response
     const enrichedJournalists = [...grouped.values()].map((group) => {
       const email = journalistEmails.get(group.journalistId) ?? null;
       const emailStatus = email ? (emailStatusMap.get(email) ?? null) : null;
       const cost = journalistCostMap.get(group.journalistId) ?? null;
+      const outlet = outletMap.get(group.outletId);
 
       return {
         journalistId: group.journalistId,
@@ -223,6 +236,8 @@ router.get("/orgs/journalists/list", async (req, res) => {
         lastName: group.lastName,
         entityType: group.entityType,
         outletId: group.outletId,
+        outletName: outlet?.outletName ?? null,
+        outletDomain: outlet?.outletDomain ?? null,
         email,
         apolloPersonId: group.apolloPersonId,
         emailStatus: emailStatus
