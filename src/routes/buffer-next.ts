@@ -812,15 +812,22 @@ router.post("/orgs/buffer/next", async (req, res) => {
       response = { found: false };
 
       for (let i = 0; i < MAX_OUTLET_ITERATIONS; i++) {
+        console.log(
+          `[journalists-service] Pulling next outlet from outlets-service (iteration ${i + 1}/${MAX_OUTLET_ITERATIONS}, campaignId=${campaignId})`
+        );
         const pulled = await pullNextOutlet(ctx);
 
         if (!pulled) {
           console.log(
-            `[journalists-service] No more outlets available from outlets-service`
+            `[journalists-service] pullNextOutlet returned: null (no more outlets)`
           );
           response = { found: false, reason: "no outlets available" };
           break;
         }
+
+        console.log(
+          `[journalists-service] pullNextOutlet returned: outletId=${pulled.outletId} name="${pulled.outletName}" domain=${pulled.outletDomain}`
+        );
 
         console.log(
           `[journalists-service] Trying outlet: ${pulled.outletName} (${pulled.outletDomain})`
