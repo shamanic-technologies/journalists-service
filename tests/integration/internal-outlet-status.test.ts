@@ -92,6 +92,19 @@ function makeEmailGatewayResultWithByCampaign(
   }>
 ): EmailGatewayStatusResult {
   const { contacted = false, delivered = false, replied = false, replyClassification = null } = brandOverrides;
+  const byCampaignRecord: Record<string, { contacted: boolean; delivered: boolean; opened: boolean; replied: boolean; replyClassification: "positive" | "negative" | "neutral" | null; bounced: boolean; unsubscribed: boolean; lastDeliveredAt: string | null }> = {};
+  for (const c of byCampaign) {
+    byCampaignRecord[c.campaignId] = {
+      contacted: c.contacted ?? false,
+      delivered: c.delivered ?? false,
+      opened: false,
+      replied: c.replied ?? false,
+      replyClassification: c.replyClassification ?? null,
+      bounced: false,
+      unsubscribed: false,
+      lastDeliveredAt: null,
+    };
+  }
   return {
     email,
     broadcast: {
@@ -106,17 +119,7 @@ function makeEmailGatewayResultWithByCampaign(
         unsubscribed: false,
         lastDeliveredAt: null,
       },
-      byCampaign: byCampaign.map((c) => ({
-        campaignId: c.campaignId,
-        contacted: c.contacted ?? false,
-        delivered: c.delivered ?? false,
-        opened: false,
-        replied: c.replied ?? false,
-        replyClassification: c.replyClassification ?? null,
-        bounced: false,
-        unsubscribed: false,
-        lastDeliveredAt: null,
-      })),
+      byCampaign: byCampaignRecord,
       global: { email: { bounced: false, unsubscribed: false } },
     },
     transactional: {

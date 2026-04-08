@@ -162,10 +162,8 @@ router.post("/orgs/outlets/status", async (req, res) => {
 
         // For brand mode, we need per-campaign status from byCampaign
         if (isBrandMode && egResult?.broadcast.byCampaign) {
-          // Find the campaign entry for this row's campaign
-          const campaignEntry = egResult.broadcast.byCampaign.find(
-            (c) => c.campaignId === row.campaignId
-          );
+          // Look up the campaign entry by key (byCampaign is Record<campaignId, StatusScope>)
+          const campaignEntry = egResult.broadcast.byCampaign[row.campaignId] ?? null;
           const rowOutreach = deriveOutreachStatusFromScope(row.status, campaignEntry ?? null);
 
           // Update per-campaign breakdown
