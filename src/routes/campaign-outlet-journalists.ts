@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "../db/index.js";
 import { campaignJournalists, journalists } from "../db/schema.js";
 import { resolveFeatureDynastySlugs } from "../lib/dynasty-client.js";
-import { checkEmailStatuses, consolidateStatus, type EmailGatewayStatusResult } from "../lib/email-gateway-client.js";
+import { checkEmailStatuses, deriveOutreachStatus, type EmailGatewayStatusResult } from "../lib/email-gateway-client.js";
 import { type OrgContext } from "../lib/service-context.js";
 
 const router = Router();
@@ -99,16 +99,16 @@ router.get("/orgs/campaign-outlet-journalists", async (req, res) => {
   }
 
   // Enrich with email-gateway statuses (fail-open)
-  const itemsWithEmail: Array<{ leadId: string; email: string }> = [];
+  const itemsWithEmail: Array<{ email: string }> = [];
   for (const row of rows) {
     const email = row.apolloEmail ?? row.email;
     if (email) {
-      itemsWithEmail.push({ leadId: row.journalistId, email });
+      itemsWithEmail.push({ email });
     }
   }
 
   let emailStatusMap = new Map<string, EmailGatewayStatusResult>();
-  if (itemsWithEmail.length > 0) {
+  if (itemsWithEmail.length > 0 && (brand_id || campaign_id)) {
     try {
       const ctx: OrgContext = {
         orgId: res.locals.orgId as string,
@@ -119,7 +119,11 @@ router.get("/orgs/campaign-outlet-journalists", async (req, res) => {
         brandIds: brand_id ? [brand_id] : [],
         workflowSlug: res.locals.workflowSlug as string | undefined,
       };
-      const results = await checkEmailStatuses(itemsWithEmail, campaign_id, ctx);
+      const results = await checkEmailStatuses(
+        itemsWithEmail,
+        { brandId: brand_id, campaignId: campaign_id },
+        ctx
+      );
       for (const result of results) {
         emailStatusMap.set(result.email, result);
       }
@@ -131,7 +135,7 @@ router.get("/orgs/campaign-outlet-journalists", async (req, res) => {
   const enrichedRows = rows.map((row) => {
     const rowEmail = row.apolloEmail ?? row.email;
     const emailGatewayResult = rowEmail ? (emailStatusMap.get(rowEmail) ?? null) : null;
-    const statusTriplet = consolidateStatus(row.status, emailGatewayResult);
+    const outreachStatus = deriveOutreachStatus(row.status, emailGatewayResult);
     return {
       id: row.id,
       journalistId: row.journalistId,
@@ -144,9 +148,7 @@ router.get("/orgs/campaign-outlet-journalists", async (req, res) => {
       whyRelevant: row.whyRelevant,
       whyNotRelevant: row.whyNotRelevant,
       articleUrls: row.articleUrls,
-      consolidatedStatus: statusTriplet.consolidatedStatus,
-      localStatus: statusTriplet.localStatus,
-      emailGatewayStatus: statusTriplet.emailGatewayStatus,
+      outreachStatus,
       runId: row.runId,
       createdAt: row.createdAt,
       journalistName: row.journalistName,

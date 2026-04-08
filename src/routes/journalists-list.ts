@@ -3,7 +3,7 @@ import { and, arrayContains, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { campaignJournalists, journalists } from "../db/schema.js";
 import { JournalistsListQuerySchema } from "../schemas.js";
-import { checkEmailStatuses, consolidateStatus, type EmailGatewayStatusResult } from "../lib/email-gateway-client.js";
+import { checkEmailStatuses, deriveOutreachStatus, type EmailGatewayStatusResult } from "../lib/email-gateway-client.js";
 import { fetchOutletsBatch, type OutletBasic } from "../lib/outlets-client.js";
 import { fetchBatchRunCosts, type BatchRunCost } from "../lib/runs-client.js";
 import { resolveFeatureDynastySlugs } from "../lib/dynasty-client.js";
@@ -145,8 +145,7 @@ router.get("/orgs/journalists/list", async (req, res) => {
     }
 
     // 4. Enrich with email statuses from email-gateway (fail-open)
-    const itemsWithEmail = [...journalistEmails.entries()].map(([leadId, email]) => ({
-      leadId,
+    const itemsWithEmail = [...journalistEmails.entries()].map(([, email]) => ({
       email,
     }));
 
@@ -154,7 +153,11 @@ router.get("/orgs/journalists/list", async (req, res) => {
     if (itemsWithEmail.length > 0) {
       try {
         const ctx = buildCtx({ ...res.locals, brandIds: [brandId] });
-        const results = await checkEmailStatuses(itemsWithEmail, campaignId, ctx);
+        const results = await checkEmailStatuses(
+          itemsWithEmail,
+          { brandId, campaignId },
+          ctx
+        );
         for (const result of results) {
           emailStatusMap.set(result.email, result);
         }
@@ -255,15 +258,13 @@ router.get("/orgs/journalists/list", async (req, res) => {
             }
           : null,
         campaigns: group.campaigns.map((c) => {
-          const statusTriplet = consolidateStatus(c.status, emailStatus);
+          const outreachStatus = deriveOutreachStatus(c.status, emailStatus);
           return {
             id: c.id,
             campaignId: c.campaignId,
             featureSlug: c.featureSlug,
             workflowSlug: c.workflowSlug,
-            consolidatedStatus: statusTriplet.consolidatedStatus,
-            localStatus: statusTriplet.localStatus,
-            emailGatewayStatus: statusTriplet.emailGatewayStatus,
+            outreachStatus,
             relevanceScore: c.relevanceScore,
             whyRelevant: c.whyRelevant,
             whyNotRelevant: c.whyNotRelevant,

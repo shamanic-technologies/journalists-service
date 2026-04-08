@@ -27,23 +27,24 @@ function mockEmailGatewayStatusEmpty() {
   });
 }
 
-function mockEmailGatewayStatusForJournalists(statuses: Array<{ leadId: string; email: string; contacted: boolean; delivered: boolean; replied: boolean; replyClassification: string | null }>) {
+function mockEmailGatewayStatusForJournalists(statuses: Array<{ email: string; contacted: boolean; delivered: boolean; replied: boolean; replyClassification: string | null }>) {
   mockFetch.mockResolvedValueOnce({
     ok: true,
     json: async () => ({
       results: statuses.map((r) => ({
-        leadId: r.leadId,
         email: r.email,
         broadcast: {
           campaign: {
             contacted: r.contacted, delivered: r.delivered, opened: false, replied: r.replied, replyClassification: r.replyClassification, bounced: false, unsubscribed: false, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null,
           },
           brand: null,
+          byCampaign: null,
           global: { email: { bounced: false, unsubscribed: false } },
         },
         transactional: {
           campaign: null,
           brand: null,
+          byCampaign: null,
           global: { email: { bounced: false, unsubscribed: false } },
         },
       })),
@@ -95,11 +96,11 @@ describe("GET /campaign-outlet-journalists", () => {
     // Should return brandIds as array
     expect(res.body.campaignJournalists[0]).toHaveProperty("brandIds");
     expect(Array.isArray(res.body.campaignJournalists[0].brandIds)).toBe(true);
-    // Status triplet
-    expect(res.body.campaignJournalists[0]).toHaveProperty("consolidatedStatus");
-    expect(res.body.campaignJournalists[0]).toHaveProperty("localStatus");
-    expect(res.body.campaignJournalists[0]).toHaveProperty("emailGatewayStatus");
-    expect(res.body.campaignJournalists[0].emailGatewayStatus).toBeNull();
+    // Outreach status
+    expect(res.body.campaignJournalists[0]).toHaveProperty("outreachStatus");
+    expect(res.body.campaignJournalists[0]).not.toHaveProperty("consolidatedStatus");
+    expect(res.body.campaignJournalists[0]).not.toHaveProperty("localStatus");
+    expect(res.body.campaignJournalists[0]).not.toHaveProperty("emailGatewayStatus");
   });
 
   it("filters by outlet_id when provided", async () => {
@@ -335,7 +336,7 @@ describe("GET /campaign-outlet-journalists", () => {
     expect(res.body.campaignJournalists[0].journalistName).toBe("Dynasty Hit");
   });
 
-  it("returns status triplet with email-gateway enrichment", async () => {
+  it("returns outreachStatus with email-gateway enrichment", async () => {
     const j1 = await insertTestJournalist({
       outletId: OUTLET_ID,
       journalistName: "Triplet Reporter",
@@ -353,7 +354,7 @@ describe("GET /campaign-outlet-journalists", () => {
     });
 
     mockEmailGatewayStatusForJournalists([
-      { leadId: j1.id, email: "triplet@example.com", contacted: true, delivered: true, replied: false, replyClassification: null },
+      { email: "triplet@example.com", contacted: true, delivered: true, replied: false, replyClassification: null },
     ]);
 
     const res = await request(app)
@@ -363,9 +364,8 @@ describe("GET /campaign-outlet-journalists", () => {
     expect(res.status).toBe(200);
     expect(res.body.campaignJournalists).toHaveLength(1);
     const cj = res.body.campaignJournalists[0];
-    expect(cj.localStatus).toBe("served");
-    expect(cj.emailGatewayStatus).toBe("delivered");
-    expect(cj.consolidatedStatus).toBe("delivered");
+    expect(cj.outreachStatus).toBe("delivered");
+    expect(cj).not.toHaveProperty("consolidatedStatus");
   });
 
   it("falls back gracefully when email-gateway fails", async () => {
@@ -394,9 +394,7 @@ describe("GET /campaign-outlet-journalists", () => {
     expect(res.status).toBe(200);
     expect(res.body.campaignJournalists).toHaveLength(1);
     const cj = res.body.campaignJournalists[0];
-    expect(cj.localStatus).toBe("served");
-    expect(cj.emailGatewayStatus).toBeNull();
-    expect(cj.consolidatedStatus).toBe("served");
+    expect(cj.outreachStatus).toBe("served");
   });
 
   it("returns empty array when dynasty slug resolves to no slugs", async () => {
