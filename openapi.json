@@ -305,7 +305,13 @@
         "additionalProperties": {
           "type": "number"
         },
-        "description": "Map of outreach status to journalist count. Statuses: buffered, claimed, served, skipped, contacted, delivered, replied, bounced."
+        "description": "Map of outreach status to journalist count. Statuses: buffered, claimed, served, skipped, contacted, delivered, replied, bounced.",
+        "example": {
+          "buffered": 12,
+          "served": 3,
+          "contacted": 5,
+          "delivered": 2
+        }
       },
       "GroupedEntry": {
         "type": "object",
@@ -783,7 +789,8 @@
           "delivered",
           "replied"
         ],
-        "description": "High watermark outreach status across all journalists for this outlet at the requested scope"
+        "description": "High watermark outreach status across all journalists for this outlet at the requested scope",
+        "example": "contacted"
       },
       "CampaignOutreachStatus": {
         "type": "object",
@@ -794,7 +801,7 @@
                 "$ref": "#/components/schemas/OutreachStatus"
               },
               {
-                "description": "Outreach status: email-gateway status when available, local DB status as fallback"
+                "description": "Outreach status derived from email-gateway when available, local DB status as fallback. Ranked: buffered < claimed < skipped < served < contacted < delivered < replied."
               }
             ]
           },
@@ -806,13 +813,19 @@
               "negative",
               "neutral"
             ],
-            "description": "Reply classification when outreachStatus is replied. Null otherwise."
+            "description": "Reply classification when outreachStatus is replied. Null otherwise.",
+            "example": null
           }
         },
         "required": [
           "outreachStatus",
           "replyClassification"
-        ]
+        ],
+        "description": "Per-campaign outreach status with optional reply classification.",
+        "example": {
+          "outreachStatus": "delivered",
+          "replyClassification": null
+        }
       },
       "OutletStatusEntry": {
         "type": "object",
@@ -841,7 +854,22 @@
         "required": [
           "outreachStatus",
           "replyClassification"
-        ]
+        ],
+        "description": "Outreach status for a single outlet. Includes a high watermark status and optional per-campaign breakdown (brand scope only).",
+        "example": {
+          "outreachStatus": "delivered",
+          "replyClassification": null,
+          "byCampaign": {
+            "7c9e6679-7425-40de-944b-e07fc1f90ae7": {
+              "outreachStatus": "delivered",
+              "replyClassification": null
+            },
+            "d4735e3a-265e-16d0-a304-ab9e68e4c122": {
+              "outreachStatus": "contacted",
+              "replyClassification": null
+            }
+          }
+        }
       },
       "OutletStatusResponse": {
         "type": "object",
@@ -856,7 +884,21 @@
         },
         "required": [
           "results"
-        ]
+        ],
+        "example": {
+          "results": {
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890": {
+              "outreachStatus": "delivered",
+              "replyClassification": null,
+              "byCampaign": {
+                "7c9e6679-7425-40de-944b-e07fc1f90ae7": {
+                  "outreachStatus": "delivered",
+                  "replyClassification": null
+                }
+              }
+            }
+          }
+        }
       },
       "ScopeFilters": {
         "type": "object",
@@ -864,15 +906,20 @@
           "brandId": {
             "type": "string",
             "format": "uuid",
-            "description": "Brand UUID to scope results to"
+            "description": "Brand UUID to scope results to",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
           },
           "campaignId": {
             "type": "string",
             "format": "uuid",
-            "description": "Campaign UUID to scope results to"
+            "description": "Campaign UUID to scope results to",
+            "example": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
           }
         },
-        "description": "Scoping filters for the query. Headers are used for tracing only, not for scoping."
+        "description": "Scoping filters for the query. Headers are used for tracing only, not for scoping.",
+        "example": {
+          "brandId": "550e8400-e29b-41d4-a716-446655440000"
+        }
       },
       "OutletStatusRequest": {
         "type": "object",
@@ -884,7 +931,10 @@
               "format": "uuid"
             },
             "minItems": 1,
-            "description": "List of outlet UUIDs to get status for"
+            "description": "List of outlet UUIDs to get status for",
+            "example": [
+              "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+            ]
           },
           "scopeFilters": {
             "$ref": "#/components/schemas/ScopeFilters"
@@ -893,7 +943,15 @@
         "required": [
           "outletIds",
           "scopeFilters"
-        ]
+        ],
+        "example": {
+          "outletIds": [
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+          ],
+          "scopeFilters": {
+            "brandId": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        }
       },
       "Journalist": {
         "type": "object",

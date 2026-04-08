@@ -165,6 +165,7 @@ export const StatsQuerySchema = z
 
 const OutreachStatusCountSchema = z.record(z.string(), z.number()).openapi("OutreachStatusCount", {
   description: "Map of outreach status to journalist count. Statuses: buffered, claimed, served, skipped, contacted, delivered, replied, bounced.",
+  example: { buffered: 12, served: 3, contacted: 5, delivered: 2 },
 });
 
 const GroupedEntrySchema = z.object({
@@ -302,28 +303,36 @@ export const CostStatsResponseSchema = z
 
 const ScopeFiltersSchema = z
   .object({
-    brandId: z.string().uuid().optional().openapi({ description: "Brand UUID to scope results to" }),
-    campaignId: z.string().uuid().optional().openapi({ description: "Campaign UUID to scope results to" }),
+    brandId: z.string().uuid().optional().openapi({ description: "Brand UUID to scope results to", example: "550e8400-e29b-41d4-a716-446655440000" }),
+    campaignId: z.string().uuid().optional().openapi({ description: "Campaign UUID to scope results to", example: "7c9e6679-7425-40de-944b-e07fc1f90ae7" }),
   })
   .openapi("ScopeFilters", {
-    description: "Scoping filters. At least one of brandId or campaignId is required. If both are provided, campaignId takes priority (brand mode is disabled).",
+    description: "Scoping filters. At least one of brandId or campaignId is required. If both are provided, campaignId takes priority (brand mode is disabled). Omitting both returns 400.",
+    example: { brandId: "550e8400-e29b-41d4-a716-446655440000" },
   });
 
 export const OutletStatusRequestSchema = z
   .object({
     outletIds: z.array(z.string().uuid()).min(1).openapi({
       description: "List of outlet UUIDs to get status for",
+      example: ["a1b2c3d4-e5f6-7890-abcd-ef1234567890"],
     }),
     scopeFilters: ScopeFiltersSchema.openapi({
       description: "Scoping filters for the query. Headers are used for tracing only, not for scoping.",
     }),
   })
-  .openapi("OutletStatusRequest");
+  .openapi("OutletStatusRequest", {
+    example: {
+      outletIds: ["a1b2c3d4-e5f6-7890-abcd-ef1234567890"],
+      scopeFilters: { brandId: "550e8400-e29b-41d4-a716-446655440000" },
+    },
+  });
 
 const OutreachStatusEnum = z
   .enum(["buffered", "claimed", "skipped", "served", "contacted", "delivered", "replied"])
   .openapi("OutreachStatus", {
-    description: "Outreach status: email-gateway status when available, local DB status as fallback",
+    description: "Outreach status derived from email-gateway when available, local DB status as fallback. Ranked: buffered < claimed < skipped < served < contacted < delivered < replied.",
+    example: "contacted",
   });
 
 const CampaignOutreachStatusSchema = z
@@ -331,9 +340,13 @@ const CampaignOutreachStatusSchema = z
     outreachStatus: OutreachStatusEnum,
     replyClassification: z.enum(["positive", "negative", "neutral"]).nullable().openapi({
       description: "Reply classification when outreachStatus is replied. Null otherwise.",
+      example: null,
     }),
   })
-  .openapi("CampaignOutreachStatus");
+  .openapi("CampaignOutreachStatus", {
+    description: "Per-campaign outreach status with optional reply classification.",
+    example: { outreachStatus: "delivered", replyClassification: null },
+  });
 
 const OutletStatusEntrySchema = z
   .object({
@@ -347,7 +360,17 @@ const OutletStatusEntrySchema = z
       description: "Per-campaign breakdown. Present when scope is brand (brandId without campaignId). Absent when scope is campaign.",
     }),
   })
-  .openapi("OutletStatusEntry");
+  .openapi("OutletStatusEntry", {
+    description: "Outreach status for a single outlet. Includes a high watermark status and optional per-campaign breakdown (brand scope only).",
+    example: {
+      outreachStatus: "delivered",
+      replyClassification: null,
+      byCampaign: {
+        "7c9e6679-7425-40de-944b-e07fc1f90ae7": { outreachStatus: "delivered", replyClassification: null },
+        "d4735e3a-265e-16d0-a304-ab9e68e4c122": { outreachStatus: "contacted", replyClassification: null },
+      },
+    },
+  });
 
 export const OutletStatusResponseSchema = z
   .object({
@@ -355,7 +378,19 @@ export const OutletStatusResponseSchema = z
       description: "Map of outletId → outreach status entry",
     }),
   })
-  .openapi("OutletStatusResponse");
+  .openapi("OutletStatusResponse", {
+    example: {
+      results: {
+        "a1b2c3d4-e5f6-7890-abcd-ef1234567890": {
+          outreachStatus: "delivered",
+          replyClassification: null,
+          byCampaign: {
+            "7c9e6679-7425-40de-944b-e07fc1f90ae7": { outreachStatus: "delivered", replyClassification: null },
+          },
+        },
+      },
+    },
+  });
 
 // ==================== Path Registrations ====================
 
