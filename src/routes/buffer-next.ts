@@ -31,7 +31,6 @@ const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const IDEMPOTENCY_TTL_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
 const APOLLO_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — don't re-call Apollo within this window
 const MAX_PULL_ITERATIONS = 100;
-const MAX_OUTLET_ITERATIONS = 20;
 const CLEANUP_PROBABILITY = 0.01;
 
 // Email statuses that indicate a usable email
@@ -811,15 +810,17 @@ router.post("/orgs/buffer/next", async (req, res) => {
       // ── No outlet — pull from outlets-service, loop until found ─
       response = { found: false };
 
-      for (let i = 0; i < MAX_OUTLET_ITERATIONS; i++) {
+      let outletIteration = 0;
+      while (true) {
+        outletIteration++;
         console.log(
-          `[journalists-service] Pulling next outlet from outlets-service (iteration ${i + 1}/${MAX_OUTLET_ITERATIONS}, campaignId=${campaignId})`
+          `[journalists-service] Pulling next outlet from outlets-service (iteration ${outletIteration}, campaignId=${campaignId})`
         );
         const pulled = await pullNextOutlet(ctx);
 
         if (!pulled) {
           console.log(
-            `[journalists-service] pullNextOutlet returned: null (no more outlets)`
+            `[journalists-service] pullNextOutlet returned: null after ${outletIteration} iterations (no more outlets)`
           );
           response = { found: false, reason: "no outlets available" };
           break;
@@ -854,7 +855,6 @@ router.post("/orgs/buffer/next", async (req, res) => {
         console.log(
           `[journalists-service] Outlet ${pulled.outletName} exhausted: ${result.reason ?? "no journalists with email"}`
         );
-        // Continue to next outlet
       }
     }
 
