@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { inArray, and, eq } from "drizzle-orm";
+import { inArray, and, eq, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { campaignJournalists, journalists } from "../db/schema.js";
 import { checkEmailStatuses } from "../lib/email-gateway-client.js";
@@ -49,6 +49,10 @@ router.post("/orgs/outlets/status", async (req, res) => {
     ];
     if (campaignId) {
       conditions.push(eq(campaignJournalists.campaignId, campaignId));
+    }
+    if (brandIds.length > 0) {
+      const pgArray = `{${brandIds.join(",")}}`;
+      conditions.push(sql`${campaignJournalists.brandIds} && ${pgArray}::uuid[]`);
     }
 
     const rows = await db
