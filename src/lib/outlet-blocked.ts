@@ -70,9 +70,9 @@ export async function checkOutletBlocked(
   `;
 
   if (servedOrContacted.length > 0) {
-    const emailsToCheck = servedOrContacted.map((row: { journalist_id: string; email: string }) => ({
-      leadId: row.journalist_id,
-      email: row.email,
+    const emailsToCheck = servedOrContacted.map((row) => ({
+      leadId: row.journalist_id as string,
+      email: row.email as string,
     }));
 
     const contactedCutoff = new Date(Date.now() - CONTACTED_COOLDOWN_MS);
