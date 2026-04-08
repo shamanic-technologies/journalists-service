@@ -533,6 +533,91 @@ describe("POST /internal/outlets/status", () => {
     );
   });
 
+  it("scopes by brand when x-brand-id is present", async () => {
+    const BRAND_A = BRAND_ID;
+    const BRAND_B = "bbbb0000-0000-0000-0000-000000000001";
+
+    const j1 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J2" });
+
+    // j1 belongs to brand A
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_A],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_A,
+      status: "served",
+      email: "j1@test.com",
+    });
+    // j2 belongs to brand B — should be excluded when querying brand A
+    await insertTestCampaignJournalist({
+      journalistId: j2.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_B],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_A,
+      status: "contacted",
+    });
+
+    mockedCheckEmailStatuses.mockResolvedValue([]);
+
+    // Query with brand A header — should only see j1 (served), not j2 (contacted)
+    const res = await request(app)
+      .post("/orgs/outlets/status")
+      .set({ ...AUTH_HEADERS, "x-brand-id": BRAND_A })
+      .send({ outletIds: [OUTLET_A] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[OUTLET_A].status).toBe("served");
+
+    // Query with brand B header — should only see j2 (contacted)
+    const res2 = await request(app)
+      .post("/orgs/outlets/status")
+      .set({ ...AUTH_HEADERS, "x-brand-id": BRAND_B })
+      .send({ outletIds: [OUTLET_A] });
+
+    expect(res2.status).toBe(200);
+    expect(res2.body.results[OUTLET_A].status).toBe("contacted");
+  });
+
+  it("returns org-wide high watermark when no brand header is present", async () => {
+    const BRAND_A = BRAND_ID;
+    const BRAND_B = "bbbb0000-0000-0000-0000-000000000002";
+
+    const j1 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J2" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_A],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_A,
+      status: "served",
+      email: "j1@test.com",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_B],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_A,
+      status: "contacted",
+    });
+
+    mockedCheckEmailStatuses.mockResolvedValue([]);
+
+    // No brand header → should see both j1 and j2, high watermark = contacted
+    const res = await request(app)
+      .post("/orgs/outlets/status")
+      .set(ORG_AUTH_HEADERS)
+      .send({ outletIds: [OUTLET_A] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[OUTLET_A].status).toBe("contacted");
+  });
+
   it("does not call email-gateway when no journalists have emails", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J1" });
     await insertTestCampaignJournalist({
