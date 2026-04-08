@@ -110,9 +110,7 @@ export const CampaignOutletJournalistSchema = z
     whyRelevant: z.string(),
     whyNotRelevant: z.string(),
     articleUrls: z.array(z.string()).nullable(),
-    consolidatedStatus: z.enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"]).openapi({ description: "Consolidated status: email-gateway status when available, otherwise local DB status" }),
-    localStatus: z.enum(["buffered", "claimed", "served", "contacted", "skipped"]).openapi({ description: "Status from the local database" }),
-    emailGatewayStatus: z.enum(["contacted", "delivered", "replied", "bounced"]).nullable().openapi({ description: "Status derived from email-gateway. Null if no email-gateway data." }),
+    outreachStatus: z.enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"]).openapi({ description: "Outreach status: email-gateway status when available, otherwise local DB status" }),
     runId: z.string().uuid().nullable(),
     createdAt: z.string(),
     journalistName: z.string(),
@@ -165,19 +163,19 @@ export const StatsQuerySchema = z
   })
   .openapi("StatsQuery");
 
-const StatusCountSchema = z.record(z.string(), z.number()).openapi("StatusCount", {
-  description: "Map of status to journalist count. Local statuses: buffered, claimed, served, skipped. Email-gateway enriched statuses: contacted, delivered, replied, bounced.",
+const OutreachStatusCountSchema = z.record(z.string(), z.number()).openapi("OutreachStatusCount", {
+  description: "Map of outreach status to journalist count. Statuses: buffered, claimed, served, skipped, contacted, delivered, replied, bounced.",
 });
 
 const GroupedEntrySchema = z.object({
   totalJournalists: z.number().openapi({ description: "Total journalists found for this group" }),
-  byStatus: StatusCountSchema,
+  byOutreachStatus: OutreachStatusCountSchema,
 }).openapi("GroupedEntry");
 
 export const StatsResponseSchema = z
   .object({
     totalJournalists: z.number().openapi({ description: "Total journalists found matching the filters" }),
-    byStatus: StatusCountSchema,
+    byOutreachStatus: OutreachStatusCountSchema,
     groupedBy: z.record(z.string(), GroupedEntrySchema).optional().openapi({ description: "Per-slug breakdown when groupBy is specified. Keys are slug values (or dynasty slugs for dynasty grouping)." }),
   })
   .openapi("StatsResponse");
@@ -243,9 +241,7 @@ const JournalistCampaignEntrySchema = z.object({
   campaignId: z.string().uuid(),
   featureSlug: z.string().nullable(),
   workflowSlug: z.string().nullable(),
-  consolidatedStatus: z.enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"]).openapi({ description: "Consolidated status: email-gateway status when available, otherwise local DB status" }),
-  localStatus: z.enum(["buffered", "claimed", "served", "contacted", "skipped"]).openapi({ description: "Status from the local database" }),
-  emailGatewayStatus: z.enum(["contacted", "delivered", "replied", "bounced"]).nullable().openapi({ description: "Status derived from email-gateway. Null if no email-gateway data." }),
+  outreachStatus: z.enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"]).openapi({ description: "Outreach status: email-gateway status when available, otherwise local DB status" }),
   relevanceScore: z.string(),
   whyRelevant: z.string(),
   whyNotRelevant: z.string(),
@@ -304,25 +300,51 @@ export const CostStatsResponseSchema = z
 
 // ==================== Outlet Status Schemas ====================
 
+const ScopeFiltersSchema = z
+  .object({
+    brandId: z.string().uuid().optional().openapi({ description: "Brand UUID to scope results to" }),
+    campaignId: z.string().uuid().optional().openapi({ description: "Campaign UUID to scope results to" }),
+  })
+  .openapi("ScopeFilters", {
+    description: "Scoping filters. At least one of brandId or campaignId is required. If both are provided, campaignId takes priority (brand mode is disabled).",
+  });
+
 export const OutletStatusRequestSchema = z
   .object({
     outletIds: z.array(z.string().uuid()).min(1).openapi({
       description: "List of outlet UUIDs to get status for",
     }),
+    scopeFilters: ScopeFiltersSchema.openapi({
+      description: "Scoping filters for the query. Headers are used for tracing only, not for scoping.",
+    }),
   })
   .openapi("OutletStatusRequest");
 
-const EnrichedStatusEnum = z
+const OutreachStatusEnum = z
   .enum(["buffered", "claimed", "skipped", "served", "contacted", "delivered", "replied"])
-  .openapi("EnrichedStatus", {
-    description: "High watermark status: DB status enriched with email-gateway real-time data",
+  .openapi("OutreachStatus", {
+    description: "Outreach status: email-gateway status when available, local DB status as fallback",
   });
+
+const CampaignOutreachStatusSchema = z
+  .object({
+    outreachStatus: OutreachStatusEnum,
+    replyClassification: z.enum(["positive", "negative", "neutral"]).nullable().openapi({
+      description: "Reply classification when outreachStatus is replied. Null otherwise.",
+    }),
+  })
+  .openapi("CampaignOutreachStatus");
 
 const OutletStatusEntrySchema = z
   .object({
-    status: EnrichedStatusEnum,
+    outreachStatus: OutreachStatusEnum.openapi({
+      description: "High watermark outreach status across all journalists for this outlet at the requested scope",
+    }),
     replyClassification: z.enum(["positive", "negative", "neutral"]).nullable().openapi({
-      description: "Best reply classification across all journalists when status is replied. Hierarchy: positive > negative > neutral. Null when status is not replied.",
+      description: "Best reply classification across all journalists when outreachStatus is replied. Hierarchy: positive > negative > neutral. Null when outreachStatus is not replied.",
+    }),
+    byCampaign: z.record(z.string().uuid(), CampaignOutreachStatusSchema).optional().openapi({
+      description: "Per-campaign breakdown. Present when scope is brand (brandId without campaignId). Absent when scope is campaign.",
     }),
   })
   .openapi("OutletStatusEntry");
@@ -330,7 +352,7 @@ const OutletStatusEntrySchema = z
 export const OutletStatusResponseSchema = z
   .object({
     results: z.record(z.string().uuid(), OutletStatusEntrySchema).openapi({
-      description: "Map of outletId → status entry",
+      description: "Map of outletId → outreach status entry",
     }),
   })
   .openapi("OutletStatusResponse");
@@ -364,8 +386,8 @@ registry.registerPath({ method: "get", path: "/orgs/journalists/list", summary: 
 // Org-scoped — Outlet blocked check
 registry.registerPath({ method: "get", path: "/orgs/outlets/blocked", summary: "Check if an outlet is blocked for a brand+org. Uses full dedup logic: checks lead-service for prior contacts, reply classification, 30-day no-reply cooldown, and 12-month expiry.", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ org_id: z.string().uuid().openapi({ description: "Organization ID" }), brand_ids: z.string().openapi({ description: "Comma-separated brand UUIDs", example: "uuid1,uuid2" }), outlet_id: z.string().uuid().openapi({ description: "Outlet ID to check" }) }) }, responses: { 200: { description: "Outlet blocked status", content: { "application/json": { schema: z.object({ blocked: z.boolean().openapi({ description: "Whether this outlet is blocked for the given brand+org" }), reason: z.string().optional().openapi({ description: "Human-readable reason when blocked" }) }).openapi("OutletBlockedResponse") } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
-// Org-scoped — Outlet status (enriched from email-gateway)
-registry.registerPath({ method: "post", path: "/orgs/outlets/status", summary: "Batch outlet status enriched from email-gateway. Returns the high watermark status across all journalists for each outlet, combining DB status with real-time email-gateway data.", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: OutletStatusRequestSchema } } } }, responses: { 200: { description: "Per-outlet enriched status", content: { "application/json": { schema: OutletStatusResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error (email-gateway)", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+// Org-scoped — Outlet outreach status (enriched from email-gateway)
+registry.registerPath({ method: "post", path: "/orgs/outlets/status", summary: "Batch outlet outreach status enriched from email-gateway. Scoping is determined by scopeFilters in the body (not headers). Returns the high watermark outreach status across all journalists for each outlet. When scoped by brand, includes per-campaign breakdown.", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: OutletStatusRequestSchema } } } }, responses: { 200: { description: "Per-outlet outreach status", content: { "application/json": { schema: OutletStatusResponseSchema } } }, 400: { description: "Validation error or missing scope filters", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error (email-gateway)", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Internal — Batch journalist lookup (api-key only)
 registry.registerPath({ method: "get", path: "/internal/journalists/by-ids", summary: "Batch lookup journalists by IDs", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ ids: z.string() }) }, responses: { 200: { description: "Journalists", content: { "application/json": { schema: z.object({ journalists: z.array(JournalistSchema) }) } } } } });

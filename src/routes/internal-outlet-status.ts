@@ -2,15 +2,15 @@ import { Router } from "express";
 import { inArray, and, eq, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { campaignJournalists, journalists } from "../db/schema.js";
-import { checkEmailStatuses } from "../lib/email-gateway-client.js";
+import { checkEmailStatuses, deriveOutreachStatusFromScope, type EmailGatewayStatusResult, type OutreachStatusValue } from "../lib/email-gateway-client.js";
 import { type OrgContext } from "../lib/service-context.js";
 import { OutletStatusRequestSchema } from "../schemas.js";
 
 const router = Router();
 
-// POST /internal/outlets/status — batch enriched status from email-gateway
-// Only requires base headers (x-org-id, x-user-id, x-run-id).
-// x-campaign-id is optional: when present, scopes to that campaign; when absent, aggregates across all campaigns for the org.
+// POST /orgs/outlets/status — batch enriched outreach status from email-gateway
+// Scoping is determined by scopeFilters in the body, not headers.
+
 const STATUS_RANK: Record<string, number> = {
   buffered: 0,
   claimed: 1,
@@ -29,6 +29,17 @@ function higherStatus(a: string, b: string): string {
   return statusRank(a) >= statusRank(b) ? a : b;
 }
 
+const CLASSIFICATION_RANK: Record<string, number> = { neutral: 0, negative: 1, positive: 2 };
+
+function bestClassification(
+  current: "positive" | "negative" | "neutral" | null,
+  candidate: "positive" | "negative" | "neutral" | null,
+): "positive" | "negative" | "neutral" | null {
+  if (!candidate) return current;
+  if (!current) return candidate;
+  return CLASSIFICATION_RANK[candidate] > CLASSIFICATION_RANK[current] ? candidate : current;
+}
+
 router.post("/orgs/outlets/status", async (req, res) => {
   const parsed = OutletStatusRequestSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -36,13 +47,19 @@ router.post("/orgs/outlets/status", async (req, res) => {
     return;
   }
 
-  const { outletIds } = parsed.data;
+  const { outletIds, scopeFilters } = parsed.data;
+
+  if (!scopeFilters.brandId && !scopeFilters.campaignId) {
+    res.status(400).json({ error: "scopeFilters.brandId or scopeFilters.campaignId is required" });
+    return;
+  }
+
   const orgId = res.locals.orgId as string;
-  const campaignId = (res.locals.campaignId as string) || "";
-  const brandIds = (res.locals.brandIds as string[]) || [];
+  const brandId = scopeFilters.brandId;
+  const campaignId = scopeFilters.campaignId;
 
   try {
-    // 1. Get all campaign_journalists for these outlets, scoped by org (+ campaign when provided)
+    // 1. Get all campaign_journalists for these outlets, scoped by org + scopeFilters
     const conditions = [
       inArray(campaignJournalists.outletId, outletIds),
       eq(campaignJournalists.orgId, orgId),
@@ -50,8 +67,8 @@ router.post("/orgs/outlets/status", async (req, res) => {
     if (campaignId) {
       conditions.push(eq(campaignJournalists.campaignId, campaignId));
     }
-    if (brandIds.length > 0) {
-      const pgArray = `{${brandIds.join(",")}}`;
+    if (brandId) {
+      const pgArray = `{${brandId}}`;
       conditions.push(sql`${campaignJournalists.brandIds} && ${pgArray}::uuid[]`);
     }
 
@@ -60,6 +77,7 @@ router.post("/orgs/outlets/status", async (req, res) => {
         cjId: campaignJournalists.id,
         outletId: campaignJournalists.outletId,
         journalistId: campaignJournalists.journalistId,
+        campaignId: campaignJournalists.campaignId,
         status: campaignJournalists.status,
         email: campaignJournalists.email,
         apolloEmail: journalists.apolloEmail,
@@ -77,107 +95,145 @@ router.post("/orgs/outlets/status", async (req, res) => {
     }
 
     // 2. Collect all journalists with emails for email-gateway batch call
-    // Resolve email: apollo_email (global) takes priority, fallback to campaign email
     const resolvedEmails = new Map<string, string>(); // cjId → email
-    const emailItems: Array<{ leadId: string; email: string; outletId: string; cjId: string }> = [];
+    const emailItems: Array<{ email: string; outletId: string; cjId: string }> = [];
     for (const row of rows) {
       const email = row.apolloEmail ?? row.email;
       if (email) {
         resolvedEmails.set(row.cjId, email);
-        emailItems.push({
-          leadId: row.journalistId,
-          email,
-          outletId: row.outletId,
-          cjId: row.cjId,
-        });
+        emailItems.push({ email, outletId: row.outletId, cjId: row.cjId });
       }
     }
 
     // 3. Call email-gateway for real-time statuses
-    const emailStatusMap = new Map<string, {
-      contacted: boolean;
-      delivered: boolean;
-      replied: boolean;
-      replyClassification: "positive" | "negative" | "neutral" | null;
-    }>();
+    const emailStatusMap = new Map<string, EmailGatewayStatusResult>();
     if (emailItems.length > 0) {
       const ctx: OrgContext = {
         orgId,
         userId: res.locals.userId as string | undefined,
         runId: res.locals.runId as string | undefined,
-        campaignId: campaignId || undefined,
-        brandIds,
+        campaignId: res.locals.campaignId as string | undefined,
+        brandIds: (res.locals.brandIds as string[]) || [],
         featureSlug: res.locals.featureSlug as string | undefined,
         workflowSlug: res.locals.workflowSlug as string | undefined,
       };
 
       const gatewayResults = await checkEmailStatuses(
-        emailItems.map(({ leadId, email }) => ({ leadId, email })),
-        campaignId || undefined,
+        emailItems.map(({ email }) => ({ email })),
+        { brandId, campaignId },
         ctx
       );
 
       for (const result of gatewayResults) {
-        const scope = result.broadcast?.campaign ?? result.broadcast?.brand;
-        if (scope) {
-          emailStatusMap.set(result.email, {
-            contacted: scope.contacted,
-            delivered: scope.delivered,
-            replied: scope.replied,
-            replyClassification: scope.replyClassification,
-          });
-        }
+        emailStatusMap.set(result.email, result);
       }
     }
 
     // 4. Build results per outlet
-    const CLASSIFICATION_RANK: Record<string, number> = { neutral: 0, negative: 1, positive: 2 };
-    const results: Record<string, {
-      status: string;
+    // Mode: campaign (campaignId present) → flat outreachStatus, no byCampaign
+    // Mode: brand (brandId, no campaignId) → outreachStatus high watermark + byCampaign breakdown
+    const isBrandMode = !!brandId && !campaignId;
+
+    type OutletResult = {
+      outreachStatus: OutreachStatusValue;
       replyClassification: "positive" | "negative" | "neutral" | null;
-    }> = {};
+      byCampaign?: Record<string, {
+        outreachStatus: OutreachStatusValue;
+        replyClassification: "positive" | "negative" | "neutral" | null;
+      }>;
+    };
+
+    const results: Record<string, OutletResult> = {};
 
     for (const outletId of outletIds) {
       const outletRows = byOutlet.get(outletId) ?? [];
-      let highWatermark = "served";
-      let bestClassification: "positive" | "negative" | "neutral" | null = null;
+      let highWatermark: OutreachStatusValue = "served";
+      let topClassification: "positive" | "negative" | "neutral" | null = null;
+
+      // For brand mode: build per-campaign breakdown
+      const campaignBreakdown = new Map<string, {
+        highWatermark: OutreachStatusValue;
+        classification: "positive" | "negative" | "neutral" | null;
+      }>();
 
       for (const row of outletRows) {
-        // Start with DB status — widen type since email-gateway can produce "delivered"/"replied"
-        let enrichedStatus: string = row.status;
-
-        // Enrich with email-gateway if available
         const resolvedEmail = resolvedEmails.get(row.cjId);
-        if (resolvedEmail) {
-          const egStatus = emailStatusMap.get(resolvedEmail);
-          if (egStatus) {
-            if (egStatus.replied) {
-              enrichedStatus = higherStatus(enrichedStatus, "replied");
-              if (egStatus.replyClassification) {
-                if (!bestClassification || CLASSIFICATION_RANK[egStatus.replyClassification] > CLASSIFICATION_RANK[bestClassification]) {
-                  bestClassification = egStatus.replyClassification;
-                }
+        const egResult = resolvedEmail ? (emailStatusMap.get(resolvedEmail) ?? null) : null;
+
+        // For brand mode, we need per-campaign status from byCampaign
+        if (isBrandMode && egResult?.broadcast.byCampaign) {
+          // Find the campaign entry for this row's campaign
+          const campaignEntry = egResult.broadcast.byCampaign.find(
+            (c) => c.campaignId === row.campaignId
+          );
+          const rowOutreach = deriveOutreachStatusFromScope(row.status, campaignEntry ?? null);
+
+          // Update per-campaign breakdown
+          const existing = campaignBreakdown.get(row.campaignId);
+          if (!existing) {
+            campaignBreakdown.set(row.campaignId, {
+              highWatermark: rowOutreach,
+              classification: campaignEntry?.replyClassification ?? null,
+            });
+          } else {
+            existing.highWatermark = higherStatus(existing.highWatermark, rowOutreach) as OutreachStatusValue;
+            existing.classification = bestClassification(existing.classification, campaignEntry?.replyClassification ?? null);
+          }
+
+          // Update top-level high watermark
+          highWatermark = higherStatus(highWatermark, rowOutreach) as OutreachStatusValue;
+          if (rowOutreach === "replied") {
+            topClassification = bestClassification(topClassification, campaignEntry?.replyClassification ?? null);
+          }
+        } else {
+          // Campaign mode or no byCampaign data: use campaign/brand scope directly
+          const scope = egResult?.broadcast.campaign ?? egResult?.broadcast.brand ?? null;
+          const rowOutreach = deriveOutreachStatusFromScope(row.status, scope);
+          highWatermark = higherStatus(highWatermark, rowOutreach) as OutreachStatusValue;
+          if (rowOutreach === "replied" && scope) {
+            topClassification = bestClassification(topClassification, scope.replyClassification);
+          }
+
+          // Still track per-campaign for brand mode even without byCampaign data
+          if (isBrandMode) {
+            const existing = campaignBreakdown.get(row.campaignId);
+            if (!existing) {
+              campaignBreakdown.set(row.campaignId, {
+                highWatermark: rowOutreach,
+                classification: rowOutreach === "replied" && scope ? scope.replyClassification : null,
+              });
+            } else {
+              existing.highWatermark = higherStatus(existing.highWatermark, rowOutreach) as OutreachStatusValue;
+              if (rowOutreach === "replied" && scope) {
+                existing.classification = bestClassification(existing.classification, scope.replyClassification);
               }
-            } else if (egStatus.delivered) {
-              enrichedStatus = higherStatus(enrichedStatus, "delivered");
-            } else if (egStatus.contacted) {
-              enrichedStatus = higherStatus(enrichedStatus, "contacted");
             }
           }
         }
-
-        highWatermark = higherStatus(highWatermark, enrichedStatus);
       }
 
-      results[outletId] = {
-        status: highWatermark,
-        replyClassification: highWatermark === "replied" ? bestClassification : null,
+      const entry: OutletResult = {
+        outreachStatus: highWatermark,
+        replyClassification: highWatermark === "replied" ? topClassification : null,
       };
+
+      if (isBrandMode) {
+        const byCampaign: Record<string, { outreachStatus: OutreachStatusValue; replyClassification: "positive" | "negative" | "neutral" | null }> = {};
+        for (const [campId, data] of campaignBreakdown) {
+          byCampaign[campId] = {
+            outreachStatus: data.highWatermark,
+            replyClassification: data.highWatermark === "replied" ? data.classification : null,
+          };
+        }
+        entry.byCampaign = byCampaign;
+      }
+
+      results[outletId] = entry;
     }
 
     res.json({ results });
   } catch (err) {
-    console.error("[journalists-service] /internal/outlets/status error:", err);
+    console.error("[journalists-service] /orgs/outlets/status error:", err);
     const message = err instanceof Error ? err.message : "Internal server error";
     res.status(502).json({ error: message });
   }

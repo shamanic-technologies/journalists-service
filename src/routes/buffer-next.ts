@@ -499,9 +499,10 @@ async function resolveAndCheckEmail(
   }
 
   // Email-gateway: check global bounced/unsubscribed
+  // Pass brandIds[0] as brandId for scoping — at least one brand is always present
   const gatewayResults = await checkEmailStatuses(
-    [{ leadId: claimed.journalistId, email }],
-    undefined,
+    [{ email }],
+    { brandId: brandIds[0] },
     ctx
   );
 

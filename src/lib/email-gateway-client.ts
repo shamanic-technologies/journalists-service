@@ -20,35 +20,54 @@ export interface EmailScopeStatus {
   lastDeliveredAt: string | null;
 }
 
+export interface EmailGatewayCampaignEntry {
+  campaignId: string;
+  contacted: boolean;
+  delivered: boolean;
+  opened: boolean;
+  replied: boolean;
+  replyClassification: "positive" | "negative" | "neutral" | null;
+  bounced: boolean;
+  unsubscribed: boolean;
+  lastDeliveredAt: string | null;
+}
+
+export interface EmailGatewayBroadcastScope {
+  campaign: EmailScopeStatus | null;
+  brand: EmailScopeStatus | null;
+  byCampaign: EmailGatewayCampaignEntry[] | null;
+  global: { email: { bounced: boolean; unsubscribed: boolean } };
+}
+
+export interface EmailGatewayTransactionalScope {
+  campaign: EmailScopeStatus | null;
+  brand: EmailScopeStatus | null;
+  byCampaign: EmailGatewayCampaignEntry[] | null;
+  global: { email: { bounced: boolean; unsubscribed: boolean } };
+}
+
 export interface EmailGatewayStatusResult {
-  leadId: string | null;
   email: string;
-  broadcast: {
-    campaign: EmailScopeStatus | null;
-    brand: EmailScopeStatus | null;
-    global: { email: { bounced: boolean; unsubscribed: boolean } };
-  };
-  transactional: {
-    campaign: EmailScopeStatus | null;
-    brand: EmailScopeStatus | null;
-    global: { email: { bounced: boolean; unsubscribed: boolean } };
-  };
+  broadcast: EmailGatewayBroadcastScope;
+  transactional: EmailGatewayTransactionalScope;
 }
 
 /**
  * Batch check email delivery status via email-gateway POST /orgs/status.
- * Brand scope comes from x-brand-id header (set by buildServiceHeaders).
+ * Scoping is determined by body fields (brandId/campaignId), not headers.
+ * At least one of brandId or campaignId is required by email-gateway.
  */
 export async function checkEmailStatuses(
-  items: Array<{ leadId: string; email: string }>,
-  campaignId: string | undefined,
+  items: Array<{ email: string }>,
+  scopeFilters: { brandId?: string; campaignId?: string },
   ctx: OrgContext
 ): Promise<EmailGatewayStatusResult[]> {
   const { url, apiKey } = getConfig();
   const headers = buildServiceHeaders(apiKey, ctx);
 
   const body: Record<string, unknown> = { items };
-  if (campaignId) body.campaignId = campaignId;
+  if (scopeFilters.campaignId) body.campaignId = scopeFilters.campaignId;
+  if (scopeFilters.brandId) body.brandId = scopeFilters.brandId;
 
   const response = await fetch(`${url}/orgs/status`, {
     method: "POST",
@@ -184,34 +203,41 @@ export async function fetchEmailGatewayStatsGrouped(
 
 // ── Status consolidation ────────────────────────────────────────────
 
-export type ConsolidatedStatusValue = "buffered" | "claimed" | "served" | "contacted" | "delivered" | "replied" | "bounced" | "skipped";
+export type OutreachStatusValue = "buffered" | "claimed" | "served" | "contacted" | "delivered" | "replied" | "bounced" | "skipped";
 
 /**
- * Derive a single consolidated status from the local DB status and email-gateway data.
- * Email-gateway status takes priority over local "served" status.
+ * Derive outreachStatus from the local DB status and email-gateway data.
+ * Email-gateway status takes priority when available; local DB status is the fallback.
  */
-export function consolidateStatus(
+export function deriveOutreachStatus(
   localStatus: string,
   emailGatewayResult: EmailGatewayStatusResult | null,
-): { consolidatedStatus: ConsolidatedStatusValue; localStatus: string; emailGatewayStatus: ConsolidatedStatusValue | null } {
-  let emailGatewayStatus: ConsolidatedStatusValue | null = null;
-
+): OutreachStatusValue {
   if (emailGatewayResult) {
     const scope = emailGatewayResult.broadcast.campaign ?? emailGatewayResult.broadcast.brand;
     if (scope) {
-      if (scope.replied) emailGatewayStatus = "replied";
-      else if (scope.bounced) emailGatewayStatus = "bounced";
-      else if (scope.delivered) emailGatewayStatus = "delivered";
-      else if (scope.contacted) emailGatewayStatus = "contacted";
+      if (scope.replied) return "replied";
+      if (scope.bounced) return "bounced";
+      if (scope.delivered) return "delivered";
+      if (scope.contacted) return "contacted";
     }
   }
+  return localStatus as OutreachStatusValue;
+}
 
-  // Consolidated: use email-gateway status when available and local is "served",
-  // otherwise keep local status
-  const consolidatedStatus: ConsolidatedStatusValue =
-    emailGatewayStatus && localStatus === "served"
-      ? emailGatewayStatus
-      : localStatus as ConsolidatedStatusValue;
-
-  return { consolidatedStatus, localStatus, emailGatewayStatus };
+/**
+ * Derive outreachStatus from an email-gateway scope (campaign entry or brand scope).
+ * Falls back to localStatus when the scope has no outreach data.
+ */
+export function deriveOutreachStatusFromScope(
+  localStatus: string,
+  scope: EmailScopeStatus | EmailGatewayCampaignEntry | null,
+): OutreachStatusValue {
+  if (scope) {
+    if (scope.replied) return "replied";
+    if (scope.bounced) return "bounced";
+    if (scope.delivered) return "delivered";
+    if (scope.contacted) return "contacted";
+  }
+  return localStatus as OutreachStatusValue;
 }

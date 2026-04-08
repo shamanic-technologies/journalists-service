@@ -224,7 +224,7 @@
               "type": "string"
             }
           },
-          "consolidatedStatus": {
+          "outreachStatus": {
             "type": "string",
             "enum": [
               "buffered",
@@ -236,29 +236,7 @@
               "bounced",
               "skipped"
             ],
-            "description": "Consolidated status: email-gateway status when available, otherwise local DB status"
-          },
-          "localStatus": {
-            "type": "string",
-            "enum": [
-              "buffered",
-              "claimed",
-              "served",
-              "contacted",
-              "skipped"
-            ],
-            "description": "Status from the local database"
-          },
-          "emailGatewayStatus": {
-            "type": "string",
-            "nullable": true,
-            "enum": [
-              "contacted",
-              "delivered",
-              "replied",
-              "bounced"
-            ],
-            "description": "Status derived from email-gateway. Null if no email-gateway data."
+            "description": "Outreach status: email-gateway status when available, otherwise local DB status"
           },
           "runId": {
             "type": "string",
@@ -299,9 +277,7 @@
           "whyRelevant",
           "whyNotRelevant",
           "articleUrls",
-          "consolidatedStatus",
-          "localStatus",
-          "emailGatewayStatus",
+          "outreachStatus",
           "runId",
           "createdAt",
           "journalistName",
@@ -324,12 +300,12 @@
           "campaignJournalists"
         ]
       },
-      "StatusCount": {
+      "OutreachStatusCount": {
         "type": "object",
         "additionalProperties": {
           "type": "number"
         },
-        "description": "Map of status to journalist count. Local statuses: buffered, claimed, served, skipped. Email-gateway enriched statuses: contacted, delivered, replied, bounced."
+        "description": "Map of outreach status to journalist count. Statuses: buffered, claimed, served, skipped, contacted, delivered, replied, bounced."
       },
       "GroupedEntry": {
         "type": "object",
@@ -338,13 +314,13 @@
             "type": "number",
             "description": "Total journalists found for this group"
           },
-          "byStatus": {
-            "$ref": "#/components/schemas/StatusCount"
+          "byOutreachStatus": {
+            "$ref": "#/components/schemas/OutreachStatusCount"
           }
         },
         "required": [
           "totalJournalists",
-          "byStatus"
+          "byOutreachStatus"
         ]
       },
       "StatsResponse": {
@@ -354,8 +330,8 @@
             "type": "number",
             "description": "Total journalists found matching the filters"
           },
-          "byStatus": {
-            "$ref": "#/components/schemas/StatusCount"
+          "byOutreachStatus": {
+            "$ref": "#/components/schemas/OutreachStatusCount"
           },
           "groupedBy": {
             "type": "object",
@@ -367,7 +343,7 @@
         },
         "required": [
           "totalJournalists",
-          "byStatus"
+          "byOutreachStatus"
         ]
       },
       "StatsGroupBy": {
@@ -624,7 +600,7 @@
             "type": "string",
             "nullable": true
           },
-          "consolidatedStatus": {
+          "outreachStatus": {
             "type": "string",
             "enum": [
               "buffered",
@@ -636,29 +612,7 @@
               "bounced",
               "skipped"
             ],
-            "description": "Consolidated status: email-gateway status when available, otherwise local DB status"
-          },
-          "localStatus": {
-            "type": "string",
-            "enum": [
-              "buffered",
-              "claimed",
-              "served",
-              "contacted",
-              "skipped"
-            ],
-            "description": "Status from the local database"
-          },
-          "emailGatewayStatus": {
-            "type": "string",
-            "nullable": true,
-            "enum": [
-              "contacted",
-              "delivered",
-              "replied",
-              "bounced"
-            ],
-            "description": "Status derived from email-gateway. Null if no email-gateway data."
+            "description": "Outreach status: email-gateway status when available, otherwise local DB status"
           },
           "relevanceScore": {
             "type": "string"
@@ -699,9 +653,7 @@
           "campaignId",
           "featureSlug",
           "workflowSlug",
-          "consolidatedStatus",
-          "localStatus",
-          "emailGatewayStatus",
+          "outreachStatus",
           "relevanceScore",
           "whyRelevant",
           "whyNotRelevant",
@@ -820,7 +772,7 @@
           "blocked"
         ]
       },
-      "EnrichedStatus": {
+      "OutreachStatus": {
         "type": "string",
         "enum": [
           "buffered",
@@ -831,13 +783,20 @@
           "delivered",
           "replied"
         ],
-        "description": "High watermark status: DB status enriched with email-gateway real-time data"
+        "description": "High watermark outreach status across all journalists for this outlet at the requested scope"
       },
-      "OutletStatusEntry": {
+      "CampaignOutreachStatus": {
         "type": "object",
         "properties": {
-          "status": {
-            "$ref": "#/components/schemas/EnrichedStatus"
+          "outreachStatus": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OutreachStatus"
+              },
+              {
+                "description": "Outreach status: email-gateway status when available, local DB status as fallback"
+              }
+            ]
           },
           "replyClassification": {
             "type": "string",
@@ -847,11 +806,40 @@
               "negative",
               "neutral"
             ],
-            "description": "Best reply classification across all journalists when status is replied. Hierarchy: positive > negative > neutral. Null when status is not replied."
+            "description": "Reply classification when outreachStatus is replied. Null otherwise."
           }
         },
         "required": [
-          "status",
+          "outreachStatus",
+          "replyClassification"
+        ]
+      },
+      "OutletStatusEntry": {
+        "type": "object",
+        "properties": {
+          "outreachStatus": {
+            "$ref": "#/components/schemas/OutreachStatus"
+          },
+          "replyClassification": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "positive",
+              "negative",
+              "neutral"
+            ],
+            "description": "Best reply classification across all journalists when outreachStatus is replied. Hierarchy: positive > negative > neutral. Null when outreachStatus is not replied."
+          },
+          "byCampaign": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CampaignOutreachStatus"
+            },
+            "description": "Per-campaign breakdown. Present when scope is brand (brandId without campaignId). Absent when scope is campaign."
+          }
+        },
+        "required": [
+          "outreachStatus",
           "replyClassification"
         ]
       },
@@ -863,12 +851,28 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/OutletStatusEntry"
             },
-            "description": "Map of outletId → status entry"
+            "description": "Map of outletId → outreach status entry"
           }
         },
         "required": [
           "results"
         ]
+      },
+      "ScopeFilters": {
+        "type": "object",
+        "properties": {
+          "brandId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Brand UUID to scope results to"
+          },
+          "campaignId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Campaign UUID to scope results to"
+          }
+        },
+        "description": "Scoping filters for the query. Headers are used for tracing only, not for scoping."
       },
       "OutletStatusRequest": {
         "type": "object",
@@ -881,10 +885,14 @@
             },
             "minItems": 1,
             "description": "List of outlet UUIDs to get status for"
+          },
+          "scopeFilters": {
+            "$ref": "#/components/schemas/ScopeFilters"
           }
         },
         "required": [
-          "outletIds"
+          "outletIds",
+          "scopeFilters"
         ]
       },
       "Journalist": {
@@ -1654,7 +1662,7 @@
     },
     "/orgs/outlets/status": {
       "post": {
-        "summary": "Batch outlet status enriched from email-gateway. Returns the high watermark status across all journalists for each outlet, combining DB status with real-time email-gateway data.",
+        "summary": "Batch outlet outreach status enriched from email-gateway. Scoping is determined by scopeFilters in the body (not headers). Returns the high watermark outreach status across all journalists for each outlet. When scoped by brand, includes per-campaign breakdown.",
         "security": [
           {
             "ApiKeyAuth": []
@@ -1671,7 +1679,7 @@
         },
         "responses": {
           "200": {
-            "description": "Per-outlet enriched status",
+            "description": "Per-outlet outreach status",
             "content": {
               "application/json": {
                 "schema": {
@@ -1681,7 +1689,7 @@
             }
           },
           "400": {
-            "description": "Validation error",
+            "description": "Validation error or missing scope filters",
             "content": {
               "application/json": {
                 "schema": {

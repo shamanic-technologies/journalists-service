@@ -97,7 +97,7 @@ describe("GET /stats", () => {
     mockFetch.mockReset();
   });
 
-  it("returns total counts and byStatus", async () => {
+  it("returns total counts and byOutreachStatus", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Stats Writer 1" });
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Stats Writer 2" });
     const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Stats Writer 3" });
@@ -123,11 +123,11 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(3);
-    expect(res.body.byStatus.buffered).toBe(1);
-    expect(res.body.byStatus.served).toBe(2);
+    expect(res.body.byOutreachStatus.buffered).toBe(1);
+    expect(res.body.byOutreachStatus.served).toBe(2);
   });
 
-  it("includes contacted from email-gateway in byStatus", async () => {
+  it("includes contacted from email-gateway in byOutreachStatus", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Contacted Writer 1" });
     const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Contacted Writer 2" });
     const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Contacted Writer 3" });
@@ -154,9 +154,9 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(3);
-    expect(res.body.byStatus.served).toBe(2);
-    expect(res.body.byStatus.buffered).toBe(1);
-    expect(res.body.byStatus.contacted).toBe(2);
+    expect(res.body.byOutreachStatus.served).toBe(2);
+    expect(res.body.byOutreachStatus.buffered).toBe(1);
+    expect(res.body.byOutreachStatus.contacted).toBe(2);
   });
 
   it("omits contacted when email-gateway returns 0", async () => {
@@ -173,7 +173,7 @@ describe("GET /stats", () => {
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
-    expect(res.body.byStatus.contacted).toBeUndefined();
+    expect(res.body.byOutreachStatus.contacted).toBeUndefined();
   });
 
   it("fails open when email-gateway is unavailable", async () => {
@@ -191,8 +191,8 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(1);
-    expect(res.body.byStatus.served).toBe(1);
-    expect(res.body.byStatus.contacted).toBeUndefined();
+    expect(res.body.byOutreachStatus.served).toBe(1);
+    expect(res.body.byOutreachStatus.contacted).toBeUndefined();
   });
 
   it("filters by brandId (matches rows containing that brand in brand_ids array)", async () => {
@@ -360,7 +360,7 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(0);
-    expect(res.body.byStatus).toEqual({});
+    expect(res.body.byOutreachStatus).toEqual({});
   });
 
   it("combines dynasty filter with other filters", async () => {
@@ -385,7 +385,7 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(1);
-    expect(res.body.byStatus.served).toBe(1);
+    expect(res.body.byOutreachStatus.served).toBe(1);
   });
 
   it("groupBy featureSlug", async () => {
@@ -415,8 +415,8 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.groupedBy["feat-a"].totalJournalists).toBe(2);
-    expect(res.body.groupedBy["feat-a"].byStatus.buffered).toBe(1);
-    expect(res.body.groupedBy["feat-a"].byStatus.served).toBe(1);
+    expect(res.body.groupedBy["feat-a"].byOutreachStatus.buffered).toBe(1);
+    expect(res.body.groupedBy["feat-a"].byOutreachStatus.served).toBe(1);
     expect(res.body.groupedBy["feat-b"].totalJournalists).toBe(1);
   });
 
@@ -476,8 +476,8 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.groupedBy["feat-alpha"].totalJournalists).toBe(2);
-    expect(res.body.groupedBy["feat-alpha"].byStatus.buffered).toBe(1);
-    expect(res.body.groupedBy["feat-alpha"].byStatus.served).toBe(1);
+    expect(res.body.groupedBy["feat-alpha"].byOutreachStatus.buffered).toBe(1);
+    expect(res.body.groupedBy["feat-alpha"].byOutreachStatus.served).toBe(1);
     expect(res.body.groupedBy["feat-beta"].totalJournalists).toBe(1);
   });
 
@@ -541,9 +541,9 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(2);
-    expect(res.body.byStatus.buffered).toBe(1);
-    expect(res.body.byStatus.served).toBe(1);
-    expect(res.body.byStatus.contacted).toBe(1);
+    expect(res.body.byOutreachStatus.buffered).toBe(1);
+    expect(res.body.byOutreachStatus.served).toBe(1);
+    expect(res.body.byOutreachStatus.contacted).toBe(1);
   });
 
   it("filters by workflowSlugs with groupBy=workflowSlug", async () => {
@@ -577,10 +577,10 @@ describe("GET /stats", () => {
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(2);
     expect(res.body.groupedBy["wf-a"].totalJournalists).toBe(1);
-    expect(res.body.groupedBy["wf-a"].byStatus.buffered).toBe(1);
+    expect(res.body.groupedBy["wf-a"].byOutreachStatus.buffered).toBe(1);
     expect(res.body.groupedBy["wf-b"].totalJournalists).toBe(1);
-    expect(res.body.groupedBy["wf-b"].byStatus.served).toBe(1);
-    expect(res.body.groupedBy["wf-b"].byStatus.contacted).toBe(3);
+    expect(res.body.groupedBy["wf-b"].byOutreachStatus.served).toBe(1);
+    expect(res.body.groupedBy["wf-b"].byOutreachStatus.contacted).toBe(3);
     expect(res.body.groupedBy["wf-c"]).toBeUndefined();
   });
 
@@ -610,9 +610,9 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(2);
-    expect(res.body.byStatus.buffered).toBe(1);
-    expect(res.body.byStatus.served).toBe(1);
-    expect(res.body.byStatus.contacted).toBe(1);
+    expect(res.body.byOutreachStatus.buffered).toBe(1);
+    expect(res.body.byOutreachStatus.served).toBe(1);
+    expect(res.body.byOutreachStatus.contacted).toBe(1);
   });
 
   it("filters by featureSlugs with groupBy=featureSlug", async () => {
@@ -646,10 +646,10 @@ describe("GET /stats", () => {
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(2);
     expect(res.body.groupedBy["pr-journalist-outreach"].totalJournalists).toBe(1);
-    expect(res.body.groupedBy["pr-journalist-outreach"].byStatus.buffered).toBe(1);
+    expect(res.body.groupedBy["pr-journalist-outreach"].byOutreachStatus.buffered).toBe(1);
     expect(res.body.groupedBy["pr-journalist-outreach-v2"].totalJournalists).toBe(1);
-    expect(res.body.groupedBy["pr-journalist-outreach-v2"].byStatus.served).toBe(1);
-    expect(res.body.groupedBy["pr-journalist-outreach-v2"].byStatus.contacted).toBe(2);
+    expect(res.body.groupedBy["pr-journalist-outreach-v2"].byOutreachStatus.served).toBe(1);
+    expect(res.body.groupedBy["pr-journalist-outreach-v2"].byOutreachStatus.contacted).toBe(2);
     expect(res.body.groupedBy["unrelated-feature"]).toBeUndefined();
   });
 
@@ -704,8 +704,8 @@ describe("GET /stats (base headers only — no workflow context)", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(2);
-    expect(res.body.byStatus.buffered).toBe(1);
-    expect(res.body.byStatus.served).toBe(1);
+    expect(res.body.byOutreachStatus.buffered).toBe(1);
+    expect(res.body.byOutreachStatus.served).toBe(1);
   });
 
   it("rejects when base headers are missing", async () => {

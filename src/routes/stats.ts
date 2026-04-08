@@ -23,12 +23,12 @@ export const orgStatsRouter = Router();
 
 interface StatsResult {
   totalJournalists: number;
-  byStatus: Record<string, number>;
-  groupedBy?: Record<string, { totalJournalists: number; byStatus: Record<string, number> }>;
+  byOutreachStatus: Record<string, number>;
+  groupedBy?: Record<string, { totalJournalists: number; byOutreachStatus: Record<string, number> }>;
 }
 
 function emptyStats(): StatsResult {
-  return { totalJournalists: 0, byStatus: {} };
+  return { totalJournalists: 0, byOutreachStatus: {} };
 }
 
 function buildPassthroughHeaders(locals: Record<string, unknown>): Record<string, string> {
@@ -96,10 +96,10 @@ async function resolveFiltersAndQuery(
     .where(where)
     .groupBy(table.status);
 
-  const byStatus: Record<string, number> = {};
+  const byOutreachStatus: Record<string, number> = {};
   let total = 0;
   for (const row of rows) {
-    byStatus[row.status] = row.count;
+    byOutreachStatus[row.status] = row.count;
     total += row.count;
   }
 
@@ -115,13 +115,13 @@ async function resolveFiltersAndQuery(
   };
   const gwStats = await fetchEmailGatewayStats(gwParams, passthroughHeaders);
   if (gwStats) {
-    if (gwStats.emailsContacted > 0) byStatus.contacted = gwStats.emailsContacted;
-    if (gwStats.emailsDelivered > 0) byStatus.delivered = gwStats.emailsDelivered;
-    if (gwStats.emailsReplied > 0) byStatus.replied = gwStats.emailsReplied;
-    if (gwStats.emailsBounced > 0) byStatus.bounced = gwStats.emailsBounced;
+    if (gwStats.emailsContacted > 0) byOutreachStatus.contacted = gwStats.emailsContacted;
+    if (gwStats.emailsDelivered > 0) byOutreachStatus.delivered = gwStats.emailsDelivered;
+    if (gwStats.emailsReplied > 0) byOutreachStatus.replied = gwStats.emailsReplied;
+    if (gwStats.emailsBounced > 0) byOutreachStatus.bounced = gwStats.emailsBounced;
   }
 
-  const result: StatsResult = { totalJournalists: total, byStatus };
+  const result: StatsResult = { totalJournalists: total, byOutreachStatus };
 
   // GroupBy dynasty logic
   const groupBy = query.groupBy;
@@ -150,17 +150,17 @@ async function resolveFiltersAndQuery(
       .groupBy(slugColumn, table.status);
 
     // Aggregate by dynasty slug
-    const dynastyMap = new Map<string, { totalJournalists: number; byStatus: Record<string, number> }>();
+    const dynastyMap = new Map<string, { totalJournalists: number; byOutreachStatus: Record<string, number> }>();
     for (const row of groupedRows) {
       const rawSlug = row.slug ?? "(none)";
       const dynastySlug = slugToDynasty.get(rawSlug) ?? rawSlug;
 
       let entry = dynastyMap.get(dynastySlug);
       if (!entry) {
-        entry = { totalJournalists: 0, byStatus: {} };
+        entry = { totalJournalists: 0, byOutreachStatus: {} };
         dynastyMap.set(dynastySlug, entry);
       }
-      entry.byStatus[row.status] = (entry.byStatus[row.status] ?? 0) + row.count;
+      entry.byOutreachStatus[row.status] = (entry.byOutreachStatus[row.status] ?? 0) + row.count;
       entry.totalJournalists += row.count;
     }
 
@@ -170,10 +170,10 @@ async function resolveFiltersAndQuery(
       for (const group of gwGrouped.groups) {
         const entry = dynastyMap.get(group.key);
         if (entry && group.broadcast) {
-          if (group.broadcast.emailsContacted > 0) entry.byStatus.contacted = group.broadcast.emailsContacted;
-          if (group.broadcast.emailsDelivered > 0) entry.byStatus.delivered = group.broadcast.emailsDelivered;
-          if (group.broadcast.emailsReplied > 0) entry.byStatus.replied = group.broadcast.emailsReplied;
-          if (group.broadcast.emailsBounced > 0) entry.byStatus.bounced = group.broadcast.emailsBounced;
+          if (group.broadcast.emailsContacted > 0) entry.byOutreachStatus.contacted = group.broadcast.emailsContacted;
+          if (group.broadcast.emailsDelivered > 0) entry.byOutreachStatus.delivered = group.broadcast.emailsDelivered;
+          if (group.broadcast.emailsReplied > 0) entry.byOutreachStatus.replied = group.broadcast.emailsReplied;
+          if (group.broadcast.emailsBounced > 0) entry.byOutreachStatus.bounced = group.broadcast.emailsBounced;
         }
       }
     }
@@ -192,15 +192,15 @@ async function resolveFiltersAndQuery(
       .where(where)
       .groupBy(slugColumn, table.status);
 
-    const slugMap = new Map<string, { totalJournalists: number; byStatus: Record<string, number> }>();
+    const slugMap = new Map<string, { totalJournalists: number; byOutreachStatus: Record<string, number> }>();
     for (const row of groupedRows) {
       const slug = row.slug ?? "(none)";
       let entry = slugMap.get(slug);
       if (!entry) {
-        entry = { totalJournalists: 0, byStatus: {} };
+        entry = { totalJournalists: 0, byOutreachStatus: {} };
         slugMap.set(slug, entry);
       }
-      entry.byStatus[row.status] = (entry.byStatus[row.status] ?? 0) + row.count;
+      entry.byOutreachStatus[row.status] = (entry.byOutreachStatus[row.status] ?? 0) + row.count;
       entry.totalJournalists += row.count;
     }
 
@@ -210,10 +210,10 @@ async function resolveFiltersAndQuery(
       for (const group of gwGrouped.groups) {
         const entry = slugMap.get(group.key);
         if (entry && group.broadcast) {
-          if (group.broadcast.emailsContacted > 0) entry.byStatus.contacted = group.broadcast.emailsContacted;
-          if (group.broadcast.emailsDelivered > 0) entry.byStatus.delivered = group.broadcast.emailsDelivered;
-          if (group.broadcast.emailsReplied > 0) entry.byStatus.replied = group.broadcast.emailsReplied;
-          if (group.broadcast.emailsBounced > 0) entry.byStatus.bounced = group.broadcast.emailsBounced;
+          if (group.broadcast.emailsContacted > 0) entry.byOutreachStatus.contacted = group.broadcast.emailsContacted;
+          if (group.broadcast.emailsDelivered > 0) entry.byOutreachStatus.delivered = group.broadcast.emailsDelivered;
+          if (group.broadcast.emailsReplied > 0) entry.byOutreachStatus.replied = group.broadcast.emailsReplied;
+          if (group.broadcast.emailsBounced > 0) entry.byOutreachStatus.bounced = group.broadcast.emailsBounced;
         }
       }
     }
