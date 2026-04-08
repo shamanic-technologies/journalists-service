@@ -20,29 +20,17 @@ export interface EmailScopeStatus {
   lastDeliveredAt: string | null;
 }
 
-export interface EmailGatewayCampaignEntry {
-  campaignId: string;
-  contacted: boolean;
-  delivered: boolean;
-  opened: boolean;
-  replied: boolean;
-  replyClassification: "positive" | "negative" | "neutral" | null;
-  bounced: boolean;
-  unsubscribed: boolean;
-  lastDeliveredAt: string | null;
-}
-
 export interface EmailGatewayBroadcastScope {
   campaign: EmailScopeStatus | null;
   brand: EmailScopeStatus | null;
-  byCampaign: EmailGatewayCampaignEntry[] | null;
+  byCampaign: Record<string, EmailScopeStatus> | null;
   global: { email: { bounced: boolean; unsubscribed: boolean } };
 }
 
 export interface EmailGatewayTransactionalScope {
   campaign: EmailScopeStatus | null;
   brand: EmailScopeStatus | null;
-  byCampaign: EmailGatewayCampaignEntry[] | null;
+  byCampaign: Record<string, EmailScopeStatus> | null;
   global: { email: { bounced: boolean; unsubscribed: boolean } };
 }
 
@@ -231,7 +219,7 @@ export function deriveOutreachStatus(
  */
 export function deriveOutreachStatusFromScope(
   localStatus: string,
-  scope: EmailScopeStatus | EmailGatewayCampaignEntry | null,
+  scope: EmailScopeStatus | null,
 ): OutreachStatusValue {
   if (scope) {
     if (scope.replied) return "replied";
