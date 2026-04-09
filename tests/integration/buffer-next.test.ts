@@ -77,7 +77,7 @@ const CHILD_RUN_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 
 const BUFFER_HEADERS = AUTH_HEADERS;
 
-/** Seed discovery cache so processOutlet won't try to refill when buffer is exhausted */
+/** Seed scoring cache so processOutlet won't try to refill when buffer is exhausted */
 async function seedDiscoveryCache(outletId = OUTLET_ID) {
   await db.insert(discoveryCache).values({
     orgId: ORG_ID,
@@ -86,8 +86,8 @@ async function seedDiscoveryCache(outletId = OUTLET_ID) {
     outletId,
     discoveredAt: new Date(),
   }).onConflictDoUpdate({
-    target: [discoveryCache.orgId, discoveryCache.campaignId, discoveryCache.outletId],
-    set: { discoveredAt: new Date() },
+    target: [discoveryCache.orgId, discoveryCache.outletId],
+    set: { discoveredAt: new Date(), brandIds: [BRAND_ID] },
   });
 }
 

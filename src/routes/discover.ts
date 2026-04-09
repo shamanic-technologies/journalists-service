@@ -112,7 +112,7 @@ router.post("/orgs/discover", async (req, res) => {
       runId: childRun.id,
     });
 
-    // Update discovery cache
+    // Update scoring cache — keyed by (orgId, outletId)
     await db
       .insert(discoveryCache)
       .values({
@@ -126,11 +126,11 @@ router.post("/orgs/discover", async (req, res) => {
       .onConflictDoUpdate({
         target: [
           discoveryCache.orgId,
-          discoveryCache.campaignId,
           discoveryCache.outletId,
         ],
         set: {
           brandIds,
+          campaignId,
           discoveredAt: new Date(),
           runId: childRun.id,
         },

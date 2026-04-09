@@ -4,10 +4,12 @@ import {
   campaignJournalists,
   discoveryCache,
   idempotencyCache,
+  outletScrapeCache,
 } from "../../src/db/schema.js";
 
 export async function cleanTestData() {
   await db.delete(idempotencyCache);
+  await db.delete(outletScrapeCache);
   await db.delete(discoveryCache);
   await db.delete(campaignJournalists);
   await db.delete(journalists);
