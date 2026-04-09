@@ -1,6 +1,6 @@
 import { db, sql as pgClient } from "../db/index.js";
-import { journalists, campaignJournalists } from "../db/schema.js";
-import { eq, and, sql } from "drizzle-orm";
+import { journalists, campaignJournalists, outletScrapeCache } from "../db/schema.js";
+import { eq, and, sql, arrayContains } from "drizzle-orm";
 import {
   discoverOutletArticles,
   type DiscoveredArticle,
@@ -326,6 +326,124 @@ export async function storeJournalists(
   return stored;
 }
 
+// ── Scrape cache ────────────────────────────────────────────────────
+
+const SCRAPE_CACHE_MAX_AGE_MS = 3 * 30 * 24 * 60 * 60 * 1000; // ~3 months
+
+async function isScrapeCacheFresh(outletId: string): Promise<boolean> {
+  const rows = await db
+    .select({ scrapedAt: outletScrapeCache.scrapedAt })
+    .from(outletScrapeCache)
+    .where(eq(outletScrapeCache.outletId, outletId));
+
+  if (rows.length === 0) return false;
+  return Date.now() - new Date(rows[0].scrapedAt).getTime() < SCRAPE_CACHE_MAX_AGE_MS;
+}
+
+async function updateScrapeCache(outletId: string): Promise<void> {
+  await db
+    .insert(outletScrapeCache)
+    .values({ outletId, scrapedAt: new Date() })
+    .onConflictDoUpdate({
+      target: outletScrapeCache.outletId,
+      set: { scrapedAt: new Date() },
+    });
+}
+
+/**
+ * Reconstruct AuthorWithArticles from DB when scrape cache is fresh.
+ * Uses journalists table + articleUrls from previous campaign_journalists entries.
+ */
+async function reconstructAuthorsFromDb(outletId: string): Promise<AuthorWithArticles[]> {
+  const rows = await pgClient`
+    SELECT DISTINCT ON (j.id)
+      j.first_name AS "firstName",
+      j.last_name AS "lastName",
+      cj.article_urls AS "articleUrls"
+    FROM journalists j
+    INNER JOIN campaign_journalists cj ON j.id = cj.journalist_id
+    WHERE j.outlet_id = ${outletId}
+      AND j.entity_type = 'individual'
+      AND j.first_name IS NOT NULL
+      AND j.last_name IS NOT NULL
+      AND cj.article_urls IS NOT NULL
+    ORDER BY j.id, cj.created_at DESC
+  `;
+
+  const authorMap = new Map<string, AuthorWithArticles>();
+  for (const row of rows) {
+    const key = `${(row.firstName as string).toLowerCase()} ${(row.lastName as string).toLowerCase()}`;
+    if (!authorMap.has(key)) {
+      const urls = (row.articleUrls as string[]) || [];
+      authorMap.set(key, {
+        firstName: row.firstName as string,
+        lastName: row.lastName as string,
+        articles: urls.map((url) => ({ url, title: null, publishedAt: null })),
+      });
+    }
+  }
+
+  return Array.from(authorMap.values());
+}
+
+// ── Copy scores from previous campaigns ─────────────────────────────
+
+/**
+ * Copy campaign_journalists rows from previous campaigns to a new campaign.
+ * Used when the scoring cache is fresh — avoids re-scraping and re-scoring.
+ * Only copies journalists above the MIN_RELEVANCE_SCORE threshold.
+ */
+export async function copyScoresToCampaign(
+  orgId: string,
+  outletId: string,
+  brandIds: string[],
+  targetCampaignId: string,
+  featureSlug: string | null,
+  workflowSlug: string | null,
+  runId: string | null,
+): Promise<number> {
+  // Get the best scores per journalist from any previous campaign for this org+outlet+brand
+  const existing = await pgClient`
+    SELECT DISTINCT ON (journalist_id)
+      journalist_id AS "journalistId",
+      relevance_score AS "relevanceScore",
+      why_relevant AS "whyRelevant",
+      why_not_relevant AS "whyNotRelevant",
+      article_urls AS "articleUrls"
+    FROM campaign_journalists
+    WHERE org_id = ${orgId}
+      AND outlet_id = ${outletId}
+      AND brand_ids @> ${brandIds}::uuid[]
+      AND campaign_id != ${targetCampaignId}
+      AND relevance_score::numeric >= 30
+    ORDER BY journalist_id, created_at DESC
+  `;
+
+  let copied = 0;
+  for (const row of existing) {
+    await db
+      .insert(campaignJournalists)
+      .values({
+        journalistId: row.journalistId as string,
+        orgId,
+        brandIds,
+        campaignId: targetCampaignId,
+        outletId,
+        relevanceScore: row.relevanceScore as string,
+        whyRelevant: row.whyRelevant as string,
+        whyNotRelevant: row.whyNotRelevant as string,
+        articleUrls: (row.articleUrls as string[]) || [],
+        featureSlug,
+        workflowSlug,
+        runId,
+      })
+      .onConflictDoNothing();
+    copied++;
+  }
+
+  return copied;
+}
+
 // ── Refill buffer: discover + score + store as buffered ──────────────
 
 export async function refillBuffer(opts: {
@@ -340,15 +458,29 @@ export async function refillBuffer(opts: {
   brandIds: string[];
   ctx: OrgContext;
   runId?: string | null;
+  skipCache?: boolean;
 }): Promise<number> {
-  const articlesResponse = await discoverOutletArticles(
-    opts.outletDomain,
-    opts.maxArticles,
-    opts.ctx
-  );
+  // Phase 1: Get authors — from scrape cache or fresh scrape
+  let authors: AuthorWithArticles[];
+  const scrapeFresh = !opts.skipCache && await isScrapeCacheFresh(opts.outletId);
 
-  const authors = groupArticlesByAuthor(articlesResponse.articles);
+  if (scrapeFresh) {
+    console.log(
+      `[journalists-service] Scrape cache hit for outletId=${opts.outletId} — using existing journalists`
+    );
+    authors = await reconstructAuthorsFromDb(opts.outletId);
+  } else {
+    const articlesResponse = await discoverOutletArticles(
+      opts.outletDomain,
+      opts.maxArticles,
+      opts.ctx
+    );
+    authors = groupArticlesByAuthor(articlesResponse.articles);
+    // Update scrape cache
+    await updateScrapeCache(opts.outletId);
+  }
 
+  // Phase 2: Score authors via LLM — always pass existing journalists for matching
   const existingAtOutlet = await db
     .select({ id: journalists.id, journalistName: journalists.journalistName })
     .from(journalists)
