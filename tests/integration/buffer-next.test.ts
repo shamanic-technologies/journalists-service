@@ -14,6 +14,7 @@ import { eq } from "drizzle-orm";
 // Mock all external service clients
 vi.mock("../../src/lib/runs-client.js", () => ({
   createChildRun: vi.fn(),
+  closeRun: vi.fn(),
 }));
 
 vi.mock("../../src/lib/brand-client.js", () => ({
@@ -46,7 +47,7 @@ vi.mock("../../src/lib/email-gateway-client.js", () => ({
   checkEmailStatuses: vi.fn(),
 }));
 
-import { createChildRun } from "../../src/lib/runs-client.js";
+import { createChildRun, closeRun } from "../../src/lib/runs-client.js";
 import { extractBrandFields, getFieldValue } from "../../src/lib/brand-client.js";
 import { fetchCampaign } from "../../src/lib/campaign-client.js";
 import { fetchOutlet, pullNextOutlet } from "../../src/lib/outlets-client.js";
@@ -56,6 +57,7 @@ import { matchPerson } from "../../src/lib/apollo-client.js";
 import { checkEmailStatuses } from "../../src/lib/email-gateway-client.js";
 
 const mockedCreateChildRun = vi.mocked(createChildRun);
+const mockedCloseRun = vi.mocked(closeRun);
 const mockedExtractBrandFields = vi.mocked(extractBrandFields);
 const mockedGetFieldValue = vi.mocked(getFieldValue);
 const mockedFetchCampaign = vi.mocked(fetchCampaign);
@@ -1425,5 +1427,90 @@ describe("POST /buffer/next", () => {
 
     expect(res.status).toBe(502);
     expect(res.body.error).toContain("Apollo");
+  });
+
+  // ── Run lifecycle: closeRun must always be called ─────────────────
+
+  it("closes child run as 'completed' on successful journalist serve", async () => {
+    const sarah = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Sarah Johnson",
+      firstName: "Sarah",
+      lastName: "Johnson",
+    });
+
+    await insertTestCampaignJournalist({
+      journalistId: sarah.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "92.00",
+      whyRelevant: "Covers SaaS",
+      whyNotRelevant: "Consumer tech",
+      status: "buffered",
+    });
+
+    setupBaseMocks();
+    setupApolloMock("sarah.johnson@techcrunch.com");
+    setupEmailGatewayNotContacted();
+
+    const res = await request(app)
+      .post("/orgs/buffer/next")
+      .set(BUFFER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.found).toBe(true);
+    expect(mockedCloseRun).toHaveBeenCalledOnce();
+    expect(mockedCloseRun).toHaveBeenCalledWith(CHILD_RUN_ID, "completed", expect.objectContaining({ runId: CHILD_RUN_ID }));
+  });
+
+  it("closes child run as 'completed' when no journalist found (buffer exhausted)", async () => {
+    setupBaseMocks();
+    await seedDiscoveryCache();
+
+    const res = await request(app)
+      .post("/orgs/buffer/next")
+      .set(BUFFER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.found).toBe(false);
+    expect(mockedCloseRun).toHaveBeenCalledOnce();
+    expect(mockedCloseRun).toHaveBeenCalledWith(CHILD_RUN_ID, "completed", expect.objectContaining({ runId: CHILD_RUN_ID }));
+  });
+
+  it("closes child run as 'failed' when an error is thrown during processing", async () => {
+    const sarah = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Sarah Johnson",
+      firstName: "Sarah",
+      lastName: "Johnson",
+    });
+
+    await insertTestCampaignJournalist({
+      journalistId: sarah.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "92.00",
+      whyRelevant: "Covers SaaS",
+      whyNotRelevant: "Consumer tech",
+      status: "buffered",
+    });
+
+    setupBaseMocks();
+    mockedMatchPerson.mockRejectedValue(new Error("Apollo exploded"));
+
+    const res = await request(app)
+      .post("/orgs/buffer/next")
+      .set(BUFFER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(502);
+    expect(mockedCloseRun).toHaveBeenCalledOnce();
+    expect(mockedCloseRun).toHaveBeenCalledWith(CHILD_RUN_ID, "failed", expect.objectContaining({ runId: CHILD_RUN_ID }));
   });
 });
