@@ -119,6 +119,8 @@ describe("GET /journalists/list", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toEqual([]);
+    expect(res.body.total).toBe(0);
+    expect(res.body.byOutreachStatus).toEqual({});
   });
 
   it("returns grouped journalist with campaigns array", async () => {
@@ -701,6 +703,44 @@ describe("GET /journalists/list", () => {
     expect(j.outletId).toBe(OUTLET_ID);
     expect(j.outletName).toBeNull();
     expect(j.outletDomain).toBeNull();
+  });
+
+  it("returns total and byOutreachStatus counts from enriched statuses", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Buffered J" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Delivered J", apolloEmail: "delivered@example.com" });
+    const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Served J", apolloEmail: "served@example.com" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, status: "buffered",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, status: "served",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j3.id, orgId: ORG_ID, brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, status: "served",
+    });
+
+    // email-gateway: j2 is delivered, j3 has no delivery data (brand.delivered = false)
+    mockEmailGatewayBrandStatus([
+      { email: "delivered@example.com", contacted: true, delivered: true, replied: false, replyClassification: null },
+      { email: "served@example.com", contacted: false, delivered: false, replied: false, replyClassification: null },
+    ]);
+    mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
+
+    const res = await request(app)
+      .get(`/orgs/journalists/list?brandId=${BRAND_ID}`)
+      .set(ORG_AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(3);
+    expect(res.body.byOutreachStatus).toEqual({
+      buffered: 1,
+      delivered: 1,
+      served: 1,
+    });
   });
 
   it("scopes by orgId from headers — does not return other org's journalists", async () => {

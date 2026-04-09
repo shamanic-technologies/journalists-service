@@ -309,6 +309,8 @@ const JournalistListItemSchema = z.object({
 
 export const JournalistsListResponseSchema = z.object({
   journalists: z.array(JournalistListItemSchema),
+  total: z.number().int().openapi({ description: "Total journalists matching filters (not affected by pagination)" }),
+  byOutreachStatus: OutreachStatusCountSchema.openapi({ description: "Count of journalists per enriched outreach status across ALL journalists matching filters (not affected by pagination)" }),
 }).openapi("JournalistsListResponse");
 
 // ==================== Cost Stats Schemas ====================
