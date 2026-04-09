@@ -809,10 +809,26 @@
             "items": {
               "$ref": "#/components/schemas/JournalistListItem"
             }
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total journalists matching filters (not affected by pagination)"
+          },
+          "byOutreachStatus": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OutreachStatusCount"
+              },
+              {
+                "description": "Count of journalists per enriched outreach status across ALL journalists matching filters (not affected by pagination)"
+              }
+            ]
           }
         },
         "required": [
-          "journalists"
+          "journalists",
+          "total",
+          "byOutreachStatus"
         ]
       },
       "OutletBlockedResponse": {
