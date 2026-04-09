@@ -264,6 +264,7 @@ const JournalistListItemSchema = z.object({
   outletDomain: z.string().nullable().openapi({ description: "Outlet domain from outlets-service — used for logo resolution. Null if outlets-service is unreachable." }),
   email: z.string().nullable().openapi({ description: "Global email (from journalists table apollo_email, fallback to best campaign email)" }),
   apolloPersonId: z.string().nullable(),
+  outreachStatus: z.enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"]).openapi({ description: "High watermark outreach status across all campaigns for this journalist. Derived from email-gateway when available, local DB status as fallback." }),
   emailStatus: JournalistEmailStatusSchema.nullable().openapi({ description: "Email delivery statuses from email-gateway. Null if journalist has no email or email-gateway is unreachable." }),
   cost: JournalistCostSchema.nullable().openapi({ description: "Per-journalist cost aggregated across all campaigns. Null if no runs or runs-service is unreachable." }),
   campaigns: z.array(JournalistCampaignEntrySchema).openapi({ description: "Per-campaign entries for this journalist" }),

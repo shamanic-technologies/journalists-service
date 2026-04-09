@@ -718,6 +718,20 @@
             "type": "string",
             "nullable": true
           },
+          "outreachStatus": {
+            "type": "string",
+            "enum": [
+              "buffered",
+              "claimed",
+              "served",
+              "contacted",
+              "delivered",
+              "replied",
+              "bounced",
+              "skipped"
+            ],
+            "description": "High watermark outreach status across all campaigns for this journalist. Derived from email-gateway when available, local DB status as fallback."
+          },
           "emailStatus": {
             "$ref": "#/components/schemas/JournalistEmailStatus"
           },
@@ -743,6 +757,7 @@
           "outletDomain",
           "email",
           "apolloPersonId",
+          "outreachStatus",
           "emailStatus",
           "cost",
           "campaigns"

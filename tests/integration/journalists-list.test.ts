@@ -20,7 +20,7 @@ const RUN_ID = "99999999-9999-9999-9999-999999999999";
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-function mockEmailGatewayStatus(results: Array<{ email: string; contacted: boolean; delivered: boolean; replied: boolean; replyClassification: string | null }>) {
+function mockEmailGatewayCampaignStatus(results: Array<{ email: string; contacted: boolean; delivered: boolean; replied: boolean; replyClassification: string | null }>) {
   mockFetch.mockResolvedValueOnce({
     ok: true,
     json: async () => ({
@@ -32,6 +32,40 @@ function mockEmailGatewayStatus(results: Array<{ email: string; contacted: boole
           },
           brand: null,
           byCampaign: null,
+          global: { email: { bounced: false, unsubscribed: false } },
+        },
+        transactional: {
+          campaign: null,
+          brand: null,
+          byCampaign: null,
+          global: { email: { bounced: false, unsubscribed: false } },
+        },
+      })),
+    }),
+  });
+}
+
+function mockEmailGatewayBrandStatus(results: Array<{
+  email: string;
+  contacted: boolean;
+  delivered: boolean;
+  replied: boolean;
+  replyClassification: string | null;
+  byCampaign?: Record<string, { contacted: boolean; delivered: boolean; replied: boolean; replyClassification: string | null }>;
+}>) {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      results: results.map((r) => ({
+        email: r.email,
+        broadcast: {
+          campaign: null,
+          brand: {
+            contacted: r.contacted, delivered: r.delivered, opened: false, replied: r.replied, replyClassification: r.replyClassification, bounced: false, unsubscribed: false, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null,
+          },
+          byCampaign: r.byCampaign ? Object.fromEntries(Object.entries(r.byCampaign).map(([k, v]) => [k, {
+            contacted: v.contacted, delivered: v.delivered, opened: false, replied: v.replied, replyClassification: v.replyClassification, bounced: false, unsubscribed: false, lastDeliveredAt: v.delivered ? "2026-04-01T00:00:00Z" : null,
+          }])) : null,
           global: { email: { bounced: false, unsubscribed: false } },
         },
         transactional: {
@@ -121,7 +155,7 @@ describe("GET /journalists/list", () => {
     expect(j.campaigns[0].outreachStatus).toBe("buffered");
   });
 
-  it("groups multiple campaigns under one journalist", async () => {
+  it("groups multiple campaigns under one journalist with per-campaign outreach status", async () => {
     const journalist = await insertTestJournalist({
       outletId: OUTLET_ID,
       journalistName: "Samantha McLean",
@@ -147,10 +181,15 @@ describe("GET /journalists/list", () => {
       email: "samantha@example.com",
     });
 
-    // email-gateway for the campaign email
-    mockEmailGatewayStatus([
-      { email: "samantha@example.com", contacted: true, delivered: true, replied: false, replyClassification: null },
-    ]);
+    // Brand mode: email-gateway returns brand scope + byCampaign breakdown
+    // Only CAMPAIGN_ID_2 has email-gateway data (it was the one that sent email)
+    mockEmailGatewayBrandStatus([{
+      email: "samantha@example.com",
+      contacted: true, delivered: true, replied: false, replyClassification: null,
+      byCampaign: {
+        [CAMPAIGN_ID_2]: { contacted: true, delivered: true, replied: false, replyClassification: null },
+      },
+    }]);
     mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
 
     const res = await request(app)
@@ -158,15 +197,17 @@ describe("GET /journalists/list", () => {
       .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
-    // ONE journalist entry with TWO campaigns
     expect(res.body.journalists).toHaveLength(1);
     const j = res.body.journalists[0];
     expect(j.journalistName).toBe("Samantha McLean");
+    // Top-level outreachStatus = max across campaigns
+    expect(j.outreachStatus).toBe("delivered");
     expect(j.campaigns).toHaveLength(2);
-    const outreachStatuses = j.campaigns.map((c: { outreachStatus: string }) => c.outreachStatus).sort();
-    // Both campaigns share the same journalist email, so both get email-gateway enrichment
-    // email-gateway says delivered → both campaigns show "delivered"
-    expect(outreachStatuses).toEqual(["delivered", "delivered"]);
+    // Per-campaign: CAMPAIGN_ID has no byCampaign entry → falls back to brand scope → delivered
+    // CAMPAIGN_ID_2 has byCampaign entry → delivered
+    const byCampaign = Object.fromEntries(j.campaigns.map((c: { campaignId: string; outreachStatus: string }) => [c.campaignId, c.outreachStatus]));
+    expect(byCampaign[CAMPAIGN_ID]).toBe("delivered");
+    expect(byCampaign[CAMPAIGN_ID_2]).toBe("delivered");
   });
 
   it("uses apollo_email from journalists table as global email", async () => {
@@ -187,7 +228,7 @@ describe("GET /journalists/list", () => {
       email: "bob@campaign.com",
     });
 
-    mockEmailGatewayStatus([
+    mockEmailGatewayBrandStatus([
       { email: "bob@global.com", contacted: true, delivered: true, replied: false, replyClassification: null },
     ]);
     mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
@@ -221,7 +262,7 @@ describe("GET /journalists/list", () => {
       email: "status@example.com",
     });
 
-    mockEmailGatewayStatus([
+    mockEmailGatewayBrandStatus([
       { email: "status@example.com", contacted: true, delivered: true, replied: true, replyClassification: "positive" },
     ]);
     mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
@@ -232,8 +273,8 @@ describe("GET /journalists/list", () => {
 
     expect(res.status).toBe(200);
     const j = res.body.journalists[0];
-    const c = j.campaigns[0];
-    expect(c.outreachStatus).toBe("replied");
+    expect(j.outreachStatus).toBe("replied");
+    expect(j.campaigns[0].outreachStatus).toBe("replied");
   });
 
   it("falls back to brand scope when campaign scope is null (no campaignId filter)", async () => {
@@ -279,8 +320,9 @@ describe("GET /journalists/list", () => {
       .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
-    const c = res.body.journalists[0].campaigns[0];
-    expect(c.outreachStatus).toBe("delivered");
+    const j = res.body.journalists[0];
+    expect(j.outreachStatus).toBe("delivered");
+    expect(j.campaigns[0].outreachStatus).toBe("delivered");
   });
 
   it("falls back to DB status when no email-gateway data", async () => {
@@ -325,7 +367,7 @@ describe("GET /journalists/list", () => {
       email: "bob@example.com",
     });
 
-    mockEmailGatewayStatus([
+    mockEmailGatewayBrandStatus([
       { email: "bob@example.com", contacted: true, delivered: true, replied: false, replyClassification: null },
     ]);
     mockOutletsService([{ id: OUTLET_ID, outletName: "TechCrunch", outletDomain: "techcrunch.com" }]);
@@ -338,7 +380,8 @@ describe("GET /journalists/list", () => {
     expect(res.body.journalists).toHaveLength(1);
     const j = res.body.journalists[0];
     expect(j.emailStatus).not.toBeNull();
-    expect(j.emailStatus.broadcast.campaign.contacted).toBe(true);
+    expect(j.emailStatus.broadcast.brand.contacted).toBe(true);
+    expect(j.outreachStatus).toBe("delivered");
   });
 
   it("enriches with costs from runs-service", async () => {

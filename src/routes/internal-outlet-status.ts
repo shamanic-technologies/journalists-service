@@ -160,52 +160,35 @@ router.post("/orgs/outlets/status", async (req, res) => {
         const resolvedEmail = resolvedEmails.get(row.cjId);
         const egResult = resolvedEmail ? (emailStatusMap.get(resolvedEmail) ?? null) : null;
 
-        // For brand mode, we need per-campaign status from byCampaign
-        if (isBrandMode && egResult?.broadcast.byCampaign) {
-          // Look up the campaign entry by key (byCampaign is Record<campaignId, StatusScope>)
-          const campaignEntry = egResult.broadcast.byCampaign[row.campaignId] ?? null;
-          const rowOutreach = deriveOutreachStatusFromScope(row.status, campaignEntry ?? null);
+        if (isBrandMode) {
+          // Top-level high watermark: use brand scope (aggregate across all campaigns)
+          const brandScope = egResult?.broadcast.brand ?? null;
+          const brandOutreach = deriveOutreachStatusFromScope(row.status, brandScope);
+          highWatermark = higherStatus(highWatermark, brandOutreach) as OutreachStatusValue;
+          if (brandOutreach === "replied") {
+            topClassification = bestClassification(topClassification, brandScope?.replyClassification ?? null);
+          }
 
-          // Update per-campaign breakdown
+          // Per-campaign breakdown: use byCampaign entry for this specific campaign
+          const campaignScope = egResult?.broadcast.byCampaign?.[row.campaignId] ?? null;
+          const campaignOutreach = deriveOutreachStatusFromScope(row.status, campaignScope);
           const existing = campaignBreakdown.get(row.campaignId);
           if (!existing) {
             campaignBreakdown.set(row.campaignId, {
-              highWatermark: rowOutreach,
-              classification: campaignEntry?.replyClassification ?? null,
+              highWatermark: campaignOutreach,
+              classification: campaignScope?.replyClassification ?? null,
             });
           } else {
-            existing.highWatermark = higherStatus(existing.highWatermark, rowOutreach) as OutreachStatusValue;
-            existing.classification = bestClassification(existing.classification, campaignEntry?.replyClassification ?? null);
-          }
-
-          // Update top-level high watermark
-          highWatermark = higherStatus(highWatermark, rowOutreach) as OutreachStatusValue;
-          if (rowOutreach === "replied") {
-            topClassification = bestClassification(topClassification, campaignEntry?.replyClassification ?? null);
+            existing.highWatermark = higherStatus(existing.highWatermark, campaignOutreach) as OutreachStatusValue;
+            existing.classification = bestClassification(existing.classification, campaignScope?.replyClassification ?? null);
           }
         } else {
-          // Campaign mode or no byCampaign data: use campaign/brand scope directly
-          const scope = egResult?.broadcast.campaign ?? egResult?.broadcast.brand ?? null;
+          // Campaign mode: use campaign scope directly
+          const scope = egResult?.broadcast.campaign ?? null;
           const rowOutreach = deriveOutreachStatusFromScope(row.status, scope);
           highWatermark = higherStatus(highWatermark, rowOutreach) as OutreachStatusValue;
           if (rowOutreach === "replied" && scope) {
             topClassification = bestClassification(topClassification, scope.replyClassification);
-          }
-
-          // Still track per-campaign for brand mode even without byCampaign data
-          if (isBrandMode) {
-            const existing = campaignBreakdown.get(row.campaignId);
-            if (!existing) {
-              campaignBreakdown.set(row.campaignId, {
-                highWatermark: rowOutreach,
-                classification: rowOutreach === "replied" && scope ? scope.replyClassification : null,
-              });
-            } else {
-              existing.highWatermark = higherStatus(existing.highWatermark, rowOutreach) as OutreachStatusValue;
-              if (rowOutreach === "replied" && scope) {
-                existing.classification = bestClassification(existing.classification, scope.replyClassification);
-              }
-            }
           }
         }
       }
