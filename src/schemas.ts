@@ -92,6 +92,41 @@ export const DiscoverResponseSchema = z
   })
   .openapi("DiscoverResponse");
 
+// ==================== Journalist Outreach Status ====================
+//
+// Journalist-level outreachStatus has 8 possible values (ordered most → least advanced):
+//   replied > delivered > contacted > served > claimed > buffered > skipped > bounced
+//
+// This is DIFFERENT from the outlet-level 10-value enum used by outlets-service.
+// Journalist-service does NOT return: open, ended, denied (these are outlet-level concepts).
+// Journalist-service DOES return: bounced (derived from email-gateway bounce data).
+
+const JOURNALIST_OUTREACH_STATUS_DESCRIPTION = [
+  "Journalist-level outreach status. Possible values (most to least advanced):",
+  "",
+  "| # | Value | Meaning |",
+  "| - | ----- | ------- |",
+  "| 1 | replied | At least one email was replied to. Accompanied by replyClassification: positive, negative, or neutral |",
+  "| 2 | delivered | At least one email delivered to the journalist's inbox |",
+  "| 3 | contacted | At least one email sent |",
+  "| 4 | served | Journalist served to the email-sending pipeline |",
+  "| 5 | claimed | Journalist claimed by the sending workflow, not yet served |",
+  "| 6 | buffered | Journalist discovered but not yet processed |",
+  "| 7 | skipped | Journalist skipped (cross-campaign duplicate, blocked outlet, or low relevance) |",
+  "| 8 | bounced | Email bounced (rejected by recipient's mail server) |",
+  "",
+  "NOTE: Unlike the outlet-level enum (10 values), journalist-level does NOT include open, ended, or denied — those are outlet-level concepts. Journalist-level DOES include bounced (derived from email-gateway bounce data), which the outlet-level enum does not have.",
+  "",
+  "Derived from email-gateway when available; falls back to local DB status.",
+].join("\n");
+
+const JournalistOutreachStatusEnum = z
+  .enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"])
+  .openapi("JournalistOutreachStatus", {
+    description: JOURNALIST_OUTREACH_STATUS_DESCRIPTION,
+    example: "delivered",
+  });
+
 // ==================== Campaign Outlet Journalists Schemas ====================
 
 export const CampaignOutletJournalistSchema = z
@@ -110,7 +145,7 @@ export const CampaignOutletJournalistSchema = z
     whyRelevant: z.string(),
     whyNotRelevant: z.string(),
     articleUrls: z.array(z.string()).nullable(),
-    outreachStatus: z.enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"]).openapi({ description: "Outreach status derived from email-gateway (campaign or brand scope depending on query filters). Falls back to local DB status when no email-gateway data.", example: "delivered" }),
+    outreachStatus: JournalistOutreachStatusEnum,
     runId: z.string().uuid().nullable(),
     createdAt: z.string(),
     journalistName: z.string(),
@@ -164,7 +199,7 @@ export const StatsQuerySchema = z
   .openapi("StatsQuery");
 
 const OutreachStatusCountSchema = z.record(z.string(), z.number()).openapi("OutreachStatusCount", {
-  description: "Map of outreach status to journalist count. Statuses: buffered, claimed, served, skipped, contacted, delivered, replied, bounced.",
+  description: "Map of journalist outreach status to count. See JournalistOutreachStatus for the 8 possible values and their meanings. Keys are status strings, values are journalist counts.",
   example: { buffered: 12, served: 3, contacted: 5, delivered: 2 },
 });
 
@@ -242,7 +277,7 @@ const JournalistCampaignEntrySchema = z.object({
   campaignId: z.string().uuid(),
   featureSlug: z.string().nullable(),
   workflowSlug: z.string().nullable(),
-  outreachStatus: z.enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"]).openapi({ description: "Outreach status for this specific campaign. In brand mode, derived from email-gateway byCampaign entry for this campaignId (fallback to brand scope). In campaign mode, derived from campaign scope. Falls back to local DB status when no email-gateway data.", example: "delivered" }),
+  outreachStatus: JournalistOutreachStatusEnum.openapi({ description: "Outreach status for this specific campaign. In brand mode, derived from email-gateway byCampaign entry for this campaignId (fallback to brand scope). In campaign mode, derived from campaign scope. Falls back to local DB status when no email-gateway data." }),
   relevanceScore: z.string(),
   whyRelevant: z.string(),
   whyNotRelevant: z.string(),
@@ -264,9 +299,8 @@ const JournalistListItemSchema = z.object({
   outletDomain: z.string().nullable().openapi({ description: "Outlet domain from outlets-service — used for logo resolution. Null if outlets-service is unreachable." }),
   email: z.string().nullable().openapi({ description: "Global email (from journalists table apollo_email, fallback to best campaign email)" }),
   apolloPersonId: z.string().nullable(),
-  outreachStatus: z.enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"]).openapi({
+  outreachStatus: JournalistOutreachStatusEnum.openapi({
     description: "High watermark outreach status across all campaigns for this journalist. In brand mode, derived from email-gateway brand scope; in campaign mode, from campaign scope. Falls back to local DB status when email-gateway has no data.",
-    example: "delivered",
   }),
   emailStatus: JournalistEmailStatusSchema.nullable().openapi({ description: "Email delivery statuses from email-gateway. Null if journalist has no email or email-gateway is unreachable." }),
   cost: JournalistCostSchema.nullable().openapi({ description: "Per-journalist cost aggregated across all campaigns. Null if no runs or runs-service is unreachable." }),
@@ -370,8 +404,13 @@ export const OutletStatusRequestSchema = z
 
 const OutreachStatusEnum = z
   .enum(["buffered", "claimed", "skipped", "served", "contacted", "delivered", "replied"])
-  .openapi("OutreachStatus", {
-    description: "Outreach status derived from email-gateway when available, local DB status as fallback. Ranked: buffered < claimed < skipped < served < contacted < delivered < replied.",
+  .openapi("OutletOutreachStatus", {
+    description: [
+      "Outlet-level outreach status (7 values). This is the high watermark across all journalists for the outlet.",
+      "Ranked from most to least advanced: replied > delivered > contacted > served > claimed > skipped > buffered.",
+      "",
+      "NOTE: This is a subset of the journalist-level enum (8 values). The outlet-level enum does NOT include bounced (bounced is journalist-level only, derived from email-gateway). It also does NOT include open, ended, or denied — those are managed by outlets-service, not journalists-service.",
+    ].join("\n"),
     example: "contacted",
   });
 
