@@ -96,7 +96,7 @@ router.get("/orgs/journalists/list", async (req, res) => {
       .where(and(...conditions));
 
     if (rows.length === 0) {
-      res.json({ journalists: [] });
+      res.json({ journalists: [], total: 0, byOutreachStatus: {} });
       return;
     }
 
@@ -301,7 +301,17 @@ router.get("/orgs/journalists/list", async (req, res) => {
       };
     });
 
-    res.json({ journalists: enrichedJournalists });
+    // 8. Compute byOutreachStatus counts from enriched top-level statuses
+    const byOutreachStatus: Record<string, number> = {};
+    for (const j of enrichedJournalists) {
+      byOutreachStatus[j.outreachStatus] = (byOutreachStatus[j.outreachStatus] ?? 0) + 1;
+    }
+
+    res.json({
+      journalists: enrichedJournalists,
+      total: enrichedJournalists.length,
+      byOutreachStatus,
+    });
   } catch (err) {
     console.error("[journalists-service] /journalists/list error:", err);
     res.status(500).json({ error: "Internal server error" });
