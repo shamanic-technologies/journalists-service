@@ -3,7 +3,7 @@ import { and, arrayContains, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { campaignJournalists, journalists } from "../db/schema.js";
 import { JournalistsListQuerySchema } from "../schemas.js";
-import { checkEmailStatuses, deriveOutreachStatus, type EmailGatewayStatusResult } from "../lib/email-gateway-client.js";
+import { checkEmailStatuses, deriveOutreachStatusFromScope, type EmailGatewayStatusResult, type OutreachStatusValue } from "../lib/email-gateway-client.js";
 import { fetchOutletsBatch, type OutletBasic } from "../lib/outlets-client.js";
 import { fetchBatchRunCosts, type BatchRunCost } from "../lib/runs-client.js";
 import { resolveFeatureDynastySlugs } from "../lib/dynasty-client.js";
@@ -32,6 +32,7 @@ router.get("/orgs/journalists/list", async (req, res) => {
     }
 
     const { brandId, campaignId, featureSlugs, featureDynastySlug, workflowSlug } = parsed.data;
+    const isBrandMode = !campaignId;
     const orgId = res.locals.orgId as string;
 
     // 1. Resolve dynasty slug to versioned slugs (if provided)
@@ -226,11 +227,49 @@ router.get("/orgs/journalists/list", async (req, res) => {
     }
 
     // 7. Build response
+    const STATUS_RANK: Record<string, number> = {
+      buffered: 0, claimed: 1, skipped: 2, served: 3, contacted: 4, delivered: 5, replied: 6,
+    };
+
     const enrichedJournalists = [...grouped.values()].map((group) => {
       const email = journalistEmails.get(group.journalistId) ?? null;
       const emailStatus = email ? (emailStatusMap.get(email) ?? null) : null;
       const cost = journalistCostMap.get(group.journalistId) ?? null;
       const outlet = outletMap.get(group.outletId);
+
+      let topOutreach: OutreachStatusValue = "buffered";
+
+      const campaigns = group.campaigns.map((c) => {
+        // Pick the right email-gateway scope based on mode
+        let scope = null;
+        if (isBrandMode && emailStatus) {
+          scope = emailStatus.broadcast.byCampaign?.[c.campaignId] ?? emailStatus.broadcast.brand ?? null;
+        } else if (emailStatus) {
+          scope = emailStatus.broadcast.campaign ?? null;
+        }
+        const outreachStatus = deriveOutreachStatusFromScope(c.status, scope);
+
+        // Track high watermark across campaigns
+        if ((STATUS_RANK[outreachStatus] ?? 0) > (STATUS_RANK[topOutreach] ?? 0)) {
+          topOutreach = outreachStatus;
+        }
+
+        return {
+          id: c.id,
+          campaignId: c.campaignId,
+          featureSlug: c.featureSlug,
+          workflowSlug: c.workflowSlug,
+          outreachStatus,
+          relevanceScore: c.relevanceScore,
+          whyRelevant: c.whyRelevant,
+          whyNotRelevant: c.whyNotRelevant,
+          articleUrls: c.articleUrls,
+          email: c.campaignEmail,
+          apolloPersonId: c.campaignApolloPersonId,
+          runId: c.runId,
+          createdAt: c.createdAt,
+        };
+      });
 
       return {
         journalistId: group.journalistId,
@@ -243,6 +282,7 @@ router.get("/orgs/journalists/list", async (req, res) => {
         outletDomain: outlet?.outletDomain ?? null,
         email,
         apolloPersonId: group.apolloPersonId,
+        outreachStatus: topOutreach,
         emailStatus: emailStatus
           ? {
               broadcast: emailStatus.broadcast,
@@ -257,24 +297,7 @@ router.get("/orgs/journalists/list", async (req, res) => {
               runCount: cost.runCount,
             }
           : null,
-        campaigns: group.campaigns.map((c) => {
-          const outreachStatus = deriveOutreachStatus(c.status, emailStatus);
-          return {
-            id: c.id,
-            campaignId: c.campaignId,
-            featureSlug: c.featureSlug,
-            workflowSlug: c.workflowSlug,
-            outreachStatus,
-            relevanceScore: c.relevanceScore,
-            whyRelevant: c.whyRelevant,
-            whyNotRelevant: c.whyNotRelevant,
-            articleUrls: c.articleUrls,
-            email: c.campaignEmail,
-            apolloPersonId: c.campaignApolloPersonId,
-            runId: c.runId,
-            createdAt: c.createdAt,
-          };
-        }),
+        campaigns,
       };
     });
 

@@ -110,7 +110,7 @@ export const CampaignOutletJournalistSchema = z
     whyRelevant: z.string(),
     whyNotRelevant: z.string(),
     articleUrls: z.array(z.string()).nullable(),
-    outreachStatus: z.enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"]).openapi({ description: "Outreach status: email-gateway status when available, otherwise local DB status" }),
+    outreachStatus: z.enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"]).openapi({ description: "Outreach status derived from email-gateway (campaign or brand scope depending on query filters). Falls back to local DB status when no email-gateway data.", example: "delivered" }),
     runId: z.string().uuid().nullable(),
     createdAt: z.string(),
     journalistName: z.string(),
@@ -242,7 +242,7 @@ const JournalistCampaignEntrySchema = z.object({
   campaignId: z.string().uuid(),
   featureSlug: z.string().nullable(),
   workflowSlug: z.string().nullable(),
-  outreachStatus: z.enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"]).openapi({ description: "Outreach status: email-gateway status when available, otherwise local DB status" }),
+  outreachStatus: z.enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"]).openapi({ description: "Outreach status for this specific campaign. In brand mode, derived from email-gateway byCampaign entry for this campaignId (fallback to brand scope). In campaign mode, derived from campaign scope. Falls back to local DB status when no email-gateway data.", example: "delivered" }),
   relevanceScore: z.string(),
   whyRelevant: z.string(),
   whyNotRelevant: z.string(),
@@ -264,10 +264,48 @@ const JournalistListItemSchema = z.object({
   outletDomain: z.string().nullable().openapi({ description: "Outlet domain from outlets-service — used for logo resolution. Null if outlets-service is unreachable." }),
   email: z.string().nullable().openapi({ description: "Global email (from journalists table apollo_email, fallback to best campaign email)" }),
   apolloPersonId: z.string().nullable(),
+  outreachStatus: z.enum(["buffered", "claimed", "served", "contacted", "delivered", "replied", "bounced", "skipped"]).openapi({
+    description: "High watermark outreach status across all campaigns for this journalist. In brand mode, derived from email-gateway brand scope; in campaign mode, from campaign scope. Falls back to local DB status when email-gateway has no data.",
+    example: "delivered",
+  }),
   emailStatus: JournalistEmailStatusSchema.nullable().openapi({ description: "Email delivery statuses from email-gateway. Null if journalist has no email or email-gateway is unreachable." }),
   cost: JournalistCostSchema.nullable().openapi({ description: "Per-journalist cost aggregated across all campaigns. Null if no runs or runs-service is unreachable." }),
   campaigns: z.array(JournalistCampaignEntrySchema).openapi({ description: "Per-campaign entries for this journalist" }),
-}).openapi("JournalistListItem");
+}).openapi("JournalistListItem", {
+  description: "A journalist with global data (email, cost, outreachStatus) and per-campaign entries. The top-level outreachStatus is the high watermark across all campaigns.",
+  example: {
+    journalistId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    journalistName: "Jane Smith",
+    firstName: "Jane",
+    lastName: "Smith",
+    entityType: "individual",
+    outletId: "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    outletName: "TechCrunch",
+    outletDomain: "techcrunch.com",
+    email: "jane.smith@example.com",
+    apolloPersonId: null,
+    outreachStatus: "delivered",
+    emailStatus: null,
+    cost: null,
+    campaigns: [
+      {
+        id: "c3d4e5f6-a7b8-9012-cdef-123456789012",
+        campaignId: "d4e5f6a7-b8c9-0123-defa-234567890123",
+        featureSlug: "pr-outreach-v1",
+        workflowSlug: null,
+        outreachStatus: "delivered",
+        relevanceScore: "0.85",
+        whyRelevant: "Covers AI startups regularly",
+        whyNotRelevant: "",
+        articleUrls: ["https://techcrunch.com/article-1"],
+        email: "jane.smith@example.com",
+        apolloPersonId: null,
+        runId: "e5f6a7b8-c9d0-1234-efab-345678901234",
+        createdAt: "2026-04-01T12:00:00.000Z",
+      },
+    ],
+  },
+});
 
 export const JournalistsListResponseSchema = z.object({
   journalists: z.array(JournalistListItemSchema),
@@ -351,17 +389,17 @@ const CampaignOutreachStatusSchema = z
 const OutletStatusEntrySchema = z
   .object({
     outreachStatus: OutreachStatusEnum.openapi({
-      description: "High watermark outreach status across all journalists for this outlet at the requested scope",
+      description: "High watermark outreach status across all journalists for this outlet. In brand mode, derived from email-gateway brand scope (aggregate across all campaigns). In campaign mode, derived from email-gateway campaign scope. Falls back to local DB status when email-gateway has no data for a journalist.",
     }),
     replyClassification: z.enum(["positive", "negative", "neutral"]).nullable().openapi({
       description: "Best reply classification across all journalists when outreachStatus is replied. Hierarchy: positive > negative > neutral. Null when outreachStatus is not replied.",
     }),
     byCampaign: z.record(z.string().uuid(), CampaignOutreachStatusSchema).optional().openapi({
-      description: "Per-campaign breakdown. Present when scope is brand (brandId without campaignId). Absent when scope is campaign.",
+      description: "Per-campaign breakdown derived from email-gateway byCampaign entries. Present only in brand mode (brandId without campaignId). Each campaign's status is derived independently from its own email-gateway scope — not the brand aggregate. Absent in campaign mode.",
     }),
   })
   .openapi("OutletStatusEntry", {
-    description: "Outreach status for a single outlet. Includes a high watermark status and optional per-campaign breakdown (brand scope only).",
+    description: "Outreach status for a single outlet. The top-level outreachStatus is the high watermark using brand or campaign scope. The byCampaign breakdown (brand mode only) uses per-campaign email-gateway entries.",
     example: {
       outreachStatus: "delivered",
       replyClassification: null,
