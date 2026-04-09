@@ -170,6 +170,21 @@
           "outletId"
         ]
       },
+      "JournalistOutreachStatus": {
+        "type": "string",
+        "enum": [
+          "buffered",
+          "claimed",
+          "served",
+          "contacted",
+          "delivered",
+          "replied",
+          "bounced",
+          "skipped"
+        ],
+        "description": "Journalist-level outreach status. Possible values (most to least advanced):\n\n| # | Value | Meaning |\n| - | ----- | ------- |\n| 1 | replied | At least one email was replied to. Accompanied by replyClassification: positive, negative, or neutral |\n| 2 | delivered | At least one email delivered to the journalist's inbox |\n| 3 | contacted | At least one email sent |\n| 4 | served | Journalist served to the email-sending pipeline |\n| 5 | claimed | Journalist claimed by the sending workflow, not yet served |\n| 6 | buffered | Journalist discovered but not yet processed |\n| 7 | skipped | Journalist skipped (cross-campaign duplicate, blocked outlet, or low relevance) |\n| 8 | bounced | Email bounced (rejected by recipient's mail server) |\n\nNOTE: Unlike the outlet-level enum (10 values), journalist-level does NOT include open, ended, or denied — those are outlet-level concepts. Journalist-level DOES include bounced (derived from email-gateway bounce data), which the outlet-level enum does not have.\n\nDerived from email-gateway when available; falls back to local DB status.",
+        "example": "delivered"
+      },
       "CampaignOutletJournalist": {
         "type": "object",
         "properties": {
@@ -225,19 +240,7 @@
             }
           },
           "outreachStatus": {
-            "type": "string",
-            "enum": [
-              "buffered",
-              "claimed",
-              "served",
-              "contacted",
-              "delivered",
-              "replied",
-              "bounced",
-              "skipped"
-            ],
-            "description": "Outreach status derived from email-gateway (campaign or brand scope depending on query filters). Falls back to local DB status when no email-gateway data.",
-            "example": "delivered"
+            "$ref": "#/components/schemas/JournalistOutreachStatus"
           },
           "runId": {
             "type": "string",
@@ -306,7 +309,7 @@
         "additionalProperties": {
           "type": "number"
         },
-        "description": "Map of outreach status to journalist count. Statuses: buffered, claimed, served, skipped, contacted, delivered, replied, bounced.",
+        "description": "Map of journalist outreach status to count. See JournalistOutreachStatus for the 8 possible values and their meanings. Keys are status strings, values are journalist counts.",
         "example": {
           "buffered": 12,
           "served": 3,
@@ -608,19 +611,14 @@
             "nullable": true
           },
           "outreachStatus": {
-            "type": "string",
-            "enum": [
-              "buffered",
-              "claimed",
-              "served",
-              "contacted",
-              "delivered",
-              "replied",
-              "bounced",
-              "skipped"
-            ],
-            "description": "Outreach status for this specific campaign. In brand mode, derived from email-gateway byCampaign entry for this campaignId (fallback to brand scope). In campaign mode, derived from campaign scope. Falls back to local DB status when no email-gateway data.",
-            "example": "delivered"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JournalistOutreachStatus"
+              },
+              {
+                "description": "Outreach status for this specific campaign. In brand mode, derived from email-gateway byCampaign entry for this campaignId (fallback to brand scope). In campaign mode, derived from campaign scope. Falls back to local DB status when no email-gateway data."
+              }
+            ]
           },
           "relevanceScore": {
             "type": "string"
@@ -721,19 +719,14 @@
             "nullable": true
           },
           "outreachStatus": {
-            "type": "string",
-            "enum": [
-              "buffered",
-              "claimed",
-              "served",
-              "contacted",
-              "delivered",
-              "replied",
-              "bounced",
-              "skipped"
-            ],
-            "description": "High watermark outreach status across all campaigns for this journalist. In brand mode, derived from email-gateway brand scope; in campaign mode, from campaign scope. Falls back to local DB status when email-gateway has no data.",
-            "example": "delivered"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JournalistOutreachStatus"
+              },
+              {
+                "description": "High watermark outreach status across all campaigns for this journalist. In brand mode, derived from email-gateway brand scope; in campaign mode, from campaign scope. Falls back to local DB status when email-gateway has no data."
+              }
+            ]
           },
           "emailStatus": {
             "$ref": "#/components/schemas/JournalistEmailStatus"
@@ -847,7 +840,7 @@
           "blocked"
         ]
       },
-      "OutreachStatus": {
+      "OutletOutreachStatus": {
         "type": "string",
         "enum": [
           "buffered",
@@ -867,10 +860,10 @@
           "outreachStatus": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/OutreachStatus"
+                "$ref": "#/components/schemas/OutletOutreachStatus"
               },
               {
-                "description": "Outreach status derived from email-gateway when available, local DB status as fallback. Ranked: buffered < claimed < skipped < served < contacted < delivered < replied."
+                "description": "Outlet-level outreach status (7 values). This is the high watermark across all journalists for the outlet.\nRanked from most to least advanced: replied > delivered > contacted > served > claimed > skipped > buffered.\n\nNOTE: This is a subset of the journalist-level enum (8 values). The outlet-level enum does NOT include bounced (bounced is journalist-level only, derived from email-gateway). It also does NOT include open, ended, or denied — those are managed by outlets-service, not journalists-service."
               }
             ]
           },
@@ -900,7 +893,7 @@
         "type": "object",
         "properties": {
           "outreachStatus": {
-            "$ref": "#/components/schemas/OutreachStatus"
+            "$ref": "#/components/schemas/OutletOutreachStatus"
           },
           "replyClassification": {
             "type": "string",
