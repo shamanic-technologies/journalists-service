@@ -580,6 +580,38 @@ describe("POST /orgs/outlets/status", () => {
     expect(res.body.results[OUTLET_A].outreachStatus).toBe("delivered");
   });
 
+  it("uses brand scope for top-level status even when byCampaign is missing the campaign key", async () => {
+    // Regression: outlet stayed at "served" because byCampaign didn't contain the campaignId,
+    // falling back to local DB status instead of using brand scope.
+    const j1 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J1" });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_A, status: "served", email: "j1@test.com",
+    });
+
+    // Email-gateway returns brand scope with delivered=true, but byCampaign is empty
+    // (campaign key not present — e.g. campaign tracking lag)
+    mockedCheckEmailStatuses.mockResolvedValue([
+      makeEmailGatewayResultWithByCampaign(
+        "j1@test.com",
+        { contacted: true, delivered: true },
+        [] // empty byCampaign — no campaign entries
+      ),
+    ]);
+
+    const res = await request(app)
+      .post("/orgs/outlets/status")
+      .set(ORG_AUTH_HEADERS)
+      .send({ outletIds: [OUTLET_A], scopeFilters: { brandId: BRAND_ID } });
+
+    expect(res.status).toBe(200);
+    const result = res.body.results[OUTLET_A];
+    // Top-level must use brand scope → delivered
+    expect(result.outreachStatus).toBe("delivered");
+    // Per-campaign breakdown has no byCampaign data → falls back to local status
+    expect(result.byCampaign[CAMPAIGN_ID].outreachStatus).toBe("served");
+  });
+
   it("returns 400 when base headers are missing", async () => {
     const res = await request(app)
       .post("/orgs/outlets/status")
