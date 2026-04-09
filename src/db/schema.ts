@@ -112,22 +112,35 @@ export const campaignJournalists = pgTable(
   ]
 );
 
-/** Tracks when discovery was last run for a given scope — used for 7-day caching. */
+/** Tracks when an outlet was last scraped for articles — global, not scoped to any org/brand/campaign. */
+export const outletScrapeCache = pgTable(
+  "outlet_scrape_cache",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    outletId: uuid("outlet_id").notNull(),
+    scrapedAt: timestamp("scraped_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("idx_osc_outlet").on(table.outletId),
+  ]
+);
+
+/** Tracks when scoring was last run for a given org+outlet — used for 3-month caching.
+ *  brandIds is stored for cache validation (cache miss if brands differ). */
 export const discoveryCache = pgTable(
   "discovery_cache",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     orgId: uuid("org_id").notNull(),
     brandIds: uuid("brand_ids").array().notNull(),
-    campaignId: uuid("campaign_id").notNull(),
+    campaignId: uuid("campaign_id"),
     outletId: uuid("outlet_id").notNull(),
     discoveredAt: timestamp("discovered_at", { withTimezone: true }).notNull(),
     runId: uuid("run_id"),
   },
   (table) => [
-    uniqueIndex("idx_dc_org_campaign_outlet").on(
+    uniqueIndex("idx_dc_org_outlet").on(
       table.orgId,
-      table.campaignId,
       table.outletId
     ),
   ]
@@ -153,6 +166,8 @@ export type Journalist = typeof journalists.$inferSelect;
 export type NewJournalist = typeof journalists.$inferInsert;
 export type CampaignJournalist = typeof campaignJournalists.$inferSelect;
 export type NewCampaignJournalist = typeof campaignJournalists.$inferInsert;
+export type OutletScrapeCache = typeof outletScrapeCache.$inferSelect;
+export type NewOutletScrapeCache = typeof outletScrapeCache.$inferInsert;
 export type DiscoveryCache = typeof discoveryCache.$inferSelect;
 export type NewDiscoveryCache = typeof discoveryCache.$inferInsert;
 export type IdempotencyCache = typeof idempotencyCache.$inferSelect;

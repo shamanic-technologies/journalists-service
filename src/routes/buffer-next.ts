@@ -14,7 +14,7 @@ import {
 } from "../lib/brand-client.js";
 import { fetchCampaign } from "../lib/campaign-client.js";
 import { fetchOutlet, pullNextOutlet } from "../lib/outlets-client.js";
-import { extractDomain, refillBuffer } from "../lib/journalist-discovery.js";
+import { extractDomain, refillBuffer, copyScoresToCampaign } from "../lib/journalist-discovery.js";
 import {
   checkOutletBlocked,
   SERVED_COOLDOWN_MS,
@@ -27,9 +27,10 @@ import type { OrgContext } from "../lib/service-context.js";
 
 const router = Router();
 
-const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const SCORING_CACHE_MAX_AGE_MS = 3 * 30 * 24 * 60 * 60 * 1000; // ~3 months — scoring cache by (orgId, outletId)
 const IDEMPOTENCY_TTL_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
-const APOLLO_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — don't re-call Apollo within this window
+const APOLLO_EMAIL_FOUND_CACHE_MS = 6 * 30 * 24 * 60 * 60 * 1000; // ~6 months — email unlikely to change
+const APOLLO_NO_EMAIL_CACHE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — worth retrying sooner
 const MAX_PULL_ITERATIONS = 100;
 const CLEANUP_PROBABILITY = 0.01;
 
@@ -412,9 +413,10 @@ async function resolveAndCheckEmail(
     .where(eq(journalists.id, claimed.journalistId));
 
   const cached = cachedRows[0];
+  const apolloCacheTtl = cached?.apolloEmail ? APOLLO_EMAIL_FOUND_CACHE_MS : APOLLO_NO_EMAIL_CACHE_MS;
   const isCacheFresh =
     cached?.apolloCheckedAt &&
-    Date.now() - new Date(cached.apolloCheckedAt).getTime() < APOLLO_CACHE_MAX_AGE_MS;
+    Date.now() - new Date(cached.apolloCheckedAt).getTime() < apolloCacheTtl;
 
   let email: string | null = null;
   let emailStatus: string | null = null;
@@ -648,28 +650,42 @@ async function processOutlet(
 
     hasAttemptedRefill = true;
 
-    // Check discovery cache
+    // Check scoring cache — keyed by (orgId, outletId), validated by brandIds match
     const discoveryCached = await db
       .select()
       .from(discoveryCache)
       .where(
         and(
           eq(discoveryCache.orgId, ctx.orgId),
-          eq(discoveryCache.campaignId, campaignId),
           eq(discoveryCache.outletId, outlet.outletId)
         )
       );
 
-    const isFresh =
-      discoveryCached.length > 0 &&
-      Date.now() - new Date(discoveryCached[0].discoveredAt).getTime() <
-        CACHE_MAX_AGE_MS;
+    const cachedEntry = discoveryCached[0];
+    const brandIdsMatch = cachedEntry &&
+      JSON.stringify([...cachedEntry.brandIds].sort()) === JSON.stringify([...brandIds].sort());
+    const scoringFresh =
+      cachedEntry &&
+      brandIdsMatch &&
+      Date.now() - new Date(cachedEntry.discoveredAt).getTime() < SCORING_CACHE_MAX_AGE_MS;
 
-    if (isFresh) {
-      return { found: false, runId: childRun.id };
+    if (scoringFresh) {
+      // Scoring cache hit — copy scores from previous campaigns to this campaign's buffer
+      const copied = await copyScoresToCampaign(
+        ctx.orgId, outlet.outletId, brandIds, campaignId,
+        ctx.featureSlug ?? null, ctx.workflowSlug ?? null, childRun.id
+      );
+      if (copied === 0) {
+        return { found: false, runId: childRun.id };
+      }
+      console.log(
+        `[journalists-service] Scoring cache hit — copied ${copied} journalists to campaign ${campaignId} (outletId=${outlet.outletId})`
+      );
+      // Loop back to claim from the freshly-populated buffer
+      continue;
     }
 
-    // Refill buffer
+    // Scoring cache stale or brand mismatch — full refill needed
     const [brandFields, campaign] = await Promise.all([
       extractBrandFields(
         [
@@ -708,7 +724,7 @@ async function processOutlet(
       runId: childRun.id,
     });
 
-    // Update discovery cache
+    // Update scoring cache — keyed by (orgId, outletId)
     await db
       .insert(discoveryCache)
       .values({
@@ -722,11 +738,11 @@ async function processOutlet(
       .onConflictDoUpdate({
         target: [
           discoveryCache.orgId,
-          discoveryCache.campaignId,
           discoveryCache.outletId,
         ],
         set: {
           brandIds,
+          campaignId,
           discoveredAt: new Date(),
           runId: childRun.id,
         },
