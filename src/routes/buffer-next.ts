@@ -7,7 +7,7 @@ import {
   idempotencyCache,
 } from "../db/schema.js";
 import { eq, and, lt } from "drizzle-orm";
-import { createChildRun } from "../lib/runs-client.js";
+import { createChildRun, closeRun } from "../lib/runs-client.js";
 import {
   extractBrandFields,
   getFieldValue,
@@ -583,179 +583,189 @@ async function processOutlet(
   );
   const childCtx: OrgContext = { ...ctx, runId: childRun.id };
 
-  let hasAttemptedRefill = false;
+  let succeeded = false;
+  try {
+    let hasAttemptedRefill = false;
 
-  for (let i = 0; i < MAX_PULL_ITERATIONS; i++) {
-    const claimed = await claimNextBuffered(campaignId, outlet.outletId);
+    for (let i = 0; i < MAX_PULL_ITERATIONS; i++) {
+      const claimed = await claimNextBuffered(campaignId, outlet.outletId);
 
-    if (claimed) {
-      // Try to resolve email + dedup by email/apolloPersonId/journalistId at brand+org level
-      const resolved = await resolveAndCheckEmail(
-        claimed,
-        outlet.outletDomain,
-        ctx.orgId,
-        brandIds,
-        childCtx
-      );
+      if (claimed) {
+        // Try to resolve email + dedup by email/apolloPersonId/journalistId at brand+org level
+        const resolved = await resolveAndCheckEmail(
+          claimed,
+          outlet.outletDomain,
+          ctx.orgId,
+          brandIds,
+          childCtx
+        );
 
-      if (resolved) {
-        // Email found and valid — mark as served with email data
+        if (resolved) {
+          // Email found and valid — mark as served with email data
+          await db
+            .update(campaignJournalists)
+            .set({
+              status: "served",
+              email: resolved.email,
+              apolloPersonId: resolved.apolloPersonId,
+            })
+            .where(eq(campaignJournalists.id, claimed.campaignJournalistId));
+
+          succeeded = true;
+          return {
+            found: true,
+            runId: childRun.id,
+            journalist: {
+              id: claimed.journalistId,
+              journalistName: claimed.journalistName,
+              firstName: claimed.firstName || "",
+              lastName: claimed.lastName || "",
+              entityType: claimed.entityType,
+              relevanceScore: Number(claimed.relevanceScore),
+              whyRelevant: claimed.whyRelevant,
+              whyNotRelevant: claimed.whyNotRelevant,
+              articleUrls: (claimed.articleUrls as string[]) || [],
+              email: resolved.email,
+              apolloPersonId: resolved.apolloPersonId ?? undefined,
+              outletId: outlet.outletId,
+              outletName: outlet.outletName,
+              outletDomain: outlet.outletDomain,
+            },
+          };
+        }
+
+        // No email — mark as skipped, try next journalist
         await db
           .update(campaignJournalists)
-          .set({
-            status: "served",
-            email: resolved.email,
-            apolloPersonId: resolved.apolloPersonId,
-          })
+          .set({ status: "skipped" })
           .where(eq(campaignJournalists.id, claimed.campaignJournalistId));
 
-        return {
-          found: true,
-          runId: childRun.id,
-          journalist: {
-            id: claimed.journalistId,
-            journalistName: claimed.journalistName,
-            firstName: claimed.firstName || "",
-            lastName: claimed.lastName || "",
-            entityType: claimed.entityType,
-            relevanceScore: Number(claimed.relevanceScore),
-            whyRelevant: claimed.whyRelevant,
-            whyNotRelevant: claimed.whyNotRelevant,
-            articleUrls: (claimed.articleUrls as string[]) || [],
-            email: resolved.email,
-            apolloPersonId: resolved.apolloPersonId ?? undefined,
-            outletId: outlet.outletId,
-            outletName: outlet.outletName,
-            outletDomain: outlet.outletDomain,
-          },
-        };
+        console.log(
+          `[journalists-service] Skipped journalist ${claimed.firstName} ${claimed.lastName} — no valid email`
+        );
+        continue;
       }
 
-      // No email — mark as skipped, try next journalist
-      await db
-        .update(campaignJournalists)
-        .set({ status: "skipped" })
-        .where(eq(campaignJournalists.id, claimed.campaignJournalistId));
-
-      console.log(
-        `[journalists-service] Skipped journalist ${claimed.firstName} ${claimed.lastName} — no valid email`
-      );
-      continue;
-    }
-
-    // Buffer empty — try refill (only once)
-    if (hasAttemptedRefill) {
-      return { found: false, runId: childRun.id };
-    }
-
-    hasAttemptedRefill = true;
-
-    // Check scoring cache — keyed by (orgId, outletId), validated by brandIds match
-    const discoveryCached = await db
-      .select()
-      .from(discoveryCache)
-      .where(
-        and(
-          eq(discoveryCache.orgId, ctx.orgId),
-          eq(discoveryCache.outletId, outlet.outletId)
-        )
-      );
-
-    const cachedEntry = discoveryCached[0];
-    const brandIdsMatch = cachedEntry &&
-      JSON.stringify([...cachedEntry.brandIds].sort()) === JSON.stringify([...brandIds].sort());
-    const scoringFresh =
-      cachedEntry &&
-      brandIdsMatch &&
-      Date.now() - new Date(cachedEntry.discoveredAt).getTime() < SCORING_CACHE_MAX_AGE_MS;
-
-    if (scoringFresh) {
-      // Scoring cache hit — copy scores from previous campaigns to this campaign's buffer
-      const copied = await copyScoresToCampaign(
-        ctx.orgId, outlet.outletId, brandIds, campaignId,
-        ctx.featureSlug ?? null, ctx.workflowSlug ?? null, childRun.id
-      );
-      if (copied === 0) {
+      // Buffer empty — try refill (only once)
+      if (hasAttemptedRefill) {
+        succeeded = true;
         return { found: false, runId: childRun.id };
       }
-      console.log(
-        `[journalists-service] Scoring cache hit — copied ${copied} journalists to campaign ${campaignId} (outletId=${outlet.outletId})`
+
+      hasAttemptedRefill = true;
+
+      // Check scoring cache — keyed by (orgId, outletId), validated by brandIds match
+      const discoveryCached = await db
+        .select()
+        .from(discoveryCache)
+        .where(
+          and(
+            eq(discoveryCache.orgId, ctx.orgId),
+            eq(discoveryCache.outletId, outlet.outletId)
+          )
+        );
+
+      const cachedEntry = discoveryCached[0];
+      const brandIdsMatch = cachedEntry &&
+        JSON.stringify([...cachedEntry.brandIds].sort()) === JSON.stringify([...brandIds].sort());
+      const scoringFresh =
+        cachedEntry &&
+        brandIdsMatch &&
+        Date.now() - new Date(cachedEntry.discoveredAt).getTime() < SCORING_CACHE_MAX_AGE_MS;
+
+      if (scoringFresh) {
+        // Scoring cache hit — copy scores from previous campaigns to this campaign's buffer
+        const copied = await copyScoresToCampaign(
+          ctx.orgId, outlet.outletId, brandIds, campaignId,
+          ctx.featureSlug ?? null, ctx.workflowSlug ?? null, childRun.id
+        );
+        if (copied === 0) {
+          succeeded = true;
+          return { found: false, runId: childRun.id };
+        }
+        console.log(
+          `[journalists-service] Scoring cache hit — copied ${copied} journalists to campaign ${campaignId} (outletId=${outlet.outletId})`
+        );
+        // Loop back to claim from the freshly-populated buffer
+        continue;
+      }
+
+      // Scoring cache stale or brand mismatch — full refill needed
+      const [brandFields, campaign] = await Promise.all([
+        extractBrandFields(
+          [
+            { key: "brand_name", description: "The brand's name" },
+            {
+              key: "brand_description",
+              description:
+                "A concise description of what the brand does, its products, and market positioning",
+            },
+          ],
+          childCtx
+        ),
+        fetchCampaign(campaignId, childCtx),
+      ]);
+
+      const brandName =
+        getFieldValue(brandFields.fields, "brand_name") || "Unknown Brand";
+      const brandDescription = getFieldValue(
+        brandFields.fields,
+        "brand_description"
       );
-      // Loop back to claim from the freshly-populated buffer
-      continue;
-    }
 
-    // Scoring cache stale or brand mismatch — full refill needed
-    const [brandFields, campaign] = await Promise.all([
-      extractBrandFields(
-        [
-          { key: "brand_name", description: "The brand's name" },
-          {
-            key: "brand_description",
-            description:
-              "A concise description of what the brand does, its products, and market positioning",
-          },
-        ],
-        childCtx
-      ),
-      fetchCampaign(campaignId, childCtx),
-    ]);
+      const featureInputs = campaign.featureInputs ?? {};
 
-    const brandName =
-      getFieldValue(brandFields.fields, "brand_name") || "Unknown Brand";
-    const brandDescription = getFieldValue(
-      brandFields.fields,
-      "brand_description"
-    );
-
-    const featureInputs = campaign.featureInputs ?? {};
-
-    const filled = await refillBuffer({
-      outletDomain: outlet.outletDomain,
-      outletId: outlet.outletId,
-      campaignId,
-      brandName,
-      brandDescription,
-      featureInputs,
-      maxArticles,
-      orgId: ctx.orgId,
-      brandIds,
-      ctx: childCtx,
-      runId: childRun.id,
-    });
-
-    // Update scoring cache — keyed by (orgId, outletId)
-    await db
-      .insert(discoveryCache)
-      .values({
+      const filled = await refillBuffer({
+        outletDomain: outlet.outletDomain,
+        outletId: outlet.outletId,
+        campaignId,
+        brandName,
+        brandDescription,
+        featureInputs,
+        maxArticles,
         orgId: ctx.orgId,
         brandIds,
-        campaignId,
-        outletId: outlet.outletId,
-        discoveredAt: new Date(),
+        ctx: childCtx,
         runId: childRun.id,
-      })
-      .onConflictDoUpdate({
-        target: [
-          discoveryCache.orgId,
-          discoveryCache.outletId,
-        ],
-        set: {
-          brandIds,
-          campaignId,
-          discoveredAt: new Date(),
-          runId: childRun.id,
-        },
       });
 
-    if (filled === 0) {
-      return { found: false, runId: childRun.id };
+      // Update scoring cache — keyed by (orgId, outletId)
+      await db
+        .insert(discoveryCache)
+        .values({
+          orgId: ctx.orgId,
+          brandIds,
+          campaignId,
+          outletId: outlet.outletId,
+          discoveredAt: new Date(),
+          runId: childRun.id,
+        })
+        .onConflictDoUpdate({
+          target: [
+            discoveryCache.orgId,
+            discoveryCache.outletId,
+          ],
+          set: {
+            brandIds,
+            campaignId,
+            discoveredAt: new Date(),
+            runId: childRun.id,
+          },
+        });
+
+      if (filled === 0) {
+        succeeded = true;
+        return { found: false, runId: childRun.id };
+      }
+
+      // Loop back to claim from the freshly-filled buffer
     }
 
-    // Loop back to claim from the freshly-filled buffer
+    succeeded = true;
+    return { found: false };
+  } finally {
+    await closeRun(childRun.id, succeeded ? "completed" : "failed", childCtx);
   }
-
-  return { found: false };
 }
 
 // ── Route handler ───────────────────────────────────────────────────
