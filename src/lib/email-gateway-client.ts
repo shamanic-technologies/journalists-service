@@ -84,8 +84,10 @@ export interface EmailGatewayBroadcastStats {
   emailsClicked: number;
   emailsReplied: number;
   emailsBounced: number;
-  repliesWillingToMeet: number;
   repliesInterested: number;
+  repliesMeetingBooked: number;
+  repliesClosed: number;
+  repliesNeutral: number;
   repliesNotInterested: number;
   repliesOutOfOffice: number;
   repliesUnsubscribe: number;
