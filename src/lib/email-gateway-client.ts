@@ -76,6 +76,18 @@ export async function checkEmailStatuses(
 
 // ── Aggregated stats from email-gateway GET /stats ──────────────────
 
+export interface EmailGatewayRepliesDetail {
+  interested: number;
+  meetingBooked: number;
+  closed: number;
+  notInterested: number;
+  wrongPerson: number;
+  unsubscribe: number;
+  neutral: number;
+  autoReply: number;
+  outOfOffice: number;
+}
+
 export interface EmailGatewayBroadcastStats {
   emailsContacted: number;
   emailsSent: number;
@@ -84,13 +96,11 @@ export interface EmailGatewayBroadcastStats {
   emailsClicked: number;
   emailsReplied: number;
   emailsBounced: number;
-  repliesInterested: number;
-  repliesMeetingBooked: number;
-  repliesClosed: number;
+  repliesPositive: number;
+  repliesNegative: number;
   repliesNeutral: number;
-  repliesNotInterested: number;
-  repliesOutOfOffice: number;
-  repliesUnsubscribe: number;
+  repliesAutoReply: number;
+  repliesDetail: EmailGatewayRepliesDetail;
   recipients: number;
 }
 
