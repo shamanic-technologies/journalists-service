@@ -46,15 +46,16 @@ export async function fetchOutletsBatch(
 ): Promise<Map<string, OutletBasic>> {
   const { url, apiKey } = getConfig();
 
-  const response = await fetch(
-    `${url}/internal/outlets?ids=${outletIds.join(",")}`,
-    { headers: { "x-api-key": apiKey } }
-  );
+  const response = await fetch(`${url}/internal/outlets`, {
+    method: "POST",
+    headers: { "x-api-key": apiKey, "content-type": "application/json" },
+    body: JSON.stringify({ ids: outletIds }),
+  });
 
   if (!response.ok) {
     const body = await response.text();
     throw new Error(
-      `[journalists-service] Outlets service GET /internal/outlets failed (${response.status}): ${body}`
+      `[journalists-service] Outlets service POST /internal/outlets failed (${response.status}): ${body}`
     );
   }
 
