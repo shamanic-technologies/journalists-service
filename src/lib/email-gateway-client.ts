@@ -94,7 +94,6 @@ export interface EmailGatewayBroadcastStats {
   emailsDelivered: number;
   emailsOpened: number;
   emailsClicked: number;
-  emailsReplied: number;
   emailsBounced: number;
   repliesPositive: number;
   repliesNegative: number;

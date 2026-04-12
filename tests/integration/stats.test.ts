@@ -33,7 +33,7 @@ function mockDynasties(dynasties: { dynastySlug: string; slugs: string[] }[]) {
   });
 }
 
-function mockEmailGatewayStats(contacted = 0, delivered = 0, replied = 0, bounced = 0) {
+function mockEmailGatewayStats(contacted = 0, delivered = 0, bounced = 0) {
   mockFetch.mockResolvedValueOnce({
     ok: true,
     json: async () => ({
@@ -43,7 +43,6 @@ function mockEmailGatewayStats(contacted = 0, delivered = 0, replied = 0, bounce
         emailsDelivered: delivered,
         emailsOpened: 0,
         emailsClicked: 0,
-        emailsReplied: replied,
         emailsBounced: bounced,
         repliesPositive: 0,
         repliesNegative: 0,
@@ -60,7 +59,7 @@ function mockEmailGatewayStats(contacted = 0, delivered = 0, replied = 0, bounce
   });
 }
 
-function mockEmailGatewayStatsGrouped(groups: Array<{ key: string; contacted: number; delivered?: number; replied?: number; bounced?: number }>) {
+function mockEmailGatewayStatsGrouped(groups: Array<{ key: string; contacted: number; delivered?: number; bounced?: number }>) {
   mockFetch.mockResolvedValueOnce({
     ok: true,
     json: async () => ({
@@ -72,7 +71,6 @@ function mockEmailGatewayStatsGrouped(groups: Array<{ key: string; contacted: nu
           emailsDelivered: g.delivered ?? 0,
           emailsOpened: 0,
           emailsClicked: 0,
-          emailsReplied: g.replied ?? 0,
           emailsBounced: g.bounced ?? 0,
           repliesPositive: 0,
           repliesNegative: 0,

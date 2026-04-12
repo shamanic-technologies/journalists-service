@@ -103,7 +103,7 @@ async function resolveFiltersAndQuery(
     total += row.count;
   }
 
-  // Enrich with contacted/delivered/replied/bounced from email-gateway (fail-open)
+  // Enrich with contacted/delivered/bounced from email-gateway (fail-open)
   const gwParams: EmailGatewayStatsParams = {
     campaignId: query.campaignId,
     brandId: query.brandId,
@@ -117,7 +117,6 @@ async function resolveFiltersAndQuery(
   if (gwStats) {
     if (gwStats.emailsContacted > 0) byOutreachStatus.contacted = gwStats.emailsContacted;
     if (gwStats.emailsDelivered > 0) byOutreachStatus.delivered = gwStats.emailsDelivered;
-    if (gwStats.emailsReplied > 0) byOutreachStatus.replied = gwStats.emailsReplied;
     if (gwStats.emailsBounced > 0) byOutreachStatus.bounced = gwStats.emailsBounced;
   }
 
@@ -172,7 +171,6 @@ async function resolveFiltersAndQuery(
         if (entry && group.broadcast) {
           if (group.broadcast.emailsContacted > 0) entry.byOutreachStatus.contacted = group.broadcast.emailsContacted;
           if (group.broadcast.emailsDelivered > 0) entry.byOutreachStatus.delivered = group.broadcast.emailsDelivered;
-          if (group.broadcast.emailsReplied > 0) entry.byOutreachStatus.replied = group.broadcast.emailsReplied;
           if (group.broadcast.emailsBounced > 0) entry.byOutreachStatus.bounced = group.broadcast.emailsBounced;
         }
       }
@@ -212,7 +210,6 @@ async function resolveFiltersAndQuery(
         if (entry && group.broadcast) {
           if (group.broadcast.emailsContacted > 0) entry.byOutreachStatus.contacted = group.broadcast.emailsContacted;
           if (group.broadcast.emailsDelivered > 0) entry.byOutreachStatus.delivered = group.broadcast.emailsDelivered;
-          if (group.broadcast.emailsReplied > 0) entry.byOutreachStatus.replied = group.broadcast.emailsReplied;
           if (group.broadcast.emailsBounced > 0) entry.byOutreachStatus.bounced = group.broadcast.emailsBounced;
         }
       }
