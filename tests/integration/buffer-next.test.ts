@@ -209,14 +209,14 @@ function setupEmailGatewayNotContacted() {
       broadcast: {
         campaign: null,
         brand: {
-          contacted: false, delivered: false, opened: false, replied: false, replyClassification: null, bounced: false, unsubscribed: false, lastDeliveredAt: null,
+          contacted: false, sent: false, delivered: false, opened: false, clicked: false, replied: false, replyClassification: null, bounced: false, unsubscribed: false, lastDeliveredAt: null,
         },
         global: { email: { bounced: false, unsubscribed: false } },
       },
       transactional: {
         campaign: null,
         brand: {
-          contacted: false, delivered: false, opened: false, replied: false, replyClassification: null, bounced: false, unsubscribed: false, lastDeliveredAt: null,
+          contacted: false, sent: false, delivered: false, opened: false, clicked: false, replied: false, replyClassification: null, bounced: false, unsubscribed: false, lastDeliveredAt: null,
         },
         global: { email: { bounced: false, unsubscribed: false } },
       },
@@ -1112,7 +1112,7 @@ describe("POST /buffer/next", () => {
           broadcast: {
             campaign: null,
             brand: {
-              contacted: true, delivered: true, opened: false, replied: false,
+              contacted: true, sent: true, delivered: true, opened: false, clicked: false, replied: false,
               replyClassification: null, bounced: false, unsubscribed: false,
               lastDeliveredAt: new Date().toISOString(),
             },

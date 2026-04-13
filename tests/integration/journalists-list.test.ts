@@ -28,7 +28,7 @@ function mockEmailGatewayCampaignStatus(results: Array<{ email: string; contacte
         email: r.email,
         broadcast: {
           campaign: {
-            contacted: r.contacted, delivered: r.delivered, opened: false, replied: r.replied, replyClassification: r.replyClassification, bounced: false, unsubscribed: false, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null,
+            contacted: r.contacted, sent: r.contacted, delivered: r.delivered, opened: false, clicked: false, replied: r.replied, replyClassification: r.replyClassification, bounced: false, unsubscribed: false, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null,
           },
           brand: null,
           byCampaign: null,
@@ -61,10 +61,10 @@ function mockEmailGatewayBrandStatus(results: Array<{
         broadcast: {
           campaign: null,
           brand: {
-            contacted: r.contacted, delivered: r.delivered, opened: false, replied: r.replied, replyClassification: r.replyClassification, bounced: false, unsubscribed: false, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null,
+            contacted: r.contacted, sent: r.contacted, delivered: r.delivered, opened: false, clicked: false, replied: r.replied, replyClassification: r.replyClassification, bounced: false, unsubscribed: false, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null,
           },
           byCampaign: r.byCampaign ? Object.fromEntries(Object.entries(r.byCampaign).map(([k, v]) => [k, {
-            contacted: v.contacted, delivered: v.delivered, opened: false, replied: v.replied, replyClassification: v.replyClassification, bounced: false, unsubscribed: false, lastDeliveredAt: v.delivered ? "2026-04-01T00:00:00Z" : null,
+            contacted: v.contacted, sent: v.contacted, delivered: v.delivered, opened: false, clicked: false, replied: v.replied, replyClassification: v.replyClassification, bounced: false, unsubscribed: false, lastDeliveredAt: v.delivered ? "2026-04-01T00:00:00Z" : null,
           }])) : null,
           global: { email: { bounced: false, unsubscribed: false } },
         },
@@ -150,11 +150,14 @@ describe("GET /journalists/list", () => {
     const j = res.body.journalists[0];
     expect(j.journalistId).toBe(journalist.id);
     expect(j.journalistName).toBe("Alice Reporter");
-    expect(j.emailStatus).toBeNull();
+    expect(j.global).toBeNull();
     expect(j.cost).toBeNull();
+    // Brand mode: brand status present
+    expect(j.brand).toBeDefined();
+    expect(j.brand.buffered).toBe(true);
+    expect(j.brand.claimed).toBe(false);
     expect(j.campaigns).toHaveLength(1);
     expect(j.campaigns[0].campaignId).toBe(CAMPAIGN_ID);
-    expect(j.campaigns[0].outreachStatus).toBe("buffered");
   });
 
   it("groups multiple campaigns under one journalist with per-campaign outreach status", async () => {
@@ -202,14 +205,14 @@ describe("GET /journalists/list", () => {
     expect(res.body.journalists).toHaveLength(1);
     const j = res.body.journalists[0];
     expect(j.journalistName).toBe("Samantha McLean");
-    // Top-level outreachStatus = max across campaigns
-    expect(j.outreachStatus).toBe("delivered");
+    // Brand mode: brand-level status from best DB status + brand scope
+    expect(j.brand.delivered).toBe(true);
+    expect(j.brand.contacted).toBe(true);
     expect(j.campaigns).toHaveLength(2);
-    // Per-campaign: CAMPAIGN_ID has no byCampaign entry → falls back to brand scope → delivered
-    // CAMPAIGN_ID_2 has byCampaign entry → delivered
-    const byCampaign = Object.fromEntries(j.campaigns.map((c: { campaignId: string; outreachStatus: string }) => [c.campaignId, c.outreachStatus]));
-    expect(byCampaign[CAMPAIGN_ID]).toBe("delivered");
-    expect(byCampaign[CAMPAIGN_ID_2]).toBe("delivered");
+    // Per-campaign breakdown via byCampaign
+    expect(j.byCampaign).toBeDefined();
+    expect(j.byCampaign[CAMPAIGN_ID_2].delivered).toBe(true);
+    expect(j.byCampaign[CAMPAIGN_ID_2].contacted).toBe(true);
   });
 
   it("uses apollo_email from journalists table as global email", async () => {
@@ -275,8 +278,8 @@ describe("GET /journalists/list", () => {
 
     expect(res.status).toBe(200);
     const j = res.body.journalists[0];
-    expect(j.outreachStatus).toBe("replied");
-    expect(j.campaigns[0].outreachStatus).toBe("replied");
+    expect(j.brand.replied).toBe(true);
+    expect(j.brand.replyClassification).toBe("positive");
   });
 
   it("falls back to brand scope when campaign scope is null (no campaignId filter)", async () => {
@@ -302,7 +305,7 @@ describe("GET /journalists/list", () => {
           email: "brand-fallback@example.com",
           broadcast: {
             campaign: null,
-            brand: { contacted: true, delivered: true, opened: false, replied: false, replyClassification: null, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-04-01T00:00:00Z" },
+            brand: { contacted: true, sent: true, delivered: true, opened: false, clicked: false, replied: false, replyClassification: null, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-04-01T00:00:00Z" },
             byCampaign: null,
             global: { email: { bounced: false, unsubscribed: false } },
           },
@@ -323,8 +326,8 @@ describe("GET /journalists/list", () => {
 
     expect(res.status).toBe(200);
     const j = res.body.journalists[0];
-    expect(j.outreachStatus).toBe("delivered");
-    expect(j.campaigns[0].outreachStatus).toBe("delivered");
+    expect(j.brand.delivered).toBe(true);
+    expect(j.brand.contacted).toBe(true);
   });
 
   it("falls back to DB status when no email-gateway data", async () => {
@@ -348,8 +351,9 @@ describe("GET /journalists/list", () => {
       .set(ORG_AUTH_HEADERS);
 
     expect(res.status).toBe(200);
-    const c = res.body.journalists[0].campaigns[0];
-    expect(c.outreachStatus).toBe("buffered");
+    const j = res.body.journalists[0];
+    expect(j.brand.buffered).toBe(true);
+    expect(j.brand.claimed).toBe(false);
   });
 
   it("enriches with email statuses from email-gateway", async () => {
@@ -381,9 +385,10 @@ describe("GET /journalists/list", () => {
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(1);
     const j = res.body.journalists[0];
-    expect(j.emailStatus).not.toBeNull();
-    expect(j.emailStatus.broadcast.brand.contacted).toBe(true);
-    expect(j.outreachStatus).toBe("delivered");
+    expect(j.global).not.toBeNull();
+    expect(j.global.bounced).toBe(false);
+    expect(j.brand.contacted).toBe(true);
+    expect(j.brand.delivered).toBe(true);
   });
 
   it("enriches with costs from runs-service", async () => {
@@ -537,7 +542,7 @@ describe("GET /journalists/list", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.journalists).toHaveLength(1);
-    expect(res.body.journalists[0].emailStatus).toBeNull();
+    expect(res.body.journalists[0].global).toBeNull();
   });
 
   it("distributes run costs across journalists sharing a run", async () => {
@@ -736,11 +741,11 @@ describe("GET /journalists/list", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.total).toBe(3);
-    expect(res.body.byOutreachStatus).toEqual({
-      buffered: 1,
-      delivered: 1,
-      served: 1,
-    });
+    // Cumulative counts: j1=buffered (brand: buffered only), j2=served+delivered, j3=served
+    expect(res.body.byOutreachStatus.buffered).toBe(3); // all are buffered (cumulative)
+    expect(res.body.byOutreachStatus.served).toBe(2); // j2 and j3 are served
+    expect(res.body.byOutreachStatus.contacted).toBe(1); // j2 only
+    expect(res.body.byOutreachStatus.delivered).toBe(1); // j2 only
   });
 
   it("scopes by orgId from headers — does not return other org's journalists", async () => {

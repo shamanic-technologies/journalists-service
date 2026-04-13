@@ -170,20 +170,76 @@
           "outletId"
         ]
       },
-      "JournalistOutreachStatus": {
-        "type": "string",
-        "enum": [
+      "StatusBooleans": {
+        "type": "object",
+        "properties": {
+          "buffered": {
+            "type": "boolean"
+          },
+          "claimed": {
+            "type": "boolean"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "skipped": {
+            "type": "boolean"
+          },
+          "contacted": {
+            "type": "boolean"
+          },
+          "sent": {
+            "type": "boolean"
+          },
+          "delivered": {
+            "type": "boolean"
+          },
+          "opened": {
+            "type": "boolean"
+          },
+          "clicked": {
+            "type": "boolean"
+          },
+          "replied": {
+            "type": "boolean"
+          },
+          "replyClassification": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "positive",
+              "negative",
+              "neutral"
+            ]
+          },
+          "bounced": {
+            "type": "boolean"
+          },
+          "unsubscribed": {
+            "type": "boolean"
+          },
+          "lastDeliveredAt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
           "buffered",
           "claimed",
           "served",
+          "skipped",
           "contacted",
+          "sent",
           "delivered",
+          "opened",
+          "clicked",
           "replied",
+          "replyClassification",
           "bounced",
-          "skipped"
+          "unsubscribed",
+          "lastDeliveredAt"
         ],
-        "description": "Journalist-level outreach status. Possible values (most to least advanced):\n\n| # | Value | Meaning |\n| - | ----- | ------- |\n| 1 | replied | At least one email was replied to. Accompanied by replyClassification: positive, negative, or neutral |\n| 2 | delivered | At least one email delivered to the journalist's inbox |\n| 3 | contacted | At least one email sent |\n| 4 | served | Journalist served to the email-sending pipeline |\n| 5 | claimed | Journalist claimed by the sending workflow, not yet served |\n| 6 | buffered | Journalist discovered but not yet processed |\n| 7 | skipped | Journalist skipped (cross-campaign duplicate, blocked outlet, or low relevance) |\n| 8 | bounced | Email bounced (rejected by recipient's mail server) |\n\nNOTE: Unlike the outlet-level enum (10 values), journalist-level does NOT include open, ended, or denied — those are outlet-level concepts. Journalist-level DOES include bounced (derived from email-gateway bounce data), which the outlet-level enum does not have.\n\nDerived from email-gateway when available; falls back to local DB status.",
-        "example": "delivered"
+        "description": "Cumulative status booleans merging DB statuses and email-gateway data. Per-journalist granularity."
       },
       "CampaignOutletJournalist": {
         "type": "object",
@@ -239,8 +295,8 @@
               "type": "string"
             }
           },
-          "outreachStatus": {
-            "$ref": "#/components/schemas/JournalistOutreachStatus"
+          "status": {
+            "$ref": "#/components/schemas/StatusBooleans"
           },
           "runId": {
             "type": "string",
@@ -281,7 +337,7 @@
           "whyRelevant",
           "whyNotRelevant",
           "articleUrls",
-          "outreachStatus",
+          "status",
           "runId",
           "createdAt",
           "journalistName",
@@ -309,13 +365,20 @@
         "additionalProperties": {
           "type": "number"
         },
-        "description": "Map of journalist outreach status to count. Keys include DB statuses (buffered, claimed, served, skipped) and email-gateway enrichments (contacted, delivered, bounced, repliesPositive, repliesNegative, repliesNeutral, repliesAutoReply).",
+        "description": "Cumulative status counts. DB statuses (buffered, claimed, served, skipped) are cumulative. Email-gateway fields (contacted, sent, delivered, opened, clicked, bounced, repliesPositive, repliesNegative, repliesNeutral, repliesAutoReply, recipients) are passed through.",
         "example": {
-          "buffered": 12,
-          "served": 3,
-          "contacted": 5,
-          "delivered": 2,
-          "repliesPositive": 1
+          "buffered": 200,
+          "claimed": 150,
+          "served": 120,
+          "skipped": 30,
+          "contacted": 115,
+          "sent": 110,
+          "delivered": 105,
+          "opened": 45,
+          "clicked": 12,
+          "bounced": 5,
+          "repliesPositive": 3,
+          "repliesNegative": 2
         }
       },
       "RepliesDetail": {
@@ -468,149 +531,24 @@
           "groups"
         ]
       },
-      "EmailStatusScope": {
+      "GlobalStatus": {
         "type": "object",
         "nullable": true,
         "properties": {
-          "lead": {
-            "type": "object",
-            "properties": {
-              "contacted": {
-                "type": "boolean"
-              },
-              "delivered": {
-                "type": "boolean"
-              },
-              "replied": {
-                "type": "boolean"
-              },
-              "replyClassification": {
-                "type": "string",
-                "nullable": true,
-                "enum": [
-                  "positive",
-                  "negative",
-                  "neutral"
-                ]
-              },
-              "lastDeliveredAt": {
-                "type": "string",
-                "nullable": true
-              }
-            },
-            "required": [
-              "contacted",
-              "delivered",
-              "replied",
-              "replyClassification",
-              "lastDeliveredAt"
-            ]
+          "bounced": {
+            "type": "boolean",
+            "description": "Whether this email has bounced anywhere"
           },
-          "email": {
-            "type": "object",
-            "properties": {
-              "contacted": {
-                "type": "boolean"
-              },
-              "delivered": {
-                "type": "boolean"
-              },
-              "bounced": {
-                "type": "boolean"
-              },
-              "unsubscribed": {
-                "type": "boolean"
-              },
-              "lastDeliveredAt": {
-                "type": "string",
-                "nullable": true
-              }
-            },
-            "required": [
-              "contacted",
-              "delivered",
-              "bounced",
-              "unsubscribed",
-              "lastDeliveredAt"
-            ]
+          "unsubscribed": {
+            "type": "boolean",
+            "description": "Whether this email has unsubscribed anywhere"
           }
         },
         "required": [
-          "lead",
-          "email"
-        ]
-      },
-      "EmailGlobalScope": {
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "object",
-            "properties": {
-              "bounced": {
-                "type": "boolean"
-              },
-              "unsubscribed": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "bounced",
-              "unsubscribed"
-            ]
-          }
-        },
-        "required": [
-          "email"
-        ]
-      },
-      "JournalistEmailStatus": {
-        "type": "object",
-        "nullable": true,
-        "properties": {
-          "broadcast": {
-            "type": "object",
-            "properties": {
-              "campaign": {
-                "$ref": "#/components/schemas/EmailStatusScope"
-              },
-              "brand": {
-                "$ref": "#/components/schemas/EmailStatusScope"
-              },
-              "global": {
-                "$ref": "#/components/schemas/EmailGlobalScope"
-              }
-            },
-            "required": [
-              "campaign",
-              "brand",
-              "global"
-            ]
-          },
-          "transactional": {
-            "type": "object",
-            "properties": {
-              "campaign": {
-                "$ref": "#/components/schemas/EmailStatusScope"
-              },
-              "brand": {
-                "$ref": "#/components/schemas/EmailStatusScope"
-              },
-              "global": {
-                "$ref": "#/components/schemas/EmailGlobalScope"
-              }
-            },
-            "required": [
-              "campaign",
-              "brand",
-              "global"
-            ]
-          }
-        },
-        "required": [
-          "broadcast",
-          "transactional"
+          "bounced",
+          "unsubscribed"
         ],
-        "description": "Email delivery statuses from email-gateway. Null if journalist has no email or email-gateway is unreachable."
+        "description": "Global email signals (bounced/unsubscribed). Null if no email-gateway data."
       },
       "JournalistCost": {
         "type": "object",
@@ -661,16 +599,6 @@
             "type": "string",
             "nullable": true
           },
-          "outreachStatus": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/JournalistOutreachStatus"
-              },
-              {
-                "description": "Outreach status for this specific campaign. In brand mode, derived from email-gateway byCampaign entry for this campaignId (fallback to brand scope). In campaign mode, derived from campaign scope. Falls back to local DB status when no email-gateway data."
-              }
-            ]
-          },
           "relevanceScore": {
             "type": "string"
           },
@@ -710,7 +638,6 @@
           "campaignId",
           "featureSlug",
           "workflowSlug",
-          "outreachStatus",
           "relevanceScore",
           "whyRelevant",
           "whyNotRelevant",
@@ -769,18 +696,38 @@
             "type": "string",
             "nullable": true
           },
-          "outreachStatus": {
+          "brand": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/JournalistOutreachStatus"
+                "$ref": "#/components/schemas/StatusBooleans"
               },
               {
-                "description": "High watermark outreach status across all campaigns for this journalist. In brand mode, derived from email-gateway brand scope; in campaign mode, from campaign scope. Falls back to local DB status when email-gateway has no data."
+                "nullable": true,
+                "description": "Cumulative status at brand scope (aggregate across campaigns). Present in brand mode, null in campaign mode."
               }
             ]
           },
-          "emailStatus": {
-            "$ref": "#/components/schemas/JournalistEmailStatus"
+          "byCampaign": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "$ref": "#/components/schemas/StatusBooleans"
+            },
+            "description": "Per-campaign status breakdown. Present in brand mode, null in campaign mode."
+          },
+          "campaign": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusBooleans"
+              },
+              {
+                "nullable": true,
+                "description": "Cumulative status at campaign scope. Present in campaign mode, null in brand mode."
+              }
+            ]
+          },
+          "global": {
+            "$ref": "#/components/schemas/GlobalStatus"
           },
           "cost": {
             "$ref": "#/components/schemas/JournalistCost"
@@ -804,46 +751,82 @@
           "outletDomain",
           "email",
           "apolloPersonId",
-          "outreachStatus",
-          "emailStatus",
+          "brand",
+          "byCampaign",
+          "campaign",
+          "global",
           "cost",
           "campaigns"
         ],
-        "description": "A journalist with global data (email, cost, outreachStatus) and per-campaign entries. The top-level outreachStatus is the high watermark across all campaigns.",
-        "example": {
-          "journalistId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-          "journalistName": "Jane Smith",
-          "firstName": "Jane",
-          "lastName": "Smith",
-          "entityType": "individual",
-          "outletId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-          "outletName": "TechCrunch",
-          "outletDomain": "techcrunch.com",
-          "email": "jane.smith@example.com",
-          "apolloPersonId": null,
-          "outreachStatus": "delivered",
-          "emailStatus": null,
-          "cost": null,
-          "campaigns": [
-            {
-              "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
-              "campaignId": "d4e5f6a7-b8c9-0123-defa-234567890123",
-              "featureSlug": "pr-outreach-v1",
-              "workflowSlug": null,
-              "outreachStatus": "delivered",
-              "relevanceScore": "0.85",
-              "whyRelevant": "Covers AI startups regularly",
-              "whyNotRelevant": "",
-              "articleUrls": [
-                "https://techcrunch.com/article-1"
-              ],
-              "email": "jane.smith@example.com",
-              "apolloPersonId": null,
-              "runId": "e5f6a7b8-c9d0-1234-efab-345678901234",
-              "createdAt": "2026-04-01T12:00:00.000Z"
-            }
-          ]
-        }
+        "description": "A journalist with scoped status booleans (brand/byCampaign/campaign/global) and per-campaign entries."
+      },
+      "StatusCounts": {
+        "type": "object",
+        "properties": {
+          "buffered": {
+            "type": "number"
+          },
+          "claimed": {
+            "type": "number"
+          },
+          "served": {
+            "type": "number"
+          },
+          "skipped": {
+            "type": "number"
+          },
+          "contacted": {
+            "type": "number"
+          },
+          "sent": {
+            "type": "number"
+          },
+          "delivered": {
+            "type": "number"
+          },
+          "opened": {
+            "type": "number"
+          },
+          "clicked": {
+            "type": "number"
+          },
+          "replied": {
+            "type": "number"
+          },
+          "repliesPositive": {
+            "type": "number"
+          },
+          "repliesNegative": {
+            "type": "number"
+          },
+          "repliesNeutral": {
+            "type": "number"
+          },
+          "bounced": {
+            "type": "number"
+          },
+          "unsubscribed": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "buffered",
+          "claimed",
+          "served",
+          "skipped",
+          "contacted",
+          "sent",
+          "delivered",
+          "opened",
+          "clicked",
+          "replied",
+          "repliesPositive",
+          "repliesNegative",
+          "repliesNeutral",
+          "bounced",
+          "unsubscribed"
+        ],
+        "description": "Cumulative status counts across ALL journalists matching filters."
       },
       "JournalistsListResponse": {
         "type": "object",
@@ -859,14 +842,7 @@
             "description": "Total journalists matching filters (not affected by pagination)"
           },
           "byOutreachStatus": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/OutreachStatusCount"
-              },
-              {
-                "description": "Count of journalists per enriched outreach status across ALL journalists matching filters (not affected by pagination)"
-              }
-            ]
+            "$ref": "#/components/schemas/StatusCounts"
           }
         },
         "required": [
@@ -891,98 +867,78 @@
           "blocked"
         ]
       },
-      "OutletOutreachStatus": {
-        "type": "string",
-        "enum": [
-          "buffered",
-          "claimed",
-          "skipped",
-          "served",
-          "contacted",
-          "delivered",
-          "replied"
-        ],
-        "description": "High watermark outreach status across all journalists for this outlet. In brand mode, derived from email-gateway brand scope (aggregate across all campaigns). In campaign mode, derived from email-gateway campaign scope. Falls back to local DB status when email-gateway has no data for a journalist.",
-        "example": "contacted"
-      },
-      "CampaignOutreachStatus": {
+      "GlobalStatusCounts": {
         "type": "object",
         "properties": {
-          "outreachStatus": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/OutletOutreachStatus"
-              },
-              {
-                "description": "Outlet-level outreach status (7 values). This is the high watermark across all journalists for the outlet.\nRanked from most to least advanced: replied > delivered > contacted > served > claimed > skipped > buffered.\n\nNOTE: This is a subset of the journalist-level enum (8 values). The outlet-level enum does NOT include bounced (bounced is journalist-level only, derived from email-gateway). It also does NOT include open, ended, or denied — those are managed by outlets-service, not journalists-service."
-              }
-            ]
+          "bounced": {
+            "type": "number"
           },
-          "replyClassification": {
-            "type": "string",
-            "nullable": true,
-            "enum": [
-              "positive",
-              "negative",
-              "neutral"
-            ],
-            "description": "Reply classification when outreachStatus is replied. Null otherwise.",
-            "example": null
+          "unsubscribed": {
+            "type": "number"
           }
         },
         "required": [
-          "outreachStatus",
-          "replyClassification"
+          "bounced",
+          "unsubscribed"
         ],
-        "description": "Per-campaign outreach status with optional reply classification.",
-        "example": {
-          "outreachStatus": "delivered",
-          "replyClassification": null
-        }
+        "description": "Global email signals (bounced/unsubscribed counts)."
       },
       "OutletStatusEntry": {
         "type": "object",
         "properties": {
-          "outreachStatus": {
-            "$ref": "#/components/schemas/OutletOutreachStatus"
+          "totalJournalists": {
+            "type": "number",
+            "description": "Total journalists for this outlet"
           },
-          "replyClassification": {
-            "type": "string",
-            "nullable": true,
-            "enum": [
-              "positive",
-              "negative",
-              "neutral"
-            ],
-            "description": "Best reply classification across all journalists when outreachStatus is replied. Hierarchy: positive > negative > neutral. Null when outreachStatus is not replied."
+          "brand": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusCounts"
+              },
+              {
+                "nullable": true,
+                "description": "Cumulative counts at brand scope. Present in brand mode, null in campaign mode."
+              }
+            ]
           },
           "byCampaign": {
             "type": "object",
+            "nullable": true,
             "additionalProperties": {
-              "$ref": "#/components/schemas/CampaignOutreachStatus"
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/StatusCounts"
+                },
+                {
+                  "description": "Cumulative status counts merging DB statuses and email-gateway data. Used for per-outlet and response-level aggregation."
+                }
+              ]
             },
-            "description": "Per-campaign breakdown derived from email-gateway byCampaign entries. Present only in brand mode (brandId without campaignId). Each campaign's status is derived independently from its own email-gateway scope — not the brand aggregate. Absent in campaign mode."
+            "description": "Per-campaign counts. Present in brand mode, null in campaign mode."
+          },
+          "campaign": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusCounts"
+              },
+              {
+                "nullable": true,
+                "description": "Cumulative counts at campaign scope. Present in campaign mode, null in brand mode."
+              }
+            ]
+          },
+          "global": {
+            "$ref": "#/components/schemas/GlobalStatusCounts"
           }
         },
         "required": [
-          "outreachStatus",
-          "replyClassification"
+          "totalJournalists",
+          "brand",
+          "byCampaign",
+          "campaign",
+          "global"
         ],
-        "description": "Outreach status for a single outlet. The top-level outreachStatus is the high watermark using brand or campaign scope. The byCampaign breakdown (brand mode only) uses per-campaign email-gateway entries.",
-        "example": {
-          "outreachStatus": "delivered",
-          "replyClassification": null,
-          "byCampaign": {
-            "7c9e6679-7425-40de-944b-e07fc1f90ae7": {
-              "outreachStatus": "delivered",
-              "replyClassification": null
-            },
-            "d4735e3a-265e-16d0-a304-ab9e68e4c122": {
-              "outreachStatus": "contacted",
-              "replyClassification": null
-            }
-          }
-        }
+        "description": "Status counts for a single outlet, aggregated across journalists."
       },
       "OutletStatusResponse": {
         "type": "object",
@@ -992,26 +948,28 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/OutletStatusEntry"
             },
-            "description": "Map of outletId → outreach status entry"
+            "description": "Map of outletId → status counts"
+          },
+          "total": {
+            "type": "number",
+            "description": "Total journalists across all requested outlets"
+          },
+          "byOutreachStatus": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusCounts"
+              },
+              {
+                "description": "Cumulative status counts across all requested outlets."
+              }
+            ]
           }
         },
         "required": [
-          "results"
-        ],
-        "example": {
-          "results": {
-            "a1b2c3d4-e5f6-7890-abcd-ef1234567890": {
-              "outreachStatus": "delivered",
-              "replyClassification": null,
-              "byCampaign": {
-                "7c9e6679-7425-40de-944b-e07fc1f90ae7": {
-                  "outreachStatus": "delivered",
-                  "replyClassification": null
-                }
-              }
-            }
-          }
-        }
+          "results",
+          "total",
+          "byOutreachStatus"
+        ]
       },
       "ScopeFilters": {
         "type": "object",

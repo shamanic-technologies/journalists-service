@@ -129,7 +129,8 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(3);
-    expect(res.body.byOutreachStatus.buffered).toBe(1);
+    // Cumulative: buffered = 1+0+2+0+0 = 3, served = 2+0 = 2
+    expect(res.body.byOutreachStatus.buffered).toBe(3);
     expect(res.body.byOutreachStatus.served).toBe(2);
   });
 
@@ -160,8 +161,9 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(3);
+    // Cumulative: buffered=3, served=2, contacted=2 (from email-gateway)
+    expect(res.body.byOutreachStatus.buffered).toBe(3);
     expect(res.body.byOutreachStatus.served).toBe(2);
-    expect(res.body.byOutreachStatus.buffered).toBe(1);
     expect(res.body.byOutreachStatus.contacted).toBe(2);
   });
 
@@ -421,7 +423,8 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.groupedBy["feat-a"].totalJournalists).toBe(2);
-    expect(res.body.groupedBy["feat-a"].byOutreachStatus.buffered).toBe(1);
+    // Cumulative: buffered = 1 + 1(served) = 2
+    expect(res.body.groupedBy["feat-a"].byOutreachStatus.buffered).toBe(2);
     expect(res.body.groupedBy["feat-a"].byOutreachStatus.served).toBe(1);
     expect(res.body.groupedBy["feat-b"].totalJournalists).toBe(1);
   });
@@ -482,7 +485,8 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.groupedBy["feat-alpha"].totalJournalists).toBe(2);
-    expect(res.body.groupedBy["feat-alpha"].byOutreachStatus.buffered).toBe(1);
+    // Cumulative: buffered = 1 + 1(served) = 2
+    expect(res.body.groupedBy["feat-alpha"].byOutreachStatus.buffered).toBe(2);
     expect(res.body.groupedBy["feat-alpha"].byOutreachStatus.served).toBe(1);
     expect(res.body.groupedBy["feat-beta"].totalJournalists).toBe(1);
   });
@@ -547,7 +551,8 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(2);
-    expect(res.body.byOutreachStatus.buffered).toBe(1);
+    // Cumulative: buffered = 1 + 1(served) = 2
+    expect(res.body.byOutreachStatus.buffered).toBe(2);
     expect(res.body.byOutreachStatus.served).toBe(1);
     expect(res.body.byOutreachStatus.contacted).toBe(1);
   });
@@ -616,7 +621,8 @@ describe("GET /stats", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(2);
-    expect(res.body.byOutreachStatus.buffered).toBe(1);
+    // Cumulative: buffered = 1 + 1(served) = 2
+    expect(res.body.byOutreachStatus.buffered).toBe(2);
     expect(res.body.byOutreachStatus.served).toBe(1);
     expect(res.body.byOutreachStatus.contacted).toBe(1);
   });
@@ -710,7 +716,8 @@ describe("GET /stats (base headers only — no workflow context)", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.totalJournalists).toBe(2);
-    expect(res.body.byOutreachStatus.buffered).toBe(1);
+    // Cumulative: buffered = 1 + 1(served) = 2
+    expect(res.body.byOutreachStatus.buffered).toBe(2);
     expect(res.body.byOutreachStatus.served).toBe(1);
   });
 

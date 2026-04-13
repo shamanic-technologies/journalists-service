@@ -3,7 +3,7 @@ import { and, arrayContains, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { campaignJournalists, journalists } from "../db/schema.js";
 import { JournalistsListQuerySchema } from "../schemas.js";
-import { checkEmailStatuses, deriveOutreachStatusFromScope, type EmailGatewayStatusResult, type OutreachStatusValue } from "../lib/email-gateway-client.js";
+import { checkEmailStatuses, buildStatusBooleans, emptyStatusCounts, accumulateStatus, type EmailGatewayStatusResult, type StatusBooleans, type StatusCounts } from "../lib/email-gateway-client.js";
 import { fetchOutletsBatch, type OutletBasic } from "../lib/outlets-client.js";
 import { fetchBatchRunCosts, type BatchRunCost } from "../lib/runs-client.js";
 import { resolveFeatureDynastySlugs } from "../lib/dynasty-client.js";
@@ -226,10 +226,8 @@ router.get("/orgs/journalists/list", async (req, res) => {
       }
     }
 
-    // 7. Build response
-    const STATUS_RANK: Record<string, number> = {
-      buffered: 0, claimed: 1, skipped: 2, served: 3, contacted: 4, delivered: 5, replied: 6,
-    };
+    // 7. Build response — flat merged status per journalist
+    const responseCounts = emptyStatusCounts();
 
     const enrichedJournalists = [...grouped.values()].map((group) => {
       const email = journalistEmails.get(group.journalistId) ?? null;
@@ -237,39 +235,56 @@ router.get("/orgs/journalists/list", async (req, res) => {
       const cost = journalistCostMap.get(group.journalistId) ?? null;
       const outlet = outletMap.get(group.outletId);
 
-      let topOutreach: OutreachStatusValue = "buffered";
+      // Build scoped status
+      let brand: StatusBooleans | null = null;
+      let byCampaign: Record<string, StatusBooleans> | null = null;
+      let campaign: StatusBooleans | null = null;
+      const global = emailStatus
+        ? { bounced: emailStatus.broadcast.global.email.bounced, unsubscribed: emailStatus.broadcast.global.email.unsubscribed }
+        : null;
 
-      const campaigns = group.campaigns.map((c) => {
-        // Pick the right email-gateway scope based on mode
-        let scope = null;
-        if (isBrandMode && emailStatus) {
-          scope = emailStatus.broadcast.byCampaign?.[c.campaignId] ?? emailStatus.broadcast.brand ?? null;
-        } else if (emailStatus) {
-          scope = emailStatus.broadcast.campaign ?? null;
+      if (isBrandMode) {
+        // Brand scope: aggregate across campaigns
+        const brandScope = emailStatus?.broadcast.brand ?? null;
+        // Use the "best" DB status across all campaigns for the brand-level booleans
+        const bestDbStatus = group.campaigns.reduce((best, c) => {
+          const order = ["buffered", "claimed", "skipped", "served", "contacted"];
+          return order.indexOf(c.status) > order.indexOf(best) ? c.status : best;
+        }, "buffered");
+        brand = buildStatusBooleans(bestDbStatus, brandScope);
+        accumulateStatus(responseCounts, brand);
+
+        // Per-campaign breakdown
+        byCampaign = {};
+        for (const c of group.campaigns) {
+          const campaignScope = emailStatus?.broadcast.byCampaign?.[c.campaignId] ?? null;
+          byCampaign[c.campaignId] = buildStatusBooleans(c.status, campaignScope);
         }
-        const outreachStatus = deriveOutreachStatusFromScope(c.status, scope);
+      } else {
+        // Campaign mode
+        const campaignScope = emailStatus?.broadcast.campaign ?? null;
+        const bestDbStatus = group.campaigns.reduce((best, c) => {
+          const order = ["buffered", "claimed", "skipped", "served", "contacted"];
+          return order.indexOf(c.status) > order.indexOf(best) ? c.status : best;
+        }, "buffered");
+        campaign = buildStatusBooleans(bestDbStatus, campaignScope);
+        accumulateStatus(responseCounts, campaign);
+      }
 
-        // Track high watermark across campaigns
-        if ((STATUS_RANK[outreachStatus] ?? 0) > (STATUS_RANK[topOutreach] ?? 0)) {
-          topOutreach = outreachStatus;
-        }
-
-        return {
-          id: c.id,
-          campaignId: c.campaignId,
-          featureSlug: c.featureSlug,
-          workflowSlug: c.workflowSlug,
-          outreachStatus,
-          relevanceScore: c.relevanceScore,
-          whyRelevant: c.whyRelevant,
-          whyNotRelevant: c.whyNotRelevant,
-          articleUrls: c.articleUrls,
-          email: c.campaignEmail,
-          apolloPersonId: c.campaignApolloPersonId,
-          runId: c.runId,
-          createdAt: c.createdAt,
-        };
-      });
+      const campaigns = group.campaigns.map((c) => ({
+        id: c.id,
+        campaignId: c.campaignId,
+        featureSlug: c.featureSlug,
+        workflowSlug: c.workflowSlug,
+        relevanceScore: c.relevanceScore,
+        whyRelevant: c.whyRelevant,
+        whyNotRelevant: c.whyNotRelevant,
+        articleUrls: c.articleUrls,
+        email: c.campaignEmail,
+        apolloPersonId: c.campaignApolloPersonId,
+        runId: c.runId,
+        createdAt: c.createdAt,
+      }));
 
       return {
         journalistId: group.journalistId,
@@ -282,13 +297,10 @@ router.get("/orgs/journalists/list", async (req, res) => {
         outletDomain: outlet?.outletDomain ?? null,
         email,
         apolloPersonId: group.apolloPersonId,
-        outreachStatus: topOutreach,
-        emailStatus: emailStatus
-          ? {
-              broadcast: emailStatus.broadcast,
-              transactional: emailStatus.transactional,
-            }
-          : null,
+        brand,
+        byCampaign,
+        campaign,
+        global,
         cost: cost
           ? {
               totalCostInUsdCents: Math.round(cost.totalCostInUsdCents),
@@ -301,16 +313,10 @@ router.get("/orgs/journalists/list", async (req, res) => {
       };
     });
 
-    // 8. Compute byOutreachStatus counts from enriched top-level statuses
-    const byOutreachStatus: Record<string, number> = {};
-    for (const j of enrichedJournalists) {
-      byOutreachStatus[j.outreachStatus] = (byOutreachStatus[j.outreachStatus] ?? 0) + 1;
-    }
-
     res.json({
       journalists: enrichedJournalists,
       total: enrichedJournalists.length,
-      byOutreachStatus,
+      byOutreachStatus: responseCounts,
     });
   } catch (err) {
     console.error("[journalists-service] /journalists/list error:", err);

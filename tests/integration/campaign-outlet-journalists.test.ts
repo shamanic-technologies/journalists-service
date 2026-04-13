@@ -35,7 +35,7 @@ function mockEmailGatewayStatusForJournalists(statuses: Array<{ email: string; c
         email: r.email,
         broadcast: {
           campaign: {
-            contacted: r.contacted, delivered: r.delivered, opened: false, replied: r.replied, replyClassification: r.replyClassification, bounced: false, unsubscribed: false, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null,
+            contacted: r.contacted, sent: r.contacted, delivered: r.delivered, opened: false, clicked: false, replied: r.replied, replyClassification: r.replyClassification, bounced: false, unsubscribed: false, lastDeliveredAt: r.delivered ? "2026-04-01T00:00:00Z" : null,
           },
           brand: null,
           byCampaign: null,
@@ -96,11 +96,12 @@ describe("GET /campaign-outlet-journalists", () => {
     // Should return brandIds as array
     expect(res.body.campaignJournalists[0]).toHaveProperty("brandIds");
     expect(Array.isArray(res.body.campaignJournalists[0].brandIds)).toBe(true);
-    // Outreach status
-    expect(res.body.campaignJournalists[0]).toHaveProperty("outreachStatus");
+    // Status is a flat merged object (StatusBooleans)
+    expect(res.body.campaignJournalists[0]).toHaveProperty("status");
+    expect(res.body.campaignJournalists[0].status).toHaveProperty("buffered");
+    expect(res.body.campaignJournalists[0].status).toHaveProperty("contacted");
+    expect(res.body.campaignJournalists[0]).not.toHaveProperty("outreachStatus");
     expect(res.body.campaignJournalists[0]).not.toHaveProperty("consolidatedStatus");
-    expect(res.body.campaignJournalists[0]).not.toHaveProperty("localStatus");
-    expect(res.body.campaignJournalists[0]).not.toHaveProperty("emailGatewayStatus");
   });
 
   it("filters by outlet_id when provided", async () => {
@@ -336,7 +337,7 @@ describe("GET /campaign-outlet-journalists", () => {
     expect(res.body.campaignJournalists[0].journalistName).toBe("Dynasty Hit");
   });
 
-  it("returns outreachStatus with email-gateway enrichment", async () => {
+  it("returns status with email-gateway enrichment", async () => {
     const j1 = await insertTestJournalist({
       outletId: OUTLET_ID,
       journalistName: "Triplet Reporter",
@@ -364,8 +365,11 @@ describe("GET /campaign-outlet-journalists", () => {
     expect(res.status).toBe(200);
     expect(res.body.campaignJournalists).toHaveLength(1);
     const cj = res.body.campaignJournalists[0];
-    expect(cj.outreachStatus).toBe("delivered");
-    expect(cj).not.toHaveProperty("consolidatedStatus");
+    expect(cj.status.buffered).toBe(true);
+    expect(cj.status.served).toBe(true);
+    expect(cj.status.contacted).toBe(true);
+    expect(cj.status.delivered).toBe(true);
+    expect(cj.status.replied).toBe(false);
   });
 
   it("falls back gracefully when email-gateway fails", async () => {
@@ -394,7 +398,11 @@ describe("GET /campaign-outlet-journalists", () => {
     expect(res.status).toBe(200);
     expect(res.body.campaignJournalists).toHaveLength(1);
     const cj = res.body.campaignJournalists[0];
-    expect(cj.outreachStatus).toBe("served");
+    // No email-gateway data → only DB status booleans
+    expect(cj.status.buffered).toBe(true);
+    expect(cj.status.served).toBe(true);
+    expect(cj.status.contacted).toBe(false);
+    expect(cj.status.delivered).toBe(false);
   });
 
   it("returns empty array when dynasty slug resolves to no slugs", async () => {
