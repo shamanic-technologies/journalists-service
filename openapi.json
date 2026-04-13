@@ -309,13 +309,58 @@
         "additionalProperties": {
           "type": "number"
         },
-        "description": "Map of journalist outreach status to count. See JournalistOutreachStatus for the 8 possible values and their meanings. Keys are status strings, values are journalist counts.",
+        "description": "Map of journalist outreach status to count. Keys include DB statuses (buffered, claimed, served, skipped) and email-gateway enrichments (contacted, delivered, bounced, repliesPositive, repliesNegative, repliesNeutral, repliesAutoReply).",
         "example": {
           "buffered": 12,
           "served": 3,
           "contacted": 5,
-          "delivered": 2
+          "delivered": 2,
+          "repliesPositive": 1
         }
+      },
+      "RepliesDetail": {
+        "type": "object",
+        "properties": {
+          "interested": {
+            "type": "number"
+          },
+          "meetingBooked": {
+            "type": "number"
+          },
+          "closed": {
+            "type": "number"
+          },
+          "notInterested": {
+            "type": "number"
+          },
+          "wrongPerson": {
+            "type": "number"
+          },
+          "unsubscribe": {
+            "type": "number"
+          },
+          "neutral": {
+            "type": "number"
+          },
+          "autoReply": {
+            "type": "number"
+          },
+          "outOfOffice": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "interested",
+          "meetingBooked",
+          "closed",
+          "notInterested",
+          "wrongPerson",
+          "unsubscribe",
+          "neutral",
+          "autoReply",
+          "outOfOffice"
+        ],
+        "description": "Granular reply breakdown from email-gateway. Present when reply data exists."
       },
       "GroupedEntry": {
         "type": "object",
@@ -326,6 +371,9 @@
           },
           "byOutreachStatus": {
             "$ref": "#/components/schemas/OutreachStatusCount"
+          },
+          "repliesDetail": {
+            "$ref": "#/components/schemas/RepliesDetail"
           }
         },
         "required": [
@@ -342,6 +390,9 @@
           },
           "byOutreachStatus": {
             "$ref": "#/components/schemas/OutreachStatusCount"
+          },
+          "repliesDetail": {
+            "$ref": "#/components/schemas/RepliesDetail"
           },
           "groupedBy": {
             "type": "object",

@@ -14,6 +14,7 @@ import {
   fetchEmailGatewayStats,
   fetchEmailGatewayStatsGrouped,
   type EmailGatewayStatsParams,
+  type EmailGatewayRepliesDetail,
 } from "../lib/email-gateway-client.js";
 
 export const publicStatsRouter = Router();
@@ -21,10 +22,17 @@ export const orgStatsRouter = Router();
 
 // ── Shared stats logic ──────────────────────────────────────────────
 
+interface GroupedEntry {
+  totalJournalists: number;
+  byOutreachStatus: Record<string, number>;
+  repliesDetail?: EmailGatewayRepliesDetail;
+}
+
 interface StatsResult {
   totalJournalists: number;
   byOutreachStatus: Record<string, number>;
-  groupedBy?: Record<string, { totalJournalists: number; byOutreachStatus: Record<string, number> }>;
+  repliesDetail?: EmailGatewayRepliesDetail;
+  groupedBy?: Record<string, GroupedEntry>;
 }
 
 function emptyStats(): StatsResult {
@@ -125,6 +133,7 @@ async function resolveFiltersAndQuery(
   }
 
   const result: StatsResult = { totalJournalists: total, byOutreachStatus };
+  if (gwStats?.repliesDetail) result.repliesDetail = gwStats.repliesDetail;
 
   // GroupBy dynasty logic
   const groupBy = query.groupBy;
@@ -153,7 +162,7 @@ async function resolveFiltersAndQuery(
       .groupBy(slugColumn, table.status);
 
     // Aggregate by dynasty slug
-    const dynastyMap = new Map<string, { totalJournalists: number; byOutreachStatus: Record<string, number> }>();
+    const dynastyMap = new Map<string, GroupedEntry>();
     for (const row of groupedRows) {
       const rawSlug = row.slug ?? "(none)";
       const dynastySlug = slugToDynasty.get(rawSlug) ?? rawSlug;
@@ -180,6 +189,7 @@ async function resolveFiltersAndQuery(
           if (group.broadcast.repliesNegative > 0) entry.byOutreachStatus.repliesNegative = group.broadcast.repliesNegative;
           if (group.broadcast.repliesNeutral > 0) entry.byOutreachStatus.repliesNeutral = group.broadcast.repliesNeutral;
           if (group.broadcast.repliesAutoReply > 0) entry.byOutreachStatus.repliesAutoReply = group.broadcast.repliesAutoReply;
+          if (group.broadcast.repliesDetail) entry.repliesDetail = group.broadcast.repliesDetail;
         }
       }
     }
@@ -198,7 +208,7 @@ async function resolveFiltersAndQuery(
       .where(where)
       .groupBy(slugColumn, table.status);
 
-    const slugMap = new Map<string, { totalJournalists: number; byOutreachStatus: Record<string, number> }>();
+    const slugMap = new Map<string, GroupedEntry>();
     for (const row of groupedRows) {
       const slug = row.slug ?? "(none)";
       let entry = slugMap.get(slug);
@@ -223,6 +233,7 @@ async function resolveFiltersAndQuery(
           if (group.broadcast.repliesNegative > 0) entry.byOutreachStatus.repliesNegative = group.broadcast.repliesNegative;
           if (group.broadcast.repliesNeutral > 0) entry.byOutreachStatus.repliesNeutral = group.broadcast.repliesNeutral;
           if (group.broadcast.repliesAutoReply > 0) entry.byOutreachStatus.repliesAutoReply = group.broadcast.repliesAutoReply;
+          if (group.broadcast.repliesDetail) entry.repliesDetail = group.broadcast.repliesDetail;
         }
       }
     }

@@ -199,19 +199,35 @@ export const StatsQuerySchema = z
   .openapi("StatsQuery");
 
 const OutreachStatusCountSchema = z.record(z.string(), z.number()).openapi("OutreachStatusCount", {
-  description: "Map of journalist outreach status to count. See JournalistOutreachStatus for the 8 possible values and their meanings. Keys are status strings, values are journalist counts.",
-  example: { buffered: 12, served: 3, contacted: 5, delivered: 2 },
+  description: "Map of journalist outreach status to count. Keys include DB statuses (buffered, claimed, served, skipped) and email-gateway enrichments (contacted, delivered, bounced, repliesPositive, repliesNegative, repliesNeutral, repliesAutoReply).",
+  example: { buffered: 12, served: 3, contacted: 5, delivered: 2, repliesPositive: 1 },
+});
+
+const RepliesDetailSchema = z.object({
+  interested: z.number(),
+  meetingBooked: z.number(),
+  closed: z.number(),
+  notInterested: z.number(),
+  wrongPerson: z.number(),
+  unsubscribe: z.number(),
+  neutral: z.number(),
+  autoReply: z.number(),
+  outOfOffice: z.number(),
+}).openapi("RepliesDetail", {
+  description: "Granular breakdown of reply types from email-gateway.",
 });
 
 const GroupedEntrySchema = z.object({
   totalJournalists: z.number().openapi({ description: "Total journalists found for this group" }),
   byOutreachStatus: OutreachStatusCountSchema,
+  repliesDetail: RepliesDetailSchema.optional().openapi({ description: "Granular reply breakdown from email-gateway. Present when reply data exists." }),
 }).openapi("GroupedEntry");
 
 export const StatsResponseSchema = z
   .object({
     totalJournalists: z.number().openapi({ description: "Total journalists found matching the filters" }),
     byOutreachStatus: OutreachStatusCountSchema,
+    repliesDetail: RepliesDetailSchema.optional().openapi({ description: "Granular reply breakdown from email-gateway. Present when reply data exists." }),
     groupedBy: z.record(z.string(), GroupedEntrySchema).optional().openapi({ description: "Per-slug breakdown when groupBy is specified. Keys are slug values (or dynasty slugs for dynasty grouping)." }),
   })
   .openapi("StatsResponse");
