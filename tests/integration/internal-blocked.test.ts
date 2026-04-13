@@ -42,8 +42,10 @@ function makeGatewayResult(email: string, overrides: {
 } = {}) {
   const scope = {
     contacted: overrides.contacted ?? false,
+    sent: overrides.contacted ?? false,
     delivered: overrides.delivered ?? false,
     opened: false,
+    clicked: false,
     replied: overrides.replied ?? false,
     replyClassification: overrides.replyClassification ?? null,
     bounced: overrides.bounced ?? false,

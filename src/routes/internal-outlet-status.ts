@@ -2,7 +2,7 @@ import { Router } from "express";
 import { inArray, and, eq, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { campaignJournalists, journalists } from "../db/schema.js";
-import { checkEmailStatuses, deriveOutreachStatusFromScope, type EmailGatewayStatusResult, type OutreachStatusValue } from "../lib/email-gateway-client.js";
+import { checkEmailStatuses, buildStatusBooleans, emptyStatusCounts, accumulateStatus, type EmailGatewayStatusResult, type StatusCounts } from "../lib/email-gateway-client.js";
 import { type OrgContext } from "../lib/service-context.js";
 import { OutletStatusRequestSchema } from "../schemas.js";
 
@@ -10,35 +10,6 @@ const router = Router();
 
 // POST /orgs/outlets/status — batch enriched outreach status from email-gateway
 // Scoping is determined by scopeFilters in the body, not headers.
-
-const STATUS_RANK: Record<string, number> = {
-  buffered: 0,
-  claimed: 1,
-  skipped: 2,
-  served: 3,
-  contacted: 4,
-  delivered: 5,
-  replied: 6,
-};
-
-function statusRank(status: string): number {
-  return STATUS_RANK[status] ?? 0;
-}
-
-function higherStatus(a: string, b: string): string {
-  return statusRank(a) >= statusRank(b) ? a : b;
-}
-
-const CLASSIFICATION_RANK: Record<string, number> = { neutral: 0, negative: 1, positive: 2 };
-
-function bestClassification(
-  current: "positive" | "negative" | "neutral" | null,
-  candidate: "positive" | "negative" | "neutral" | null,
-): "positive" | "negative" | "neutral" | null {
-  if (!candidate) return current;
-  if (!current) return candidate;
-  return CLASSIFICATION_RANK[candidate] > CLASSIFICATION_RANK[current] ? candidate : current;
-}
 
 router.post("/orgs/outlets/status", async (req, res) => {
   const parsed = OutletStatusRequestSchema.safeParse(req.body);
@@ -96,12 +67,16 @@ router.post("/orgs/outlets/status", async (req, res) => {
 
     // 2. Collect all journalists with emails for email-gateway batch call
     const resolvedEmails = new Map<string, string>(); // cjId → email
-    const emailItems: Array<{ email: string; outletId: string; cjId: string }> = [];
+    const emailItems: Array<{ email: string }> = [];
+    const seenEmails = new Set<string>();
     for (const row of rows) {
       const email = row.apolloEmail ?? row.email;
       if (email) {
         resolvedEmails.set(row.cjId, email);
-        emailItems.push({ email, outletId: row.outletId, cjId: row.cjId });
+        if (!seenEmails.has(email)) {
+          seenEmails.add(email);
+          emailItems.push({ email });
+        }
       }
     }
 
@@ -119,7 +94,7 @@ router.post("/orgs/outlets/status", async (req, res) => {
       };
 
       const gatewayResults = await checkEmailStatuses(
-        emailItems.map(({ email }) => ({ email })),
+        emailItems,
         { brandId, campaignId },
         ctx
       );
@@ -129,90 +104,78 @@ router.post("/orgs/outlets/status", async (req, res) => {
       }
     }
 
-    // 4. Build results per outlet
-    // Mode: campaign (campaignId present) → flat outreachStatus, no byCampaign
-    // Mode: brand (brandId, no campaignId) → outreachStatus high watermark + byCampaign breakdown
+    // 4. Build results per outlet with counts
     const isBrandMode = !!brandId && !campaignId;
+    const totalCounts = emptyStatusCounts();
 
     type OutletResult = {
-      outreachStatus: OutreachStatusValue;
-      replyClassification: "positive" | "negative" | "neutral" | null;
-      byCampaign?: Record<string, {
-        outreachStatus: OutreachStatusValue;
-        replyClassification: "positive" | "negative" | "neutral" | null;
-      }>;
+      totalJournalists: number;
+      brand: StatusCounts | null;
+      byCampaign: Record<string, StatusCounts> | null;
+      campaign: StatusCounts | null;
+      global: { bounced: number; unsubscribed: number };
     };
 
     const results: Record<string, OutletResult> = {};
 
     for (const outletId of outletIds) {
       const outletRows = byOutlet.get(outletId) ?? [];
-      let highWatermark: OutreachStatusValue = "served";
-      let topClassification: "positive" | "negative" | "neutral" | null = null;
-
-      // For brand mode: build per-campaign breakdown
-      const campaignBreakdown = new Map<string, {
-        highWatermark: OutreachStatusValue;
-        classification: "positive" | "negative" | "neutral" | null;
-      }>();
+      const outletBrandCounts = emptyStatusCounts();
+      const outletCampaignCounts = emptyStatusCounts();
+      const campaignCountsMap = new Map<string, StatusCounts>();
+      let globalBounced = 0;
+      let globalUnsubscribed = 0;
 
       for (const row of outletRows) {
         const resolvedEmail = resolvedEmails.get(row.cjId);
         const egResult = resolvedEmail ? (emailStatusMap.get(resolvedEmail) ?? null) : null;
 
-        if (isBrandMode) {
-          // Top-level high watermark: use brand scope (aggregate across all campaigns)
-          const brandScope = egResult?.broadcast.brand ?? null;
-          const brandOutreach = deriveOutreachStatusFromScope(row.status, brandScope);
-          highWatermark = higherStatus(highWatermark, brandOutreach) as OutreachStatusValue;
-          if (brandOutreach === "replied") {
-            topClassification = bestClassification(topClassification, brandScope?.replyClassification ?? null);
-          }
+        if (egResult) {
+          if (egResult.broadcast.global.email.bounced) globalBounced++;
+          if (egResult.broadcast.global.email.unsubscribed) globalUnsubscribed++;
+        }
 
-          // Per-campaign breakdown: use byCampaign entry for this specific campaign
+        if (isBrandMode) {
+          // Brand-level counts
+          const brandScope = egResult?.broadcast.brand ?? null;
+          const brandStatus = buildStatusBooleans(row.status, brandScope);
+          accumulateStatus(outletBrandCounts, brandStatus);
+          accumulateStatus(totalCounts, brandStatus);
+
+          // Per-campaign counts
           const campaignScope = egResult?.broadcast.byCampaign?.[row.campaignId] ?? null;
-          const campaignOutreach = deriveOutreachStatusFromScope(row.status, campaignScope);
-          const existing = campaignBreakdown.get(row.campaignId);
-          if (!existing) {
-            campaignBreakdown.set(row.campaignId, {
-              highWatermark: campaignOutreach,
-              classification: campaignScope?.replyClassification ?? null,
-            });
-          } else {
-            existing.highWatermark = higherStatus(existing.highWatermark, campaignOutreach) as OutreachStatusValue;
-            existing.classification = bestClassification(existing.classification, campaignScope?.replyClassification ?? null);
+          const campaignStatus = buildStatusBooleans(row.status, campaignScope);
+          let campCounts = campaignCountsMap.get(row.campaignId);
+          if (!campCounts) {
+            campCounts = emptyStatusCounts();
+            campaignCountsMap.set(row.campaignId, campCounts);
           }
+          accumulateStatus(campCounts, campaignStatus);
         } else {
-          // Campaign mode: use campaign scope directly
-          const scope = egResult?.broadcast.campaign ?? null;
-          const rowOutreach = deriveOutreachStatusFromScope(row.status, scope);
-          highWatermark = higherStatus(highWatermark, rowOutreach) as OutreachStatusValue;
-          if (rowOutreach === "replied" && scope) {
-            topClassification = bestClassification(topClassification, scope.replyClassification);
-          }
+          // Campaign mode
+          const campaignScope = egResult?.broadcast.campaign ?? null;
+          const campaignStatus = buildStatusBooleans(row.status, campaignScope);
+          accumulateStatus(outletCampaignCounts, campaignStatus);
+          accumulateStatus(totalCounts, campaignStatus);
         }
       }
 
       const entry: OutletResult = {
-        outreachStatus: highWatermark,
-        replyClassification: highWatermark === "replied" ? topClassification : null,
+        totalJournalists: outletRows.length,
+        brand: isBrandMode ? outletBrandCounts : null,
+        byCampaign: isBrandMode ? Object.fromEntries(campaignCountsMap) : null,
+        campaign: isBrandMode ? null : outletCampaignCounts,
+        global: { bounced: globalBounced, unsubscribed: globalUnsubscribed },
       };
-
-      if (isBrandMode) {
-        const byCampaign: Record<string, { outreachStatus: OutreachStatusValue; replyClassification: "positive" | "negative" | "neutral" | null }> = {};
-        for (const [campId, data] of campaignBreakdown) {
-          byCampaign[campId] = {
-            outreachStatus: data.highWatermark,
-            replyClassification: data.highWatermark === "replied" ? data.classification : null,
-          };
-        }
-        entry.byCampaign = byCampaign;
-      }
 
       results[outletId] = entry;
     }
 
-    res.json({ results });
+    res.json({
+      results,
+      total: rows.length,
+      byOutreachStatus: totalCounts,
+    });
   } catch (err) {
     console.error("[journalists-service] /orgs/outlets/status error:", err);
     const message = err instanceof Error ? err.message : "Internal server error";

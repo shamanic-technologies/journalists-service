@@ -13,7 +13,10 @@ import {
 import {
   fetchEmailGatewayStats,
   fetchEmailGatewayStatsGrouped,
+  makeCumulativeDbCounts,
   type EmailGatewayStatsParams,
+  type EmailGatewayBroadcastStats,
+  type EmailGatewayRepliesDetail,
 } from "../lib/email-gateway-client.js";
 
 export const publicStatsRouter = Router();
@@ -21,14 +24,35 @@ export const orgStatsRouter = Router();
 
 // ── Shared stats logic ──────────────────────────────────────────────
 
+interface GroupedEntry {
+  totalJournalists: number;
+  byOutreachStatus: Record<string, number>;
+  repliesDetail?: EmailGatewayRepliesDetail;
+}
+
 interface StatsResult {
   totalJournalists: number;
   byOutreachStatus: Record<string, number>;
-  groupedBy?: Record<string, { totalJournalists: number; byOutreachStatus: Record<string, number> }>;
+  repliesDetail?: EmailGatewayRepliesDetail;
+  groupedBy?: Record<string, GroupedEntry>;
 }
 
 function emptyStats(): StatsResult {
   return { totalJournalists: 0, byOutreachStatus: {} };
+}
+
+function enrichWithGatewayStats(target: Record<string, number>, gw: EmailGatewayBroadcastStats): void {
+  if (gw.emailsContacted > 0) target.contacted = gw.emailsContacted;
+  if (gw.emailsSent > 0) target.sent = gw.emailsSent;
+  if (gw.emailsDelivered > 0) target.delivered = gw.emailsDelivered;
+  if (gw.emailsOpened > 0) target.opened = gw.emailsOpened;
+  if (gw.emailsClicked > 0) target.clicked = gw.emailsClicked;
+  if (gw.emailsBounced > 0) target.bounced = gw.emailsBounced;
+  if (gw.repliesPositive > 0) target.repliesPositive = gw.repliesPositive;
+  if (gw.repliesNegative > 0) target.repliesNegative = gw.repliesNegative;
+  if (gw.repliesNeutral > 0) target.repliesNeutral = gw.repliesNeutral;
+  if (gw.repliesAutoReply > 0) target.repliesAutoReply = gw.repliesAutoReply;
+  if (gw.recipients > 0) target.recipients = gw.recipients;
 }
 
 function buildPassthroughHeaders(locals: Record<string, unknown>): Record<string, string> {
@@ -96,14 +120,16 @@ async function resolveFiltersAndQuery(
     .where(where)
     .groupBy(table.status);
 
-  const byOutreachStatus: Record<string, number> = {};
+  // Build exclusive DB counts, then convert to cumulative
+  const exclusiveCounts: Record<string, number> = {};
   let total = 0;
   for (const row of rows) {
-    byOutreachStatus[row.status] = row.count;
+    exclusiveCounts[row.status] = row.count;
     total += row.count;
   }
+  const byOutreachStatus: Record<string, number> = makeCumulativeDbCounts(exclusiveCounts);
 
-  // Enrich with contacted/delivered/bounced/replies from email-gateway (fail-open)
+  // Enrich with all email-gateway stats (fail-open)
   const gwParams: EmailGatewayStatsParams = {
     campaignId: query.campaignId,
     brandId: query.brandId,
@@ -115,16 +141,11 @@ async function resolveFiltersAndQuery(
   };
   const gwStats = await fetchEmailGatewayStats(gwParams, passthroughHeaders);
   if (gwStats) {
-    if (gwStats.emailsContacted > 0) byOutreachStatus.contacted = gwStats.emailsContacted;
-    if (gwStats.emailsDelivered > 0) byOutreachStatus.delivered = gwStats.emailsDelivered;
-    if (gwStats.emailsBounced > 0) byOutreachStatus.bounced = gwStats.emailsBounced;
-    if (gwStats.repliesPositive > 0) byOutreachStatus.repliesPositive = gwStats.repliesPositive;
-    if (gwStats.repliesNegative > 0) byOutreachStatus.repliesNegative = gwStats.repliesNegative;
-    if (gwStats.repliesNeutral > 0) byOutreachStatus.repliesNeutral = gwStats.repliesNeutral;
-    if (gwStats.repliesAutoReply > 0) byOutreachStatus.repliesAutoReply = gwStats.repliesAutoReply;
+    enrichWithGatewayStats(byOutreachStatus, gwStats);
   }
 
   const result: StatsResult = { totalJournalists: total, byOutreachStatus };
+  if (gwStats?.repliesDetail) result.repliesDetail = gwStats.repliesDetail;
 
   // GroupBy dynasty logic
   const groupBy = query.groupBy;
@@ -153,7 +174,7 @@ async function resolveFiltersAndQuery(
       .groupBy(slugColumn, table.status);
 
     // Aggregate by dynasty slug
-    const dynastyMap = new Map<string, { totalJournalists: number; byOutreachStatus: Record<string, number> }>();
+    const dynastyMap = new Map<string, GroupedEntry>();
     for (const row of groupedRows) {
       const rawSlug = row.slug ?? "(none)";
       const dynastySlug = slugToDynasty.get(rawSlug) ?? rawSlug;
@@ -167,19 +188,20 @@ async function resolveFiltersAndQuery(
       entry.totalJournalists += row.count;
     }
 
+    // Make dynasty DB counts cumulative
+    for (const entry of dynastyMap.values()) {
+      const cumulative = makeCumulativeDbCounts(entry.byOutreachStatus);
+      entry.byOutreachStatus = cumulative;
+    }
+
     // Enrich grouped results with email-gateway stats
     const gwGrouped = await fetchEmailGatewayStatsGrouped(gwParams, groupBy, passthroughHeaders);
     if (gwGrouped) {
       for (const group of gwGrouped.groups) {
         const entry = dynastyMap.get(group.key);
         if (entry && group.broadcast) {
-          if (group.broadcast.emailsContacted > 0) entry.byOutreachStatus.contacted = group.broadcast.emailsContacted;
-          if (group.broadcast.emailsDelivered > 0) entry.byOutreachStatus.delivered = group.broadcast.emailsDelivered;
-          if (group.broadcast.emailsBounced > 0) entry.byOutreachStatus.bounced = group.broadcast.emailsBounced;
-          if (group.broadcast.repliesPositive > 0) entry.byOutreachStatus.repliesPositive = group.broadcast.repliesPositive;
-          if (group.broadcast.repliesNegative > 0) entry.byOutreachStatus.repliesNegative = group.broadcast.repliesNegative;
-          if (group.broadcast.repliesNeutral > 0) entry.byOutreachStatus.repliesNeutral = group.broadcast.repliesNeutral;
-          if (group.broadcast.repliesAutoReply > 0) entry.byOutreachStatus.repliesAutoReply = group.broadcast.repliesAutoReply;
+          enrichWithGatewayStats(entry.byOutreachStatus, group.broadcast);
+          if (group.broadcast.repliesDetail) entry.repliesDetail = group.broadcast.repliesDetail;
         }
       }
     }
@@ -198,7 +220,7 @@ async function resolveFiltersAndQuery(
       .where(where)
       .groupBy(slugColumn, table.status);
 
-    const slugMap = new Map<string, { totalJournalists: number; byOutreachStatus: Record<string, number> }>();
+    const slugMap = new Map<string, GroupedEntry>();
     for (const row of groupedRows) {
       const slug = row.slug ?? "(none)";
       let entry = slugMap.get(slug);
@@ -210,19 +232,20 @@ async function resolveFiltersAndQuery(
       entry.totalJournalists += row.count;
     }
 
+    // Make slug DB counts cumulative
+    for (const entry of slugMap.values()) {
+      const cumulative = makeCumulativeDbCounts(entry.byOutreachStatus);
+      entry.byOutreachStatus = cumulative;
+    }
+
     // Enrich grouped results with email-gateway stats
     const gwGrouped = await fetchEmailGatewayStatsGrouped(gwParams, groupBy, passthroughHeaders);
     if (gwGrouped) {
       for (const group of gwGrouped.groups) {
         const entry = slugMap.get(group.key);
         if (entry && group.broadcast) {
-          if (group.broadcast.emailsContacted > 0) entry.byOutreachStatus.contacted = group.broadcast.emailsContacted;
-          if (group.broadcast.emailsDelivered > 0) entry.byOutreachStatus.delivered = group.broadcast.emailsDelivered;
-          if (group.broadcast.emailsBounced > 0) entry.byOutreachStatus.bounced = group.broadcast.emailsBounced;
-          if (group.broadcast.repliesPositive > 0) entry.byOutreachStatus.repliesPositive = group.broadcast.repliesPositive;
-          if (group.broadcast.repliesNegative > 0) entry.byOutreachStatus.repliesNegative = group.broadcast.repliesNegative;
-          if (group.broadcast.repliesNeutral > 0) entry.byOutreachStatus.repliesNeutral = group.broadcast.repliesNeutral;
-          if (group.broadcast.repliesAutoReply > 0) entry.byOutreachStatus.repliesAutoReply = group.broadcast.repliesAutoReply;
+          enrichWithGatewayStats(entry.byOutreachStatus, group.broadcast);
+          if (group.broadcast.repliesDetail) entry.repliesDetail = group.broadcast.repliesDetail;
         }
       }
     }
