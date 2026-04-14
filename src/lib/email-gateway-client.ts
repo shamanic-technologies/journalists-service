@@ -11,8 +11,10 @@ function getConfig() {
 
 export interface EmailScopeStatus {
   contacted: boolean;
+  sent: boolean;
   delivered: boolean;
   opened: boolean;
+  clicked: boolean;
   replied: boolean;
   replyClassification: "positive" | "negative" | "neutral" | null;
   bounced: boolean;
@@ -94,7 +96,6 @@ export interface EmailGatewayBroadcastStats {
   emailsDelivered: number;
   emailsOpened: number;
   emailsClicked: number;
-  emailsReplied: number;
   emailsBounced: number;
   repliesPositive: number;
   repliesNegative: number;
@@ -201,43 +202,120 @@ export async function fetchEmailGatewayStatsGrouped(
   }
 }
 
-// ── Status consolidation ────────────────────────────────────────────
-
-export type OutreachStatusValue = "buffered" | "claimed" | "served" | "contacted" | "delivered" | "replied" | "bounced" | "skipped";
+// ── Status helpers ──────────────────────────────────────────────────
 
 /**
- * Derive outreachStatus from the local DB status and email-gateway data.
- * Email-gateway status takes priority when available; local DB status is the fallback.
+ * Build cumulative boolean status from DB status + email-gateway scope.
+ * DB statuses are cumulative: if a journalist is "served", they are also "claimed" and "buffered".
+ * Email-gateway booleans are passed through as-is (they are already cumulative).
  */
-export function deriveOutreachStatus(
-  localStatus: string,
-  emailGatewayResult: EmailGatewayStatusResult | null,
-): OutreachStatusValue {
-  if (emailGatewayResult) {
-    const scope = emailGatewayResult.broadcast.campaign ?? emailGatewayResult.broadcast.brand;
-    if (scope) {
-      if (scope.replied) return "replied";
-      if (scope.bounced) return "bounced";
-      if (scope.delivered) return "delivered";
-      if (scope.contacted) return "contacted";
-    }
-  }
-  return localStatus as OutreachStatusValue;
+const DB_STATUS_CHAIN = ["buffered", "claimed", "served", "contacted"] as const;
+
+export interface StatusBooleans {
+  buffered: boolean;
+  claimed: boolean;
+  served: boolean;
+  skipped: boolean;
+  contacted: boolean;
+  sent: boolean;
+  delivered: boolean;
+  opened: boolean;
+  clicked: boolean;
+  replied: boolean;
+  replyClassification: "positive" | "negative" | "neutral" | null;
+  bounced: boolean;
+  unsubscribed: boolean;
+  lastDeliveredAt: string | null;
+}
+
+export function buildStatusBooleans(
+  dbStatus: string,
+  scope: EmailScopeStatus | null,
+): StatusBooleans {
+  const isSkipped = dbStatus === "skipped";
+  const dbIndex = DB_STATUS_CHAIN.indexOf(dbStatus as typeof DB_STATUS_CHAIN[number]);
+
+  return {
+    buffered: true,
+    claimed: isSkipped || dbIndex >= 1,
+    served: !isSkipped && dbIndex >= 2,
+    skipped: isSkipped,
+    contacted: scope?.contacted ?? false,
+    sent: scope?.sent ?? false,
+    delivered: scope?.delivered ?? false,
+    opened: scope?.opened ?? false,
+    clicked: scope?.clicked ?? false,
+    replied: scope?.replied ?? false,
+    replyClassification: scope?.replyClassification ?? null,
+    bounced: scope?.bounced ?? false,
+    unsubscribed: scope?.unsubscribed ?? false,
+    lastDeliveredAt: scope?.lastDeliveredAt ?? null,
+  };
 }
 
 /**
- * Derive outreachStatus from an email-gateway scope (campaign entry or brand scope).
- * Falls back to localStatus when the scope has no outreach data.
+ * Accumulate status booleans into counts. Used for per-outlet and response-level aggregation.
  */
-export function deriveOutreachStatusFromScope(
-  localStatus: string,
-  scope: EmailScopeStatus | null,
-): OutreachStatusValue {
-  if (scope) {
-    if (scope.replied) return "replied";
-    if (scope.bounced) return "bounced";
-    if (scope.delivered) return "delivered";
-    if (scope.contacted) return "contacted";
-  }
-  return localStatus as OutreachStatusValue;
+export interface StatusCounts {
+  buffered: number;
+  claimed: number;
+  served: number;
+  skipped: number;
+  contacted: number;
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  replied: number;
+  repliesPositive: number;
+  repliesNegative: number;
+  repliesNeutral: number;
+  bounced: number;
+  unsubscribed: number;
+}
+
+export function emptyStatusCounts(): StatusCounts {
+  return {
+    buffered: 0, claimed: 0, served: 0, skipped: 0,
+    contacted: 0, sent: 0, delivered: 0, opened: 0, clicked: 0,
+    replied: 0, repliesPositive: 0, repliesNegative: 0, repliesNeutral: 0,
+    bounced: 0, unsubscribed: 0,
+  };
+}
+
+export function accumulateStatus(counts: StatusCounts, status: StatusBooleans): void {
+  if (status.buffered) counts.buffered++;
+  if (status.claimed) counts.claimed++;
+  if (status.served) counts.served++;
+  if (status.skipped) counts.skipped++;
+  if (status.contacted) counts.contacted++;
+  if (status.sent) counts.sent++;
+  if (status.delivered) counts.delivered++;
+  if (status.opened) counts.opened++;
+  if (status.clicked) counts.clicked++;
+  if (status.replied) counts.replied++;
+  if (status.bounced) counts.bounced++;
+  if (status.unsubscribed) counts.unsubscribed++;
+  if (status.replyClassification === "positive") counts.repliesPositive++;
+  if (status.replyClassification === "negative") counts.repliesNegative++;
+  if (status.replyClassification === "neutral") counts.repliesNeutral++;
+}
+
+/**
+ * Convert exclusive DB status counts (from GROUP BY) into cumulative counts.
+ * The chain is: buffered → claimed → served → contacted (skipped branches off claimed).
+ */
+export function makeCumulativeDbCounts(exclusive: Record<string, number>): Record<string, number> {
+  const b = exclusive["buffered"] ?? 0;
+  const c = exclusive["claimed"] ?? 0;
+  const sv = exclusive["served"] ?? 0;
+  const sk = exclusive["skipped"] ?? 0;
+  const ct = exclusive["contacted"] ?? 0;
+
+  return {
+    buffered: b + c + sv + sk + ct,
+    claimed: c + sv + sk + ct,
+    served: sv + ct,
+    skipped: sk,
+  };
 }

@@ -50,8 +50,10 @@ function makeEmailGatewayResult(
   const { contacted = false, delivered = false, replied = false, replyClassification = null, useBrandScope = false } = overrides;
   const scope = {
     contacted,
+    sent: contacted,
     delivered,
     opened: false,
+    clicked: false,
     replied,
     replyClassification,
     bounced: false,
@@ -92,12 +94,14 @@ function makeEmailGatewayResultWithByCampaign(
   }>
 ): EmailGatewayStatusResult {
   const { contacted = false, delivered = false, replied = false, replyClassification = null } = brandOverrides;
-  const byCampaignRecord: Record<string, { contacted: boolean; delivered: boolean; opened: boolean; replied: boolean; replyClassification: "positive" | "negative" | "neutral" | null; bounced: boolean; unsubscribed: boolean; lastDeliveredAt: string | null }> = {};
+  const byCampaignRecord: Record<string, { contacted: boolean; sent: boolean; delivered: boolean; opened: boolean; clicked: boolean; replied: boolean; replyClassification: "positive" | "negative" | "neutral" | null; bounced: boolean; unsubscribed: boolean; lastDeliveredAt: string | null }> = {};
   for (const c of byCampaign) {
     byCampaignRecord[c.campaignId] = {
       contacted: c.contacted ?? false,
+      sent: c.contacted ?? false,
       delivered: c.delivered ?? false,
       opened: false,
+      clicked: false,
       replied: c.replied ?? false,
       replyClassification: c.replyClassification ?? null,
       bounced: false,
@@ -111,8 +115,10 @@ function makeEmailGatewayResultWithByCampaign(
       campaign: null,
       brand: {
         contacted,
+        sent: contacted,
         delivered,
         opened: false,
+        clicked: false,
         replied,
         replyClassification,
         bounced: false,
@@ -152,7 +158,7 @@ describe("POST /orgs/outlets/status", () => {
     expect(res.body.error).toContain("scopeFilters");
   });
 
-  it("returns outreachStatus: served when no email-gateway enrichment (campaign scope)", async () => {
+  it("returns counts with served when no email-gateway enrichment (campaign scope)", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J1" });
     await insertTestCampaignJournalist({
       journalistId: j1.id,
@@ -171,10 +177,12 @@ describe("POST /orgs/outlets/status", () => {
       .send({ outletIds: [OUTLET_A], scopeFilters: { campaignId: CAMPAIGN_ID } });
 
     expect(res.status).toBe(200);
-    expect(res.body.results[OUTLET_A]).toEqual({
-      outreachStatus: "served",
-      replyClassification: null,
-    });
+    const result = res.body.results[OUTLET_A];
+    expect(result.totalJournalists).toBe(1);
+    expect(result.campaign.buffered).toBe(1);
+    expect(result.campaign.served).toBe(1);
+    expect(result.campaign.contacted).toBe(0);
+    expect(result.brand).toBeNull();
   });
 
   it("enriches to contacted when email-gateway says contacted", async () => {
@@ -199,10 +207,9 @@ describe("POST /orgs/outlets/status", () => {
       .send({ outletIds: [OUTLET_A], scopeFilters: { campaignId: CAMPAIGN_ID } });
 
     expect(res.status).toBe(200);
-    expect(res.body.results[OUTLET_A]).toEqual({
-      outreachStatus: "contacted",
-      replyClassification: null,
-    });
+    const result = res.body.results[OUTLET_A];
+    expect(result.campaign.contacted).toBe(1);
+    expect(result.campaign.served).toBe(1);
   });
 
   it("enriches to delivered when email-gateway says delivered", async () => {
@@ -227,13 +234,12 @@ describe("POST /orgs/outlets/status", () => {
       .send({ outletIds: [OUTLET_A], scopeFilters: { campaignId: CAMPAIGN_ID } });
 
     expect(res.status).toBe(200);
-    expect(res.body.results[OUTLET_A]).toEqual({
-      outreachStatus: "delivered",
-      replyClassification: null,
-    });
+    const result = res.body.results[OUTLET_A];
+    expect(result.campaign.contacted).toBe(1);
+    expect(result.campaign.delivered).toBe(1);
   });
 
-  it("enriches to replied with replyClassification", async () => {
+  it("enriches to replied with reply counts", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J1" });
     await insertTestCampaignJournalist({
       journalistId: j1.id,
@@ -255,13 +261,13 @@ describe("POST /orgs/outlets/status", () => {
       .send({ outletIds: [OUTLET_A], scopeFilters: { campaignId: CAMPAIGN_ID } });
 
     expect(res.status).toBe(200);
-    expect(res.body.results[OUTLET_A]).toEqual({
-      outreachStatus: "replied",
-      replyClassification: "negative",
-    });
+    const result = res.body.results[OUTLET_A];
+    expect(result.campaign.replied).toBe(1);
+    expect(result.campaign.repliesNegative).toBe(1);
+    expect(result.campaign.repliesPositive).toBe(0);
   });
 
-  it("takes high watermark across multiple journalists", async () => {
+  it("accumulates counts across multiple journalists", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J1" });
     const j2 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J2" });
 
@@ -285,10 +291,12 @@ describe("POST /orgs/outlets/status", () => {
       .send({ outletIds: [OUTLET_A], scopeFilters: { campaignId: CAMPAIGN_ID } });
 
     expect(res.status).toBe(200);
-    expect(res.body.results[OUTLET_A]).toEqual({
-      outreachStatus: "replied",
-      replyClassification: "neutral",
-    });
+    const result = res.body.results[OUTLET_A];
+    expect(result.totalJournalists).toBe(2);
+    expect(result.campaign.contacted).toBe(2);
+    expect(result.campaign.delivered).toBe(1);
+    expect(result.campaign.replied).toBe(1);
+    expect(result.campaign.repliesNeutral).toBe(1);
   });
 
   it("handles multiple outlets in a single batch", async () => {
@@ -314,11 +322,12 @@ describe("POST /orgs/outlets/status", () => {
       .send({ outletIds: [OUTLET_A, OUTLET_B], scopeFilters: { campaignId: CAMPAIGN_ID } });
 
     expect(res.status).toBe(200);
-    expect(res.body.results[OUTLET_A]).toEqual({ outreachStatus: "delivered", replyClassification: null });
-    expect(res.body.results[OUTLET_B]).toEqual({ outreachStatus: "served", replyClassification: null });
+    expect(res.body.results[OUTLET_A].campaign.delivered).toBe(1);
+    expect(res.body.results[OUTLET_B].campaign.served).toBe(1);
+    expect(res.body.results[OUTLET_B].campaign.delivered).toBe(0);
   });
 
-  it("returns served for outlets with no journalists", async () => {
+  it("returns zero counts for outlets with no journalists", async () => {
     mockedCheckEmailStatuses.mockResolvedValue([]);
 
     const res = await request(app)
@@ -327,10 +336,9 @@ describe("POST /orgs/outlets/status", () => {
       .send({ outletIds: [OUTLET_C], scopeFilters: { brandId: BRAND_ID } });
 
     expect(res.status).toBe(200);
-    expect(res.body.results[OUTLET_C]).toMatchObject({
-      outreachStatus: "served",
-      replyClassification: null,
-    });
+    const result = res.body.results[OUTLET_C];
+    expect(result.totalJournalists).toBe(0);
+    expect(result.brand.buffered).toBe(0);
   });
 
   it("uses DB status as baseline (contacted in DB stays contacted even without email-gateway)", async () => {
@@ -348,7 +356,11 @@ describe("POST /orgs/outlets/status", () => {
       .send({ outletIds: [OUTLET_A], scopeFilters: { campaignId: CAMPAIGN_ID } });
 
     expect(res.status).toBe(200);
-    expect(res.body.results[OUTLET_A].outreachStatus).toBe("contacted");
+    // DB "contacted" status: buildStatusBooleans sets contacted from scope, but DB chain goes buffered→claimed→served→contacted
+    // With no email-gateway data, contacted boolean comes from scope (false), but served count includes contacted DB rows
+    const result = res.body.results[OUTLET_A];
+    expect(result.campaign.buffered).toBe(1);
+    expect(result.campaign.served).toBe(1);
   });
 
   it("returns 400 for empty outletIds", async () => {
@@ -386,7 +398,7 @@ describe("POST /orgs/outlets/status", () => {
     expect(res.status).toBe(502);
   });
 
-  it("returns best replyClassification across journalists (positive > negative > neutral)", async () => {
+  it("counts reply classifications across journalists", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J1" });
     const j2 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J2" });
     const j3 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J3" });
@@ -410,10 +422,11 @@ describe("POST /orgs/outlets/status", () => {
       .send({ outletIds: [OUTLET_A], scopeFilters: { campaignId: CAMPAIGN_ID } });
 
     expect(res.status).toBe(200);
-    expect(res.body.results[OUTLET_A]).toEqual({
-      outreachStatus: "replied",
-      replyClassification: "positive",
-    });
+    const result = res.body.results[OUTLET_A];
+    expect(result.campaign.replied).toBe(3);
+    expect(result.campaign.repliesPositive).toBe(1);
+    expect(result.campaign.repliesNegative).toBe(1);
+    expect(result.campaign.repliesNeutral).toBe(1);
   });
 
   it("scopes by brand via scopeFilters", async () => {
@@ -441,9 +454,10 @@ describe("POST /orgs/outlets/status", () => {
       .send({ outletIds: [OUTLET_A], scopeFilters: { brandId: BRAND_A } });
 
     expect(res.status).toBe(200);
-    expect(res.body.results[OUTLET_A].outreachStatus).toBe("served");
+    expect(res.body.results[OUTLET_A].brand.served).toBe(1);
+    expect(res.body.results[OUTLET_A].brand.contacted).toBe(0);
 
-    // Query with brand B → should only see j2 (contacted)
+    // Query with brand B → should only see j2 (contacted in DB)
     mockedCheckEmailStatuses.mockResolvedValue([]);
     const res2 = await request(app)
       .post("/orgs/outlets/status")
@@ -451,7 +465,8 @@ describe("POST /orgs/outlets/status", () => {
       .send({ outletIds: [OUTLET_A], scopeFilters: { brandId: BRAND_B } });
 
     expect(res2.status).toBe(200);
-    expect(res2.body.results[OUTLET_A].outreachStatus).toBe("contacted");
+    // DB status "contacted" → served count includes contacted rows (cumulative)
+    expect(res2.body.results[OUTLET_A].brand.served).toBe(1);
   });
 
   it("does not call email-gateway when no journalists have emails", async () => {
@@ -530,13 +545,14 @@ describe("POST /orgs/outlets/status", () => {
 
     expect(res.status).toBe(200);
     const result = res.body.results[OUTLET_A];
-    // High watermark across campaigns
-    expect(result.outreachStatus).toBe("delivered");
-    expect(result.replyClassification).toBeNull();
+    // Brand-level counts
+    expect(result.brand.delivered).toBe(1);
+    expect(result.brand.contacted).toBe(2);
     // Per-campaign breakdown
     expect(result.byCampaign).toBeDefined();
-    expect(result.byCampaign[CAMPAIGN_ID]).toEqual({ outreachStatus: "delivered", replyClassification: null });
-    expect(result.byCampaign[CAMPAIGN_ID_2]).toEqual({ outreachStatus: "contacted", replyClassification: null });
+    expect(result.byCampaign[CAMPAIGN_ID].delivered).toBe(1);
+    expect(result.byCampaign[CAMPAIGN_ID_2].contacted).toBe(1);
+    expect(result.byCampaign[CAMPAIGN_ID_2].delivered).toBe(0);
   });
 
   it("does not include byCampaign in campaign mode", async () => {
@@ -556,7 +572,7 @@ describe("POST /orgs/outlets/status", () => {
       .send({ outletIds: [OUTLET_A], scopeFilters: { campaignId: CAMPAIGN_ID } });
 
     expect(res.status).toBe(200);
-    expect(res.body.results[OUTLET_A].byCampaign).toBeUndefined();
+    expect(res.body.results[OUTLET_A].byCampaign).toBeNull();
   });
 
   it("email-gateway overrides DB status even when DB is not served", async () => {
@@ -576,8 +592,10 @@ describe("POST /orgs/outlets/status", () => {
       .send({ outletIds: [OUTLET_A], scopeFilters: { campaignId: CAMPAIGN_ID } });
 
     expect(res.status).toBe(200);
-    // email-gateway "delivered" overrides DB "claimed" (delivered > claimed)
-    expect(res.body.results[OUTLET_A].outreachStatus).toBe("delivered");
+    // email-gateway "delivered" enriches the DB "claimed" journalist
+    const result = res.body.results[OUTLET_A];
+    expect(result.campaign.claimed).toBe(1);
+    expect(result.campaign.delivered).toBe(1);
   });
 
   it("uses brand scope for top-level status even when byCampaign is missing the campaign key", async () => {
@@ -606,10 +624,11 @@ describe("POST /orgs/outlets/status", () => {
 
     expect(res.status).toBe(200);
     const result = res.body.results[OUTLET_A];
-    // Top-level must use brand scope → delivered
-    expect(result.outreachStatus).toBe("delivered");
-    // Per-campaign breakdown has no byCampaign data → falls back to local status
-    expect(result.byCampaign[CAMPAIGN_ID].outreachStatus).toBe("served");
+    // Brand scope: delivered
+    expect(result.brand.delivered).toBe(1);
+    // Per-campaign breakdown: no byCampaign entry → campaign scope falls back to no data
+    expect(result.byCampaign[CAMPAIGN_ID].delivered).toBe(0);
+    expect(result.byCampaign[CAMPAIGN_ID].served).toBe(1);
   });
 
   it("returns 400 when base headers are missing", async () => {

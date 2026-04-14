@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "../db/index.js";
 import { campaignJournalists, journalists } from "../db/schema.js";
 import { resolveFeatureDynastySlugs } from "../lib/dynasty-client.js";
-import { checkEmailStatuses, deriveOutreachStatus, type EmailGatewayStatusResult } from "../lib/email-gateway-client.js";
+import { checkEmailStatuses, buildStatusBooleans, type EmailGatewayStatusResult } from "../lib/email-gateway-client.js";
 import { type OrgContext } from "../lib/service-context.js";
 
 const router = Router();
@@ -134,8 +134,9 @@ router.get("/orgs/campaign-outlet-journalists", async (req, res) => {
 
   const enrichedRows = rows.map((row) => {
     const rowEmail = row.apolloEmail ?? row.email;
-    const emailGatewayResult = rowEmail ? (emailStatusMap.get(rowEmail) ?? null) : null;
-    const outreachStatus = deriveOutreachStatus(row.status, emailGatewayResult);
+    const egResult = rowEmail ? (emailStatusMap.get(rowEmail) ?? null) : null;
+    const scope = egResult?.broadcast.campaign ?? egResult?.broadcast.brand ?? null;
+    const status = buildStatusBooleans(row.status, scope);
     return {
       id: row.id,
       journalistId: row.journalistId,
@@ -148,7 +149,7 @@ router.get("/orgs/campaign-outlet-journalists", async (req, res) => {
       whyRelevant: row.whyRelevant,
       whyNotRelevant: row.whyNotRelevant,
       articleUrls: row.articleUrls,
-      outreachStatus,
+      status,
       runId: row.runId,
       createdAt: row.createdAt,
       journalistName: row.journalistName,
