@@ -687,6 +687,71 @@ describe("GET /stats", () => {
     expect(res.status).toBe(200);
     expect(res.body.groupedBy["orphan-slug"].totalJournalists).toBe(1);
   });
+
+  it("groupBy brandId — aggregates per brand (multi-brand rows appear in each group)", async () => {
+    const BRAND_ID_2 = "44444444-4444-4444-4444-555555555555";
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Brand Group 1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Brand Group 2" });
+    const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Brand Group 3" });
+
+    // j1 belongs to both brands
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID, BRAND_ID_2], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "served",
+    });
+    // j2 belongs to BRAND_ID only
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "buffered",
+    });
+    // j3 belongs to BRAND_ID_2 only
+    await insertTestCampaignJournalist({
+      journalistId: j3.id, orgId: ORG_ID, brandIds: [BRAND_ID_2], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "served",
+    });
+
+    mockEmailGatewayStats(0);
+    mockEmailGatewayStatsGrouped([]);
+
+    const res = await request(app)
+      .get("/orgs/stats?groupBy=brandId")
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    // BRAND_ID: j1 (served) + j2 (buffered) = 2 journalists
+    expect(res.body.groupedBy[BRAND_ID].totalJournalists).toBe(2);
+    // Cumulative: buffered = 1 + 1(served) = 2, served = 1
+    expect(res.body.groupedBy[BRAND_ID].byOutreachStatus.buffered).toBe(2);
+    expect(res.body.groupedBy[BRAND_ID].byOutreachStatus.served).toBe(1);
+
+    // BRAND_ID_2: j1 (served) + j3 (served) = 2 journalists
+    expect(res.body.groupedBy[BRAND_ID_2].totalJournalists).toBe(2);
+    // Cumulative: buffered = 0 + 2(served) = 2, served = 2
+    expect(res.body.groupedBy[BRAND_ID_2].byOutreachStatus.buffered).toBe(2);
+    expect(res.body.groupedBy[BRAND_ID_2].byOutreachStatus.served).toBe(2);
+  });
+
+  it("groupBy brandId with email-gateway enrichment", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Brand GW 1" });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "served",
+    });
+
+    mockEmailGatewayStats(0);
+    mockEmailGatewayStatsGrouped([
+      { key: BRAND_ID, contacted: 1, delivered: 1 },
+    ]);
+
+    const res = await request(app)
+      .get("/orgs/stats?groupBy=brandId")
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.groupedBy[BRAND_ID].totalJournalists).toBe(1);
+    expect(res.body.groupedBy[BRAND_ID].byOutreachStatus.contacted).toBe(1);
+    expect(res.body.groupedBy[BRAND_ID].byOutreachStatus.delivered).toBe(1);
+  });
 });
 
 describe("GET /stats (base headers only — no workflow context)", () => {
