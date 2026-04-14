@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and, inArray, arrayContains, count } from "drizzle-orm";
+import { eq, and, inArray, arrayContains, count, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { campaignJournalists } from "../db/schema.js";
 import { StatsQuerySchema } from "../schemas.js";
@@ -251,6 +251,49 @@ async function resolveFiltersAndQuery(
     }
 
     result.groupedBy = Object.fromEntries(slugMap);
+  } else if (groupBy === "brandId") {
+    // brand_ids is a UUID array — UNNEST to get per-brand rows
+    // A journalist with [brandA, brandB] will appear in both groups
+    const groupedRows = await db.execute<{ brand_id: string; status: string; cnt: number }>(
+      sql`
+        SELECT unnested_brand AS brand_id, status, COUNT(*)::int AS cnt
+        FROM ${table}, UNNEST(${table.brandIds}) AS unnested_brand
+        WHERE ${where ?? sql`TRUE`}
+        GROUP BY unnested_brand, status
+      `
+    );
+
+    const brandMap = new Map<string, GroupedEntry>();
+    for (const row of groupedRows) {
+      const brandId = row.brand_id;
+      let entry = brandMap.get(brandId);
+      if (!entry) {
+        entry = { totalJournalists: 0, byOutreachStatus: {} };
+        brandMap.set(brandId, entry);
+      }
+      entry.byOutreachStatus[row.status] = (entry.byOutreachStatus[row.status] ?? 0) + row.cnt;
+      entry.totalJournalists += row.cnt;
+    }
+
+    // Make brand DB counts cumulative
+    for (const entry of brandMap.values()) {
+      const cumulative = makeCumulativeDbCounts(entry.byOutreachStatus);
+      entry.byOutreachStatus = cumulative;
+    }
+
+    // Enrich grouped results with email-gateway stats
+    const gwGrouped = await fetchEmailGatewayStatsGrouped(gwParams, "brandId", passthroughHeaders);
+    if (gwGrouped) {
+      for (const group of gwGrouped.groups) {
+        const entry = brandMap.get(group.key);
+        if (entry && group.broadcast) {
+          enrichWithGatewayStats(entry.byOutreachStatus, group.broadcast);
+          if (group.broadcast.repliesDetail) entry.repliesDetail = group.broadcast.repliesDetail;
+        }
+      }
+    }
+
+    result.groupedBy = Object.fromEntries(brandMap);
   }
 
   return result;
