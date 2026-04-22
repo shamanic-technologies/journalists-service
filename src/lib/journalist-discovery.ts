@@ -230,15 +230,26 @@ export async function storeJournalists(
         const newLastName = (j.lastName.length > (existingById[0].lastName?.length ?? 0)) ? j.lastName : existingById[0].lastName;
         const newJournalistName = `${newFirstName} ${newLastName}`;
         if (newFirstName !== existingById[0].firstName || newLastName !== existingById[0].lastName) {
-          await db
-            .update(journalists)
-            .set({
-              firstName: newFirstName,
-              lastName: newLastName,
-              journalistName: newJournalistName,
-              updatedAt: new Date(),
-            })
-            .where(eq(journalists.id, journalistId));
+          try {
+            await db
+              .update(journalists)
+              .set({
+                firstName: newFirstName,
+                lastName: newLastName,
+                journalistName: newJournalistName,
+                updatedAt: new Date(),
+              })
+              .where(eq(journalists.id, journalistId));
+          } catch (err: unknown) {
+            // Unique constraint violation — enriched name collides with another journalist at same outlet
+            if (err instanceof Error && "code" in err && (err as { code: string }).code === "23505") {
+              console.log(
+                `[journalists-service] Name enrichment skipped — "${newJournalistName}" already exists at outlet ${outletId}`
+              );
+            } else {
+              throw err;
+            }
+          }
         }
       }
     }
@@ -264,18 +275,29 @@ export async function storeJournalists(
         const newLastName = (j.lastName.length > (existing[0].lastName?.length ?? 0)) ? j.lastName : existing[0].lastName;
         const newJournalistName = `${newFirstName} ${newLastName}`;
         if (newFirstName !== existing[0].firstName || newLastName !== existing[0].lastName) {
-          await db
-            .update(journalists)
-            .set({
-              firstName: newFirstName,
-              lastName: newLastName,
-              journalistName: newJournalistName,
-              updatedAt: new Date(),
-            })
-            .where(eq(journalists.id, journalistId));
+          try {
+            await db
+              .update(journalists)
+              .set({
+                firstName: newFirstName,
+                lastName: newLastName,
+                journalistName: newJournalistName,
+                updatedAt: new Date(),
+              })
+              .where(eq(journalists.id, journalistId));
+          } catch (err: unknown) {
+            if (err instanceof Error && "code" in err && (err as { code: string }).code === "23505") {
+              console.log(
+                `[journalists-service] Name enrichment skipped — "${newJournalistName}" already exists at outlet ${outletId}`
+              );
+            } else {
+              throw err;
+            }
+          }
         }
       } else {
-        const [created] = await db
+        // Upsert: concurrent refills for the same outlet can race here
+        const [upserted] = await db
           .insert(journalists)
           .values({
             outletId,
@@ -284,9 +306,17 @@ export async function storeJournalists(
             firstName: j.firstName,
             lastName: j.lastName,
           })
+          .onConflictDoUpdate({
+            target: [journalists.outletId, journalists.journalistName, journalists.entityType],
+            set: {
+              firstName: sql`CASE WHEN length(excluded.first_name) > length(COALESCE(${journalists.firstName}, '')) THEN excluded.first_name ELSE ${journalists.firstName} END`,
+              lastName: sql`CASE WHEN length(excluded.last_name) > length(COALESCE(${journalists.lastName}, '')) THEN excluded.last_name ELSE ${journalists.lastName} END`,
+              updatedAt: new Date(),
+            },
+          })
           .returning();
-        journalistId = created.id;
-        isNew = true;
+        journalistId = upserted.id;
+        isNew = !upserted.updatedAt || upserted.createdAt.getTime() === upserted.updatedAt.getTime();
       }
     }
 
