@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import healthRoutes from "../../src/routes/health.js";
 import internalRoutes from "../../src/routes/internal.js";
+import internalTransferBrandRoutes from "../../src/routes/internal-transfer-brand.js";
 import outletStatusRoutes from "../../src/routes/internal-outlet-status.js";
 import outletBlockedRoutes from "../../src/routes/outlet-blocked.js";
 import bufferNextRoutes from "../../src/routes/buffer-next.js";
@@ -22,6 +23,7 @@ export function createTestApp() {
   app.use(publicStatsRouter);
   // Internal — API key only
   app.use(internalRoutes);
+  app.use(internalTransferBrandRoutes);
   // Org-scoped — API key + x-org-id required
   const orgRouter = express.Router();
   orgRouter.use(requireOrgId);

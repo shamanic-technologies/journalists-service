@@ -8,6 +8,7 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { db } from "./db/index.js";
 import healthRoutes from "./routes/health.js";
 import internalRoutes from "./routes/internal.js";
+import internalTransferBrandRoutes from "./routes/internal-transfer-brand.js";
 import outletStatusRoutes from "./routes/internal-outlet-status.js";
 import bufferNextRoutes from "./routes/buffer-next.js";
 import discoverRoutes from "./routes/discover.js";
@@ -52,6 +53,7 @@ app.use(publicStatsRouter);
 
 // Internal — API key only, service-to-service
 app.use(internalRoutes);
+app.use(internalTransferBrandRoutes);
 
 // Org-scoped — API key + x-org-id required
 const orgRouter = express.Router();
