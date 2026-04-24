@@ -190,9 +190,10 @@ export const StatsGroupByEnum = z
     "featureDynastySlug",
     "workflowDynastySlug",
     "brandId",
+    "campaignId",
   ])
   .openapi("StatsGroupBy", {
-    description: "Dimension to group results by. Dynasty variants aggregate all versioned slugs under the dynasty slug. brandId groups by individual brand UUID (journalists with multiple brands appear in each group).",
+    description: "Dimension to group results by. Dynasty variants aggregate all versioned slugs under the dynasty slug. brandId groups by individual brand UUID (journalists with multiple brands appear in each group). campaignId groups by campaign UUID.",
   });
 
 export const StatsQuerySchema = z

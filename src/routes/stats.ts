@@ -251,6 +251,48 @@ async function resolveFiltersAndQuery(
     }
 
     result.groupedBy = Object.fromEntries(slugMap);
+  } else if (groupBy === "campaignId") {
+    const groupedRows = await db
+      .select({
+        slug: table.campaignId,
+        status: table.status,
+        count: count(),
+      })
+      .from(table)
+      .where(where)
+      .groupBy(table.campaignId, table.status);
+
+    const campaignMap = new Map<string, GroupedEntry>();
+    for (const row of groupedRows) {
+      const campaignId = row.slug ?? "(none)";
+      let entry = campaignMap.get(campaignId);
+      if (!entry) {
+        entry = { totalJournalists: 0, byOutreachStatus: {} };
+        campaignMap.set(campaignId, entry);
+      }
+      entry.byOutreachStatus[row.status] = (entry.byOutreachStatus[row.status] ?? 0) + row.count;
+      entry.totalJournalists += row.count;
+    }
+
+    // Make campaign DB counts cumulative
+    for (const entry of campaignMap.values()) {
+      const cumulative = makeCumulativeDbCounts(entry.byOutreachStatus);
+      entry.byOutreachStatus = cumulative;
+    }
+
+    // Enrich grouped results with email-gateway stats
+    const gwGrouped = await fetchEmailGatewayStatsGrouped(gwParams, "campaignId", passthroughHeaders);
+    if (gwGrouped) {
+      for (const group of gwGrouped.groups) {
+        const entry = campaignMap.get(group.key);
+        if (entry && group.broadcast) {
+          enrichWithGatewayStats(entry.byOutreachStatus, group.broadcast);
+          if (group.broadcast.repliesDetail) entry.repliesDetail = group.broadcast.repliesDetail;
+        }
+      }
+    }
+
+    result.groupedBy = Object.fromEntries(campaignMap);
   } else if (groupBy === "brandId") {
     // brand_ids is a UUID array — UNNEST to get per-brand rows
     // A journalist with [brandA, brandB] will appear in both groups
