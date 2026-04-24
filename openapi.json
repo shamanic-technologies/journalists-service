@@ -477,7 +477,8 @@
           "workflowSlug",
           "featureDynastySlug",
           "workflowDynastySlug",
-          "brandId"
+          "brandId",
+          "campaignId"
         ],
         "description": "Dimension to group results by. When set, the response includes a groupedBy map keyed by slug."
       },
