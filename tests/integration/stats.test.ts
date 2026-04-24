@@ -752,6 +752,66 @@ describe("GET /stats", () => {
     expect(res.body.groupedBy[BRAND_ID].byOutreachStatus.contacted).toBe(1);
     expect(res.body.groupedBy[BRAND_ID].byOutreachStatus.delivered).toBe(1);
   });
+
+  it("groupBy campaignId — aggregates per campaign", async () => {
+    const CAMPAIGN_ID_2 = "55555555-5555-5555-5555-666666666666";
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Campaign Group 1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Campaign Group 2" });
+    const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Campaign Group 3" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "served",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "buffered",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j3.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID_2,
+      outletId: OUTLET_ID, status: "served",
+    });
+
+    mockEmailGatewayStats(0);
+    mockEmailGatewayStatsGrouped([]);
+
+    const res = await request(app)
+      .get("/orgs/stats?groupBy=campaignId")
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    // CAMPAIGN_ID: j1 (served) + j2 (buffered) = 2 journalists
+    expect(res.body.groupedBy[CAMPAIGN_ID].totalJournalists).toBe(2);
+    // Cumulative: buffered = 1 + 1(served) = 2, served = 1
+    expect(res.body.groupedBy[CAMPAIGN_ID].byOutreachStatus.buffered).toBe(2);
+    expect(res.body.groupedBy[CAMPAIGN_ID].byOutreachStatus.served).toBe(1);
+
+    // CAMPAIGN_ID_2: j3 (served) = 1 journalist
+    expect(res.body.groupedBy[CAMPAIGN_ID_2].totalJournalists).toBe(1);
+    expect(res.body.groupedBy[CAMPAIGN_ID_2].byOutreachStatus.served).toBe(1);
+  });
+
+  it("groupBy campaignId with email-gateway enrichment", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Campaign GW 1" });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "served",
+    });
+
+    mockEmailGatewayStats(0);
+    mockEmailGatewayStatsGrouped([
+      { key: CAMPAIGN_ID, contacted: 1, delivered: 1 },
+    ]);
+
+    const res = await request(app)
+      .get("/orgs/stats?groupBy=campaignId")
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.groupedBy[CAMPAIGN_ID].totalJournalists).toBe(1);
+    expect(res.body.groupedBy[CAMPAIGN_ID].byOutreachStatus.contacted).toBe(1);
+    expect(res.body.groupedBy[CAMPAIGN_ID].byOutreachStatus.delivered).toBe(1);
+  });
 });
 
 describe("GET /stats (base headers only — no workflow context)", () => {
