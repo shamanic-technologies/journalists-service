@@ -499,33 +499,34 @@ async function resolveAndCheckEmail(
     return null;
   }
 
-  // Email-gateway: check global bounced/unsubscribed
-  // Pass brandIds[0] as brandId for scoping — at least one brand is always present
-  const gatewayResults = await checkEmailStatuses(
-    [{ email }],
-    { brandId: brandIds[0] },
-    ctx
-  );
+  // Email-gateway: check global bounced/unsubscribed + brand-scope contacted for ALL brands
+  for (const brandId of brandIds) {
+    const gatewayResults = await checkEmailStatuses(
+      [{ email }],
+      { brandId },
+      ctx
+    );
 
-  if (gatewayResults.length > 0) {
-    const result = gatewayResults[0];
-    if (result.broadcast?.global?.email?.bounced) {
-      console.log(
-        `[journalists-service] Email ${email} globally bounced`
-      );
-      return null;
-    }
-    if (result.broadcast?.global?.email?.unsubscribed) {
-      console.log(
-        `[journalists-service] Email ${email} globally unsubscribed`
-      );
-      return null;
-    }
-    if (result.broadcast?.brand?.contacted) {
-      console.log(
-        `[journalists-service] Email ${email} already contacted at brand scope`
-      );
-      return null;
+    if (gatewayResults.length > 0) {
+      const result = gatewayResults[0];
+      if (result.broadcast?.global?.email?.bounced) {
+        console.log(
+          `[journalists-service] Email ${email} globally bounced`
+        );
+        return null;
+      }
+      if (result.broadcast?.global?.email?.unsubscribed) {
+        console.log(
+          `[journalists-service] Email ${email} globally unsubscribed`
+        );
+        return null;
+      }
+      if (result.broadcast?.brand?.contacted) {
+        console.log(
+          `[journalists-service] Email ${email} already contacted at brand scope (brand ${brandId})`
+        );
+        return null;
+      }
     }
   }
 
