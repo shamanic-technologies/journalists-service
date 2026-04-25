@@ -7,9 +7,10 @@ import { eq, and, sql } from "drizzle-orm";
 const router = Router();
 
 const TransferBrandBodySchema = z.object({
-  brandId: z.string().uuid(),
+  sourceBrandId: z.string().uuid(),
   sourceOrgId: z.string().uuid(),
   targetOrgId: z.string().uuid(),
+  targetBrandId: z.string().uuid().optional(),
 });
 
 router.post("/internal/transfer-brand", async (req, res) => {
@@ -19,15 +20,16 @@ router.post("/internal/transfer-brand", async (req, res) => {
     return;
   }
 
-  const { brandId, sourceOrgId, targetOrgId } = parsed.data;
+  const { sourceBrandId, sourceOrgId, targetOrgId, targetBrandId } = parsed.data;
 
+  // Step 1: Move solo-brand rows from sourceOrg to targetOrg
   const cjRows = await db
     .update(campaignJournalists)
     .set({ orgId: targetOrgId })
     .where(
       and(
         eq(campaignJournalists.orgId, sourceOrgId),
-        sql`${campaignJournalists.brandIds} = ARRAY[${brandId}]::uuid[]`
+        sql`${campaignJournalists.brandIds} = ARRAY[${sourceBrandId}]::uuid[]`
       )
     )
     .returning({ id: campaignJournalists.id });
@@ -38,10 +40,24 @@ router.post("/internal/transfer-brand", async (req, res) => {
     .where(
       and(
         eq(discoveryCache.orgId, sourceOrgId),
-        sql`${discoveryCache.brandIds} = ARRAY[${brandId}]::uuid[]`
+        sql`${discoveryCache.brandIds} = ARRAY[${sourceBrandId}]::uuid[]`
       )
     )
     .returning({ id: discoveryCache.id });
+
+  // Step 2: When targetBrandId is present, rewrite all remaining references
+  // to sourceBrandId (no org filter — catches all orgs)
+  if (targetBrandId) {
+    await db
+      .update(campaignJournalists)
+      .set({ brandIds: [targetBrandId] })
+      .where(sql`${campaignJournalists.brandIds} = ARRAY[${sourceBrandId}]::uuid[]`);
+
+    await db
+      .update(discoveryCache)
+      .set({ brandIds: [targetBrandId] })
+      .where(sql`${discoveryCache.brandIds} = ARRAY[${sourceBrandId}]::uuid[]`);
+  }
 
   res.json({
     updatedTables: [
