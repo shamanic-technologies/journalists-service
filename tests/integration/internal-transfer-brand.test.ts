@@ -160,6 +160,43 @@ describe("POST /internal/transfer-brand", () => {
     expect(cjThird[0].brandIds).toEqual([TARGET_BRAND_ID]);
   });
 
+  it("handles discovery_cache conflict when target org already has the outlet", async () => {
+    // Source org has discovery for OUTLET_ID
+    await db.insert(discoveryCache).values({
+      orgId: SOURCE_ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      discoveredAt: new Date(),
+    });
+    // Target org already has discovery for the same OUTLET_ID
+    await db.insert(discoveryCache).values({
+      orgId: TARGET_ORG_ID,
+      brandIds: [OTHER_BRAND_ID],
+      campaignId: CAMPAIGN_ID_2,
+      outletId: OUTLET_ID,
+      discoveredAt: new Date(),
+    });
+
+    const res = await request(app)
+      .post("/internal/transfer-brand")
+      .set({ "x-api-key": AUTH_HEADERS["x-api-key"] })
+      .send({ sourceBrandId: BRAND_ID, sourceOrgId: SOURCE_ORG_ID, targetOrgId: TARGET_ORG_ID });
+
+    expect(res.status).toBe(200);
+    // Source row was deleted (conflict), not moved — count is 0
+    expect(res.body.updatedTables[1]).toEqual({ tableName: "discovery_cache", count: 0 });
+
+    // Target org still has exactly one row (its original)
+    const dcRows = await db.select().from(discoveryCache).where(eq(discoveryCache.orgId, TARGET_ORG_ID));
+    expect(dcRows).toHaveLength(1);
+    expect(dcRows[0].brandIds).toEqual([OTHER_BRAND_ID]);
+
+    // Source org row is gone
+    const srcRows = await db.select().from(discoveryCache).where(eq(discoveryCache.orgId, SOURCE_ORG_ID));
+    expect(srcRows).toHaveLength(0);
+  });
+
   it("skips co-branding rows (multiple brand IDs)", async () => {
     const j = await insertTestJournalist({ outletId: OUTLET_ID });
     await insertTestCampaignJournalist({
