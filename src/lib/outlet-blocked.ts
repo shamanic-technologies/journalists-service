@@ -77,31 +77,33 @@ export async function checkOutletBlocked(
     const contactedCutoff = new Date(Date.now() - CONTACTED_COOLDOWN_MS);
     const replyCutoff = new Date(Date.now() - REPLY_COOLDOWN_MS);
 
-    const gatewayResults = await checkEmailStatuses(emailsToCheck, { brandId: brandIds[0] }, ctx);
+    for (const brandId of brandIds) {
+      const gatewayResults = await checkEmailStatuses(emailsToCheck, { brandId }, ctx);
 
-    for (const result of gatewayResults) {
-      const brandScope = result.broadcast?.brand;
-      if (!brandScope) continue;
+      for (const result of gatewayResults) {
+        const brandScope = result.broadcast?.brand;
+        if (!brandScope) continue;
 
-      // Contacted within 30 days?
-      if (brandScope.contacted && brandScope.lastDeliveredAt) {
-        const deliveredAt = new Date(brandScope.lastDeliveredAt);
-        if (deliveredAt >= contactedCutoff) {
-          return {
-            blocked: true,
-            reason: "journalist already contacted at this outlet for this brand within 30 days",
-          };
+        // Contacted within 30 days?
+        if (brandScope.contacted && brandScope.lastDeliveredAt) {
+          const deliveredAt = new Date(brandScope.lastDeliveredAt);
+          if (deliveredAt >= contactedCutoff) {
+            return {
+              blocked: true,
+              reason: `journalist already contacted at this outlet for brand ${brandId} within 30 days`,
+            };
+          }
         }
-      }
 
-      // Replied (positive or negative) within 6 months?
-      if (brandScope.replied && brandScope.replyClassification && brandScope.lastDeliveredAt) {
-        const deliveredAt = new Date(brandScope.lastDeliveredAt);
-        if (deliveredAt >= replyCutoff) {
-          return {
-            blocked: true,
-            reason: `journalist replied (${brandScope.replyClassification}) at this outlet for this brand within 6 months`,
-          };
+        // Replied (positive or negative) within 6 months?
+        if (brandScope.replied && brandScope.replyClassification && brandScope.lastDeliveredAt) {
+          const deliveredAt = new Date(brandScope.lastDeliveredAt);
+          if (deliveredAt >= replyCutoff) {
+            return {
+              blocked: true,
+              reason: `journalist replied (${brandScope.replyClassification}) at this outlet for brand ${brandId} within 6 months`,
+            };
+          }
         }
       }
     }
