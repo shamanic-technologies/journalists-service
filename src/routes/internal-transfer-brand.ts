@@ -22,14 +22,10 @@ router.post("/internal/transfer-brand", async (req, res) => {
 
   const { sourceBrandId, sourceOrgId, targetOrgId, targetBrandId } = parsed.data;
 
-  const cjSet: { orgId: string; brandIds?: string[] } = { orgId: targetOrgId };
-  if (targetBrandId) {
-    cjSet.brandIds = [targetBrandId];
-  }
-
+  // Step 1: Move solo-brand rows from sourceOrg to targetOrg
   const cjRows = await db
     .update(campaignJournalists)
-    .set(cjSet)
+    .set({ orgId: targetOrgId })
     .where(
       and(
         eq(campaignJournalists.orgId, sourceOrgId),
@@ -38,14 +34,9 @@ router.post("/internal/transfer-brand", async (req, res) => {
     )
     .returning({ id: campaignJournalists.id });
 
-  const dcSet: { orgId: string; brandIds?: string[] } = { orgId: targetOrgId };
-  if (targetBrandId) {
-    dcSet.brandIds = [targetBrandId];
-  }
-
   const dcRows = await db
     .update(discoveryCache)
-    .set(dcSet)
+    .set({ orgId: targetOrgId })
     .where(
       and(
         eq(discoveryCache.orgId, sourceOrgId),
@@ -53,6 +44,20 @@ router.post("/internal/transfer-brand", async (req, res) => {
       )
     )
     .returning({ id: discoveryCache.id });
+
+  // Step 2: When targetBrandId is present, rewrite all remaining references
+  // to sourceBrandId (no org filter — catches all orgs)
+  if (targetBrandId) {
+    await db
+      .update(campaignJournalists)
+      .set({ brandIds: [targetBrandId] })
+      .where(sql`${campaignJournalists.brandIds} = ARRAY[${sourceBrandId}]::uuid[]`);
+
+    await db
+      .update(discoveryCache)
+      .set({ brandIds: [targetBrandId] })
+      .where(sql`${discoveryCache.brandIds} = ARRAY[${sourceBrandId}]::uuid[]`);
+  }
 
   res.json({
     updatedTables: [
