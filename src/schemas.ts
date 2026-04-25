@@ -432,9 +432,10 @@ registry.registerPath({ method: "get", path: "/internal/journalists/by-ids", sum
 
 export const TransferBrandRequestSchema = z
   .object({
-    brandId: z.string().uuid(),
+    sourceBrandId: z.string().uuid(),
     sourceOrgId: z.string().uuid(),
     targetOrgId: z.string().uuid(),
+    targetBrandId: z.string().uuid().optional(),
   })
   .openapi("TransferBrandRequest");
 
@@ -452,4 +453,4 @@ export const TransferBrandResponseSchema = z
   .openapi("TransferBrandResponse");
 
 // Internal — Transfer brand (solo-brand only)
-registry.registerPath({ method: "post", path: "/internal/transfer-brand", summary: "Transfer a solo-brand from one org to another. Updates org_id on all rows referencing only this brand. Skips co-branding rows (multiple brand IDs). Idempotent.", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: TransferBrandRequestSchema } } } }, responses: { 200: { description: "Transfer results with per-table update counts", content: { "application/json": { schema: TransferBrandResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+registry.registerPath({ method: "post", path: "/internal/transfer-brand", summary: "Transfer a solo-brand from one org to another. Updates org_id (and optionally brand_ids when targetBrandId is provided) on all rows referencing only sourceBrandId. Skips co-branding rows (multiple brand IDs). Idempotent.", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: TransferBrandRequestSchema } } } }, responses: { 200: { description: "Transfer results with per-table update counts", content: { "application/json": { schema: TransferBrandResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
