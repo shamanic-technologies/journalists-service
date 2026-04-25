@@ -625,6 +625,66 @@ describe("GET /orgs/outlets/blocked", () => {
     expect(res.body.blocked).toBe(false);
   });
 
+  // ── Regression: multi-brand gateway check ───────────────────────────
+
+  it("returns blocked=true when contacted for second brand in multi-brand campaign", async () => {
+    const BRAND_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+
+    const sarah = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Sarah Johnson",
+      firstName: "Sarah",
+      lastName: "Johnson",
+    });
+
+    // Contacted for brand B at this outlet
+    await insertTestCampaignJournalist({
+      journalistId: sarah.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_B],
+      campaignId: OTHER_CAMPAIGN,
+      outletId: OUTLET_ID,
+      relevanceScore: "90.00",
+      status: "contacted",
+      email: "sarah@techcrunch.com",
+    });
+
+    // Buffered for [BRAND_A, BRAND_B] in current campaign
+    await insertTestCampaignJournalist({
+      journalistId: sarah.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_A, BRAND_B],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "92.00",
+      status: "buffered",
+    });
+
+    // email-gateway: first call (brand A) returns not contacted,
+    // second call (brand B) returns contacted within 30 days
+    mockedCheckEmailStatuses
+      .mockResolvedValueOnce([
+        makeGatewayResult("sarah@techcrunch.com", { contacted: false }),
+      ])
+      .mockResolvedValueOnce([
+        makeGatewayResult("sarah@techcrunch.com", {
+          contacted: true,
+          delivered: true,
+          lastDeliveredAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+        }),
+      ]);
+
+    const res = await request(app)
+      .get(`/orgs/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set({ ...BLOCKED_HEADERS, "x-brand-id": `${BRAND_A},${BRAND_B}` });
+
+    expect(res.status).toBe(200);
+    expect(res.body.blocked).toBe(true);
+    expect(res.body.reason).toContain("already contacted");
+    // Verify checkEmailStatuses was called for both brands
+    expect(mockedCheckEmailStatuses).toHaveBeenCalledTimes(2);
+  });
+
   it("returns blocked=false when journalist has Apollo email cached", async () => {
     const withEmail = await insertTestJournalist({
       outletId: OUTLET_ID,
