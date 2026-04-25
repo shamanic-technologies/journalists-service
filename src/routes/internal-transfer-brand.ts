@@ -34,6 +34,19 @@ router.post("/internal/transfer-brand", async (req, res) => {
     )
     .returning({ id: campaignJournalists.id });
 
+  // discovery_cache has a unique index on (org_id, outlet_id).
+  // Delete source rows where the target org already has a row for that outlet,
+  // then move the remaining non-conflicting rows.
+  await db.execute(sql`
+    DELETE FROM ${discoveryCache}
+    WHERE ${discoveryCache.orgId} = ${sourceOrgId}
+      AND ${discoveryCache.brandIds} = ARRAY[${sourceBrandId}]::uuid[]
+      AND ${discoveryCache.outletId} IN (
+        SELECT ${discoveryCache.outletId} FROM ${discoveryCache}
+        WHERE ${discoveryCache.orgId} = ${targetOrgId}
+      )
+  `);
+
   const dcRows = await db
     .update(discoveryCache)
     .set({ orgId: targetOrgId })
