@@ -90,19 +90,33 @@ export interface EmailGatewayRepliesDetail {
   outOfOffice: number;
 }
 
-export interface EmailGatewayBroadcastStats {
-  emailsContacted: number;
-  emailsSent: number;
-  emailsDelivered: number;
-  emailsOpened: number;
-  emailsClicked: number;
-  emailsBounced: number;
+export interface EmailGatewayRecipientStats {
+  contacted: number;
+  sent: number;
+  delivered: number;
+  opened: number;
+  bounced: number;
+  clicked: number;
+  unsubscribed: number;
   repliesPositive: number;
   repliesNegative: number;
   repliesNeutral: number;
   repliesAutoReply: number;
   repliesDetail: EmailGatewayRepliesDetail;
-  recipients: number;
+}
+
+export interface EmailGatewayEmailStats {
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  unsubscribed: number;
+}
+
+export interface EmailGatewayBroadcastStats {
+  recipientStats: EmailGatewayRecipientStats;
+  emailStats: EmailGatewayEmailStats;
 }
 
 export interface EmailGatewayStatsParams {
