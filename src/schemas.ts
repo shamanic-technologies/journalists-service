@@ -187,13 +187,11 @@ export const StatsGroupByEnum = z
   .enum([
     "featureSlug",
     "workflowSlug",
-    "featureDynastySlug",
-    "workflowDynastySlug",
     "brandId",
     "campaignId",
   ])
   .openapi("StatsGroupBy", {
-    description: "Dimension to group results by. Dynasty variants aggregate all versioned slugs under the dynasty slug. brandId groups by individual brand UUID (journalists with multiple brands appear in each group). campaignId groups by campaign UUID.",
+    description: "Dimension to group results by. brandId groups by individual brand UUID (journalists with multiple brands appear in each group). campaignId groups by campaign UUID.",
   });
 
 export const StatsQuerySchema = z
@@ -214,8 +212,6 @@ export const StatsQuerySchema = z
       .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean))
       .optional()
       .openapi({ description: "Comma-separated list of workflow slugs to filter by. Use with groupBy=workflowSlug for per-workflow stats.", example: "pr-pitch,cold-email,warm-intro" }),
-    featureDynastySlug: z.string().optional().openapi({ description: "Filter by feature dynasty slug — resolves to all versioned slugs in the dynasty" }),
-    workflowDynastySlug: z.string().optional().openapi({ description: "Filter by workflow dynasty slug — resolves to all versioned slugs in the dynasty" }),
     groupBy: StatsGroupByEnum.optional().openapi({ description: "Dimension to group results by. When set, the response includes a groupedBy map keyed by slug." }),
   })
   .openapi("StatsQuery");
@@ -250,7 +246,7 @@ export const StatsResponseSchema = z
     totalJournalists: z.number().openapi({ description: "Total journalists found matching the filters" }),
     byOutreachStatus: OutreachStatusCountSchema,
     repliesDetail: RepliesDetailSchema.optional().openapi({ description: "Granular reply breakdown from email-gateway. Present when reply data exists." }),
-    groupedBy: z.record(z.string(), GroupedEntrySchema).optional().openapi({ description: "Per-slug breakdown when groupBy is specified. Keys are slug values (or dynasty slugs for dynasty grouping)." }),
+    groupedBy: z.record(z.string(), GroupedEntrySchema).optional().openapi({ description: "Per-slug breakdown when groupBy is specified. Keys are slug values." }),
   })
   .openapi("StatsResponse");
 
@@ -261,7 +257,6 @@ export const JournalistsListQuerySchema = z
     brandId: z.string().uuid().openapi({ description: "Brand ID (required). Returns journalists whose brand_ids array contains this brand." }),
     campaignId: z.string().uuid().optional().openapi({ description: "Optionally narrow to a single campaign" }),
     featureSlugs: z.string().optional().openapi({ description: "Comma-separated feature slugs to filter campaign rows" }).transform((val) => val ? val.split(",").map((s) => s.trim()).filter(Boolean) : undefined),
-    featureDynastySlug: z.string().optional().openapi({ description: "Filter by feature dynasty slug — resolves to all versioned slugs in the dynasty via features-service. Takes priority over featureSlugs." }),
     workflowSlug: z.string().optional().openapi({ description: "Optionally filter campaign rows by workflow slug" }),
   })
   .openapi("JournalistsListQuery");
@@ -405,10 +400,10 @@ registry.registerPath({ method: "post", path: "/orgs/buffer/next", summary: "Pul
 registry.registerPath({ method: "post", path: "/orgs/discover", summary: "Discover new journalists for a campaign+outlet. Creates a run, scrapes articles, scores journalists via LLM, and stores them as buffered. The x-brand-id header supports CSV format (e.g. uuid1,uuid2).", security: [{ [apiKeyAuth.name]: [] }], request: { body: { content: { "application/json": { schema: DiscoverRequestSchema } } } }, responses: { 200: { description: "Discovery results with run ID and count of journalists found", content: { "application/json": { schema: DiscoverResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Campaign Outlet Journalists
-registry.registerPath({ method: "get", path: "/orgs/campaign-outlet-journalists", summary: "Get journalists associated with a campaign or brand, optionally filtered by outlet, run, and/or feature dynasty slug. Provide campaign_id, brand_id, or both.", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ campaign_id: z.string().uuid().optional().openapi({ description: "Filter by campaign. At least one of campaign_id or brand_id is required." }), brand_id: z.string().uuid().optional().openapi({ description: "Filter by brand (returns journalists whose brand_ids array contains this brand). At least one of campaign_id or brand_id is required." }), outlet_id: z.string().uuid().optional(), run_id: z.string().uuid().optional().openapi({ description: "Filter by the run that created the journalist entries." }), feature_dynasty_slug: z.string().optional().openapi({ description: "Filter by feature dynasty slug — resolves to all versioned slugs in the dynasty via features-service." }) }) }, responses: { 200: { description: "Campaign journalists with journalist details. The brandIds field is a UUID array.", content: { "application/json": { schema: CampaignOutletJournalistsResponseSchema } } }, 400: { description: "Validation error — at least one of campaign_id or brand_id is required", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+registry.registerPath({ method: "get", path: "/orgs/campaign-outlet-journalists", summary: "Get journalists associated with a campaign or brand, optionally filtered by outlet, run, and/or feature slug. Provide campaign_id, brand_id, or both.", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ campaign_id: z.string().uuid().optional().openapi({ description: "Filter by campaign. At least one of campaign_id or brand_id is required." }), brand_id: z.string().uuid().optional().openapi({ description: "Filter by brand (returns journalists whose brand_ids array contains this brand). At least one of campaign_id or brand_id is required." }), outlet_id: z.string().uuid().optional(), run_id: z.string().uuid().optional().openapi({ description: "Filter by the run that created the journalist entries." }), feature_slug: z.string().optional().openapi({ description: "Filter by feature slug" }) }) }, responses: { 200: { description: "Campaign journalists with journalist details. The brandIds field is a UUID array.", content: { "application/json": { schema: CampaignOutletJournalistsResponseSchema } } }, 400: { description: "Validation error — at least one of campaign_id or brand_id is required", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Stats (org-scoped — requires x-org-id)
-registry.registerPath({ method: "get", path: "/orgs/stats", summary: "Get journalist stats with optional dynasty-aware filtering and grouping", security: [{ [apiKeyAuth.name]: [] }], request: { query: StatsQuerySchema }, responses: { 200: { description: "Journalist stats", content: { "application/json": { schema: StatsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+registry.registerPath({ method: "get", path: "/orgs/stats", summary: "Get journalist stats with optional filtering and grouping", security: [{ [apiKeyAuth.name]: [] }], request: { query: StatsQuerySchema }, responses: { 200: { description: "Journalist stats", content: { "application/json": { schema: StatsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Stats (protected public — API key only)
 registry.registerPath({ method: "get", path: "/public/stats", summary: "Get journalist stats (public). Same filters as /stats but does not require identity headers.", security: [{ [apiKeyAuth.name]: [] }], request: { query: StatsQuerySchema }, responses: { 200: { description: "Journalist stats", content: { "application/json": { schema: StatsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
@@ -417,7 +412,7 @@ registry.registerPath({ method: "get", path: "/public/stats", summary: "Get jour
 registry.registerPath({ method: "get", path: "/orgs/journalists/stats/costs", summary: "Get cost stats for journalist discovery runs. Returns aggregated costs from runs-service, distributed per journalist. Requires x-org-id to scope costs to the requesting org.", security: [{ [apiKeyAuth.name]: [] }], request: { query: CostStatsQuerySchema }, responses: { 200: { description: "Cost stats (flat or grouped by journalistId)", content: { "application/json": { schema: CostStatsResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Journalists List
-registry.registerPath({ method: "get", path: "/orgs/journalists/list", summary: "List journalists grouped by identity with per-campaign details. Each journalist has global data (email, cost, emailStatus) and a campaigns[] array with per-campaign entries. Filter by featureSlugs (CSV), featureDynastySlug (resolves to versioned slugs), and/or workflowSlug.", security: [{ [apiKeyAuth.name]: [] }], request: { query: JournalistsListQuerySchema }, responses: { 200: { description: "Grouped journalist list with per-campaign entries", content: { "application/json": { schema: JournalistsListResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
+registry.registerPath({ method: "get", path: "/orgs/journalists/list", summary: "List journalists grouped by identity with per-campaign details. Each journalist has global data (email, cost, emailStatus) and a campaigns[] array with per-campaign entries. Filter by featureSlugs (CSV) and/or workflowSlug.", security: [{ [apiKeyAuth.name]: [] }], request: { query: JournalistsListQuerySchema }, responses: { 200: { description: "Grouped journalist list with per-campaign entries", content: { "application/json": { schema: JournalistsListResponseSchema } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
 
 // Org-scoped — Outlet blocked check
 registry.registerPath({ method: "get", path: "/orgs/outlets/blocked", summary: "Check if an outlet is blocked for a brand+org. Uses full dedup logic: checks lead-service for prior contacts, reply classification, 30-day no-reply cooldown, and 12-month expiry.", security: [{ [apiKeyAuth.name]: [] }], request: { query: z.object({ org_id: z.string().uuid().openapi({ description: "Organization ID" }), brand_ids: z.string().openapi({ description: "Comma-separated brand UUIDs", example: "uuid1,uuid2" }), outlet_id: z.string().uuid().openapi({ description: "Outlet ID to check" }) }) }, responses: { 200: { description: "Outlet blocked status", content: { "application/json": { schema: z.object({ blocked: z.boolean().openapi({ description: "Whether this outlet is blocked for the given brand+org" }), reason: z.string().optional().openapi({ description: "Human-readable reason when blocked" }) }).openapi("OutletBlockedResponse") } } }, 400: { description: "Validation error", content: { "application/json": { schema: ErrorResponseSchema } } }, 502: { description: "Upstream service error", content: { "application/json": { schema: ErrorResponseSchema } } } } });
