@@ -83,6 +83,8 @@ export const campaignJournalists = pgTable(
     whyNotRelevant: text("why_not_relevant").notNull(),
     articleUrls: jsonb("article_urls").$type<string[]>(),
     status: bufferStatusEnum("status").notNull().default("buffered"),
+    statusReason: text("status_reason"),
+    statusDetail: text("status_detail"),
     email: text("email"),
     apolloPersonId: text("apollo_person_id"),
     runId: uuid("run_id"),

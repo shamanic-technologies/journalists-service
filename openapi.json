@@ -298,6 +298,16 @@
           "status": {
             "$ref": "#/components/schemas/StatusBooleans"
           },
+          "statusReason": {
+            "type": "string",
+            "nullable": true,
+            "description": "Machine-readable skip reason slug (e.g. 'no-email', 'already-contacted'). Null if not skipped."
+          },
+          "statusDetail": {
+            "type": "string",
+            "nullable": true,
+            "description": "Human-readable debug detail with IDs and names. Null if not skipped."
+          },
           "runId": {
             "type": "string",
             "nullable": true,
@@ -338,6 +348,8 @@
           "whyNotRelevant",
           "articleUrls",
           "status",
+          "statusReason",
+          "statusDetail",
           "runId",
           "createdAt",
           "journalistName",
@@ -625,6 +637,16 @@
             "type": "string",
             "nullable": true
           },
+          "statusReason": {
+            "type": "string",
+            "nullable": true,
+            "description": "Machine-readable skip reason slug (e.g. 'no-email', 'already-contacted'). Null if not skipped."
+          },
+          "statusDetail": {
+            "type": "string",
+            "nullable": true,
+            "description": "Human-readable debug detail with IDs and names. Null if not skipped."
+          },
           "runId": {
             "type": "string",
             "nullable": true,
@@ -645,6 +667,8 @@
           "articleUrls",
           "email",
           "apolloPersonId",
+          "statusReason",
+          "statusDetail",
           "runId",
           "createdAt"
         ]
