@@ -208,6 +208,27 @@ describe("GET /stats", () => {
     expect(res.body.byOutreachStatus.contacted).toBeUndefined();
   });
 
+  it("forwards brandId (not brandIds) to email-gateway", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "BrandParam" });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "served",
+    });
+
+    mockEmailGatewayStats(1);
+
+    await request(app)
+      .get(`/orgs/stats?brandId=${BRAND_ID}`)
+      .set(AUTH_HEADERS);
+
+    // Verify the fetch call to email-gateway uses "brandId" (singular), not "brandIds"
+    const gwCall = mockFetch.mock.calls[0];
+    const gwUrl = new URL(gwCall[0]);
+    expect(gwUrl.searchParams.has("brandId")).toBe(true);
+    expect(gwUrl.searchParams.get("brandId")).toBe(BRAND_ID);
+    expect(gwUrl.searchParams.has("brandIds")).toBe(false);
+  });
+
   it("filters by brandId (matches rows containing that brand in brand_ids array)", async () => {
     const BRAND_ID_2 = "44444444-4444-4444-4444-555555555555";
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Brand Filter 1" });
