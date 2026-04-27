@@ -141,7 +141,7 @@ export async function fetchEmailGatewayStats(
     const qs = new URLSearchParams();
     qs.set("type", "broadcast");
     if (params.campaignId) qs.set("campaignId", params.campaignId);
-    if (params.brandId) qs.set("brandIds", params.brandId);
+    if (params.brandId) qs.set("brandId", params.brandId);
     if (params.featureSlugs && params.featureSlugs.length > 0) qs.set("featureSlugs", params.featureSlugs.join(","));
     else if (params.featureSlug) qs.set("featureSlugs", params.featureSlug);
     if (params.workflowSlugs && params.workflowSlugs.length > 0) qs.set("workflowSlugs", params.workflowSlugs.join(","));
@@ -186,7 +186,7 @@ export async function fetchEmailGatewayStatsGrouped(
     const qs = new URLSearchParams();
     qs.set("type", "broadcast");
     if (params.campaignId) qs.set("campaignId", params.campaignId);
-    if (params.brandId) qs.set("brandIds", params.brandId);
+    if (params.brandId) qs.set("brandId", params.brandId);
     if (params.featureSlugs && params.featureSlugs.length > 0) qs.set("featureSlugs", params.featureSlugs.join(","));
     else if (params.featureSlug) qs.set("featureSlugs", params.featureSlug);
     if (params.workflowSlugs && params.workflowSlugs.length > 0) qs.set("workflowSlugs", params.workflowSlugs.join(","));
