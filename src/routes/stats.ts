@@ -4,13 +4,6 @@ import { db } from "../db/index.js";
 import { campaignJournalists } from "../db/schema.js";
 import { StatsQuerySchema } from "../schemas.js";
 import {
-  resolveFeatureDynastySlugs,
-  resolveWorkflowDynastySlugs,
-  fetchFeatureDynasties,
-  fetchWorkflowDynasties,
-  buildSlugToDynastyMap,
-} from "../lib/dynasty-client.js";
-import {
   fetchEmailGatewayStats,
   fetchEmailGatewayStatsGrouped,
   makeCumulativeDbCounts,
@@ -42,17 +35,18 @@ function emptyStats(): StatsResult {
 }
 
 function enrichWithGatewayStats(target: Record<string, number>, gw: EmailGatewayBroadcastStats): void {
-  if (gw.emailsContacted > 0) target.contacted = gw.emailsContacted;
-  if (gw.emailsSent > 0) target.sent = gw.emailsSent;
-  if (gw.emailsDelivered > 0) target.delivered = gw.emailsDelivered;
-  if (gw.emailsOpened > 0) target.opened = gw.emailsOpened;
-  if (gw.emailsClicked > 0) target.clicked = gw.emailsClicked;
-  if (gw.emailsBounced > 0) target.bounced = gw.emailsBounced;
-  if (gw.repliesPositive > 0) target.repliesPositive = gw.repliesPositive;
-  if (gw.repliesNegative > 0) target.repliesNegative = gw.repliesNegative;
-  if (gw.repliesNeutral > 0) target.repliesNeutral = gw.repliesNeutral;
-  if (gw.repliesAutoReply > 0) target.repliesAutoReply = gw.repliesAutoReply;
-  if (gw.recipients > 0) target.recipients = gw.recipients;
+  const rs = gw.recipientStats;
+  if (rs.contacted > 0) target.contacted = rs.contacted;
+  if (rs.sent > 0) target.sent = rs.sent;
+  if (rs.delivered > 0) target.delivered = rs.delivered;
+  if (rs.opened > 0) target.opened = rs.opened;
+  if (rs.clicked > 0) target.clicked = rs.clicked;
+  if (rs.bounced > 0) target.bounced = rs.bounced;
+  if (rs.unsubscribed > 0) target.unsubscribed = rs.unsubscribed;
+  if (rs.repliesPositive > 0) target.repliesPositive = rs.repliesPositive;
+  if (rs.repliesNegative > 0) target.repliesNegative = rs.repliesNegative;
+  if (rs.repliesNeutral > 0) target.repliesNeutral = rs.repliesNeutral;
+  if (rs.repliesAutoReply > 0) target.repliesAutoReply = rs.repliesAutoReply;
 }
 
 function buildPassthroughHeaders(locals: Record<string, unknown>): Record<string, string> {
@@ -69,20 +63,6 @@ async function resolveFiltersAndQuery(
 ): Promise<StatsResult> {
   const table = campaignJournalists;
 
-  // Resolve dynasty slugs to versioned slug lists
-  let featureSlugs: string[] | null = null;
-  let workflowSlugs: string[] | null = null;
-
-  if (query.featureDynastySlug) {
-    featureSlugs = await resolveFeatureDynastySlugs(query.featureDynastySlug, passthroughHeaders);
-    if (featureSlugs.length === 0) return emptyStats();
-  }
-
-  if (query.workflowDynastySlug) {
-    workflowSlugs = await resolveWorkflowDynastySlugs(query.workflowDynastySlug, passthroughHeaders);
-    if (workflowSlugs.length === 0) return emptyStats();
-  }
-
   // Build WHERE conditions
   const conditions = [];
 
@@ -91,18 +71,13 @@ async function resolveFiltersAndQuery(
   if (query.outletId) conditions.push(eq(table.outletId, query.outletId));
   if (query.brandId) conditions.push(arrayContains(table.brandIds, [query.brandId]));
 
-  // Dynasty slug (resolved list) takes priority, then explicit list, then exact slug
-  if (featureSlugs && featureSlugs.length > 0) {
-    conditions.push(inArray(table.featureSlug, featureSlugs));
-  } else if (query.featureSlugs && query.featureSlugs.length > 0) {
+  if (query.featureSlugs && query.featureSlugs.length > 0) {
     conditions.push(inArray(table.featureSlug, query.featureSlugs));
   } else if (query.featureSlug) {
     conditions.push(eq(table.featureSlug, query.featureSlug));
   }
 
-  if (workflowSlugs && workflowSlugs.length > 0) {
-    conditions.push(inArray(table.workflowSlug, workflowSlugs));
-  } else if (query.workflowSlugs && query.workflowSlugs.length > 0) {
+  if (query.workflowSlugs && query.workflowSlugs.length > 0) {
     conditions.push(inArray(table.workflowSlug, query.workflowSlugs));
   } else if (query.workflowSlug) {
     conditions.push(eq(table.workflowSlug, query.workflowSlug));
@@ -136,8 +111,6 @@ async function resolveFiltersAndQuery(
     featureSlug: query.featureSlug,
     featureSlugs: query.featureSlugs,
     workflowSlug: query.workflowSlug,
-    featureDynastySlug: query.featureDynastySlug,
-    workflowDynastySlug: query.workflowDynastySlug,
   };
   const gwStats = await fetchEmailGatewayStats(gwParams, passthroughHeaders);
   if (gwStats) {
@@ -145,69 +118,10 @@ async function resolveFiltersAndQuery(
   }
 
   const result: StatsResult = { totalJournalists: total, byOutreachStatus };
-  if (gwStats?.repliesDetail) result.repliesDetail = gwStats.repliesDetail;
+  if (gwStats?.recipientStats.repliesDetail) result.repliesDetail = gwStats.recipientStats.repliesDetail;
 
-  // GroupBy dynasty logic
   const groupBy = query.groupBy;
-  if (
-    groupBy === "featureDynastySlug" ||
-    groupBy === "workflowDynastySlug"
-  ) {
-    const isFeature = groupBy === "featureDynastySlug";
-    const slugColumn = isFeature ? table.featureSlug : table.workflowSlug;
-
-    // Fetch all dynasties to build reverse map
-    const dynasties = isFeature
-      ? await fetchFeatureDynasties(passthroughHeaders)
-      : await fetchWorkflowDynasties(passthroughHeaders);
-    const slugToDynasty = buildSlugToDynastyMap(dynasties);
-
-    // Query grouped by the raw slug column
-    const groupedRows = await db
-      .select({
-        slug: slugColumn,
-        status: table.status,
-        count: count(),
-      })
-      .from(table)
-      .where(where)
-      .groupBy(slugColumn, table.status);
-
-    // Aggregate by dynasty slug
-    const dynastyMap = new Map<string, GroupedEntry>();
-    for (const row of groupedRows) {
-      const rawSlug = row.slug ?? "(none)";
-      const dynastySlug = slugToDynasty.get(rawSlug) ?? rawSlug;
-
-      let entry = dynastyMap.get(dynastySlug);
-      if (!entry) {
-        entry = { totalJournalists: 0, byOutreachStatus: {} };
-        dynastyMap.set(dynastySlug, entry);
-      }
-      entry.byOutreachStatus[row.status] = (entry.byOutreachStatus[row.status] ?? 0) + row.count;
-      entry.totalJournalists += row.count;
-    }
-
-    // Make dynasty DB counts cumulative
-    for (const entry of dynastyMap.values()) {
-      const cumulative = makeCumulativeDbCounts(entry.byOutreachStatus);
-      entry.byOutreachStatus = cumulative;
-    }
-
-    // Enrich grouped results with email-gateway stats
-    const gwGrouped = await fetchEmailGatewayStatsGrouped(gwParams, groupBy, passthroughHeaders);
-    if (gwGrouped) {
-      for (const group of gwGrouped.groups) {
-        const entry = dynastyMap.get(group.key);
-        if (entry && group.broadcast) {
-          enrichWithGatewayStats(entry.byOutreachStatus, group.broadcast);
-          if (group.broadcast.repliesDetail) entry.repliesDetail = group.broadcast.repliesDetail;
-        }
-      }
-    }
-
-    result.groupedBy = Object.fromEntries(dynastyMap);
-  } else if (groupBy === "featureSlug" || groupBy === "workflowSlug") {
+  if (groupBy === "featureSlug" || groupBy === "workflowSlug") {
     const slugColumn = groupBy === "featureSlug" ? table.featureSlug : table.workflowSlug;
 
     const groupedRows = await db
@@ -245,7 +159,7 @@ async function resolveFiltersAndQuery(
         const entry = slugMap.get(group.key);
         if (entry && group.broadcast) {
           enrichWithGatewayStats(entry.byOutreachStatus, group.broadcast);
-          if (group.broadcast.repliesDetail) entry.repliesDetail = group.broadcast.repliesDetail;
+          if (group.broadcast.recipientStats.repliesDetail) entry.repliesDetail = group.broadcast.recipientStats.repliesDetail;
         }
       }
     }
@@ -287,7 +201,7 @@ async function resolveFiltersAndQuery(
         const entry = campaignMap.get(group.key);
         if (entry && group.broadcast) {
           enrichWithGatewayStats(entry.byOutreachStatus, group.broadcast);
-          if (group.broadcast.repliesDetail) entry.repliesDetail = group.broadcast.repliesDetail;
+          if (group.broadcast.recipientStats.repliesDetail) entry.repliesDetail = group.broadcast.recipientStats.repliesDetail;
         }
       }
     }
@@ -330,7 +244,7 @@ async function resolveFiltersAndQuery(
         const entry = brandMap.get(group.key);
         if (entry && group.broadcast) {
           enrichWithGatewayStats(entry.byOutreachStatus, group.broadcast);
-          if (group.broadcast.repliesDetail) entry.repliesDetail = group.broadcast.repliesDetail;
+          if (group.broadcast.recipientStats.repliesDetail) entry.repliesDetail = group.broadcast.recipientStats.repliesDetail;
         }
       }
     }

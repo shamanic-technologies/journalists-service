@@ -90,19 +90,33 @@ export interface EmailGatewayRepliesDetail {
   outOfOffice: number;
 }
 
-export interface EmailGatewayBroadcastStats {
-  emailsContacted: number;
-  emailsSent: number;
-  emailsDelivered: number;
-  emailsOpened: number;
-  emailsClicked: number;
-  emailsBounced: number;
+export interface EmailGatewayRecipientStats {
+  contacted: number;
+  sent: number;
+  delivered: number;
+  opened: number;
+  bounced: number;
+  clicked: number;
+  unsubscribed: number;
   repliesPositive: number;
   repliesNegative: number;
   repliesNeutral: number;
   repliesAutoReply: number;
   repliesDetail: EmailGatewayRepliesDetail;
-  recipients: number;
+}
+
+export interface EmailGatewayEmailStats {
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  unsubscribed: number;
+}
+
+export interface EmailGatewayBroadcastStats {
+  recipientStats: EmailGatewayRecipientStats;
+  emailStats: EmailGatewayEmailStats;
 }
 
 export interface EmailGatewayStatsParams {
@@ -112,8 +126,6 @@ export interface EmailGatewayStatsParams {
   featureSlugs?: string[];
   workflowSlug?: string;
   workflowSlugs?: string[];
-  featureDynastySlug?: string;
-  workflowDynastySlug?: string;
 }
 
 /**
@@ -134,8 +146,6 @@ export async function fetchEmailGatewayStats(
     else if (params.featureSlug) qs.set("featureSlugs", params.featureSlug);
     if (params.workflowSlugs && params.workflowSlugs.length > 0) qs.set("workflowSlugs", params.workflowSlugs.join(","));
     else if (params.workflowSlug) qs.set("workflowSlugs", params.workflowSlug);
-    if (params.featureDynastySlug) qs.set("featureDynastySlug", params.featureDynastySlug);
-    if (params.workflowDynastySlug) qs.set("workflowDynastySlug", params.workflowDynastySlug);
 
     const statsPath = passthroughHeaders["x-org-id"] ? "/orgs/stats" : "/public/stats";
     const res = await fetch(`${url}${statsPath}?${qs.toString()}`, {
@@ -181,8 +191,6 @@ export async function fetchEmailGatewayStatsGrouped(
     else if (params.featureSlug) qs.set("featureSlugs", params.featureSlug);
     if (params.workflowSlugs && params.workflowSlugs.length > 0) qs.set("workflowSlugs", params.workflowSlugs.join(","));
     else if (params.workflowSlug) qs.set("workflowSlugs", params.workflowSlug);
-    if (params.featureDynastySlug) qs.set("featureDynastySlug", params.featureDynastySlug);
-    if (params.workflowDynastySlug) qs.set("workflowDynastySlug", params.workflowDynastySlug);
     qs.set("groupBy", groupBy);
 
     const statsPath = passthroughHeaders["x-org-id"] ? "/orgs/stats" : "/public/stats";
