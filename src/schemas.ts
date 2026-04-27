@@ -217,8 +217,8 @@ export const StatsQuerySchema = z
   .openapi("StatsQuery");
 
 const OutreachStatusCountSchema = z.record(z.string(), z.number()).openapi("OutreachStatusCount", {
-  description: "Cumulative status counts. DB statuses (buffered, claimed, served, skipped) are cumulative. Email-gateway fields (contacted, sent, delivered, opened, clicked, bounced, repliesPositive, repliesNegative, repliesNeutral, repliesAutoReply, recipients) are passed through.",
-  example: { buffered: 200, claimed: 150, served: 120, skipped: 30, contacted: 115, sent: 110, delivered: 105, opened: 45, clicked: 12, bounced: 5, repliesPositive: 3, repliesNegative: 2 },
+  description: "Cumulative status counts. DB statuses (buffered, claimed, served, skipped) are cumulative. Email-gateway recipientStats fields (contacted, sent, delivered, opened, clicked, bounced, unsubscribed, repliesPositive, repliesNegative, repliesNeutral, repliesAutoReply) are passed through.",
+  example: { buffered: 200, claimed: 150, served: 120, skipped: 30, contacted: 115, sent: 110, delivered: 105, opened: 45, clicked: 12, bounced: 5, unsubscribed: 1, repliesPositive: 3, repliesNegative: 2 },
 });
 
 const RepliesDetailSchema = z.object({

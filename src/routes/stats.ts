@@ -35,17 +35,18 @@ function emptyStats(): StatsResult {
 }
 
 function enrichWithGatewayStats(target: Record<string, number>, gw: EmailGatewayBroadcastStats): void {
-  if (gw.emailsContacted > 0) target.contacted = gw.emailsContacted;
-  if (gw.emailsSent > 0) target.sent = gw.emailsSent;
-  if (gw.emailsDelivered > 0) target.delivered = gw.emailsDelivered;
-  if (gw.emailsOpened > 0) target.opened = gw.emailsOpened;
-  if (gw.emailsClicked > 0) target.clicked = gw.emailsClicked;
-  if (gw.emailsBounced > 0) target.bounced = gw.emailsBounced;
-  if (gw.repliesPositive > 0) target.repliesPositive = gw.repliesPositive;
-  if (gw.repliesNegative > 0) target.repliesNegative = gw.repliesNegative;
-  if (gw.repliesNeutral > 0) target.repliesNeutral = gw.repliesNeutral;
-  if (gw.repliesAutoReply > 0) target.repliesAutoReply = gw.repliesAutoReply;
-  if (gw.recipients > 0) target.recipients = gw.recipients;
+  const rs = gw.recipientStats;
+  if (rs.contacted > 0) target.contacted = rs.contacted;
+  if (rs.sent > 0) target.sent = rs.sent;
+  if (rs.delivered > 0) target.delivered = rs.delivered;
+  if (rs.opened > 0) target.opened = rs.opened;
+  if (rs.clicked > 0) target.clicked = rs.clicked;
+  if (rs.bounced > 0) target.bounced = rs.bounced;
+  if (rs.unsubscribed > 0) target.unsubscribed = rs.unsubscribed;
+  if (rs.repliesPositive > 0) target.repliesPositive = rs.repliesPositive;
+  if (rs.repliesNegative > 0) target.repliesNegative = rs.repliesNegative;
+  if (rs.repliesNeutral > 0) target.repliesNeutral = rs.repliesNeutral;
+  if (rs.repliesAutoReply > 0) target.repliesAutoReply = rs.repliesAutoReply;
 }
 
 function buildPassthroughHeaders(locals: Record<string, unknown>): Record<string, string> {
@@ -117,7 +118,7 @@ async function resolveFiltersAndQuery(
   }
 
   const result: StatsResult = { totalJournalists: total, byOutreachStatus };
-  if (gwStats?.repliesDetail) result.repliesDetail = gwStats.repliesDetail;
+  if (gwStats?.recipientStats.repliesDetail) result.repliesDetail = gwStats.recipientStats.repliesDetail;
 
   const groupBy = query.groupBy;
   if (groupBy === "featureSlug" || groupBy === "workflowSlug") {
@@ -158,7 +159,7 @@ async function resolveFiltersAndQuery(
         const entry = slugMap.get(group.key);
         if (entry && group.broadcast) {
           enrichWithGatewayStats(entry.byOutreachStatus, group.broadcast);
-          if (group.broadcast.repliesDetail) entry.repliesDetail = group.broadcast.repliesDetail;
+          if (group.broadcast.recipientStats.repliesDetail) entry.repliesDetail = group.broadcast.recipientStats.repliesDetail;
         }
       }
     }
@@ -200,7 +201,7 @@ async function resolveFiltersAndQuery(
         const entry = campaignMap.get(group.key);
         if (entry && group.broadcast) {
           enrichWithGatewayStats(entry.byOutreachStatus, group.broadcast);
-          if (group.broadcast.repliesDetail) entry.repliesDetail = group.broadcast.repliesDetail;
+          if (group.broadcast.recipientStats.repliesDetail) entry.repliesDetail = group.broadcast.recipientStats.repliesDetail;
         }
       }
     }
@@ -243,7 +244,7 @@ async function resolveFiltersAndQuery(
         const entry = brandMap.get(group.key);
         if (entry && group.broadcast) {
           enrichWithGatewayStats(entry.byOutreachStatus, group.broadcast);
-          if (group.broadcast.repliesDetail) entry.repliesDetail = group.broadcast.repliesDetail;
+          if (group.broadcast.recipientStats.repliesDetail) entry.repliesDetail = group.broadcast.recipientStats.repliesDetail;
         }
       }
     }
