@@ -65,6 +65,8 @@ router.get("/orgs/journalists/list", async (req, res) => {
         status: campaignJournalists.status,
         campaignEmail: campaignJournalists.email,
         campaignApolloPersonId: campaignJournalists.apolloPersonId,
+        statusReason: campaignJournalists.statusReason,
+        statusDetail: campaignJournalists.statusDetail,
         runId: campaignJournalists.runId,
         createdAt: campaignJournalists.createdAt,
         journalistName: journalists.journalistName,
@@ -265,6 +267,8 @@ router.get("/orgs/journalists/list", async (req, res) => {
         articleUrls: c.articleUrls,
         email: c.campaignEmail,
         apolloPersonId: c.campaignApolloPersonId,
+        statusReason: c.statusReason,
+        statusDetail: c.statusDetail,
         runId: c.runId,
         createdAt: c.createdAt,
       }));

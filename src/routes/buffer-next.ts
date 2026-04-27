@@ -286,6 +286,16 @@ async function mergeByApolloEmail(
 
 // ── Resolve email via Apollo + email-gateway dedup ──────────────────
 
+interface SkipInfo {
+  reason: string;
+  detail: string;
+}
+
+interface ResolveResult {
+  resolved: ResolvedEmail | null;
+  skip: SkipInfo | null;
+}
+
 interface ResolvedEmail {
   email: string;
   apolloPersonId: string | null;
@@ -372,7 +382,7 @@ async function isAlreadyContacted(
 
 /**
  * Try to resolve a verified, non-contacted email for a claimed journalist.
- * Returns null if Apollo has no match, email is bad, or already contacted for brand+org.
+ * Returns { resolved, skip } — resolved is the email data, skip is the reason if skipped.
  */
 async function resolveAndCheckEmail(
   claimed: ClaimedRow,
@@ -380,9 +390,10 @@ async function resolveAndCheckEmail(
   orgId: string,
   brandIds: string[],
   ctx: OrgContext
-): Promise<ResolvedEmail | null> {
+): Promise<ResolveResult> {
   const firstName = claimed.firstName || "";
   const lastName = claimed.lastName || "";
+  const journalistLabel = `${firstName || "?"} ${lastName || "?"} (journalistId=${claimed.journalistId})`;
 
   // Pre-check: journalist_id dedup (before Apollo call to save API credits)
   const preCheck = await isAlreadyContacted(
@@ -390,14 +401,19 @@ async function resolveAndCheckEmail(
   );
   if (preCheck.contacted) {
     console.log(`[journalists-service] ${preCheck.reason}`);
-    return null;
+    return {
+      resolved: null,
+      skip: { reason: "already-contacted", detail: `${journalistLabel}: ${preCheck.reason}` },
+    };
   }
 
   if (!firstName || !lastName) {
-    console.log(
-      `[journalists-service] Skipping Apollo match — missing name for journalist ${claimed.journalistId}`
-    );
-    return null;
+    const detail = `${journalistLabel}: firstName=${firstName || "null"}, lastName=${lastName || "null"} — cannot call Apollo without both names`;
+    console.log(`[journalists-service] Skipping Apollo match — missing name for journalist ${claimed.journalistId}`);
+    return {
+      resolved: null,
+      skip: { reason: "missing-name", detail },
+    };
   }
 
   // Check global journalists table for cached Apollo results
@@ -425,10 +441,14 @@ async function resolveAndCheckEmail(
   if (isCacheFresh) {
     // Cache hit — use stored results
     if (!cached.apolloEmail) {
+      const detail = `${journalistLabel}: Apollo cache hit with no email (checked ${cached.apolloCheckedAt!.toISOString()}, domain=${outletDomain})`;
       console.log(
         `[journalists-service] Apollo cache: no email for ${firstName} ${lastName} (checked ${cached.apolloCheckedAt!.toISOString()})`
       );
-      return null;
+      return {
+        resolved: null,
+        skip: { reason: "no-email", detail },
+      };
     }
     email = cached.apolloEmail;
     emailStatus = cached.apolloEmailStatus;
@@ -471,10 +491,14 @@ async function resolveAndCheckEmail(
     }
 
     if (!apolloResult.person?.email) {
+      const detail = `${journalistLabel}: Apollo returned no email (domain=${outletDomain}, apolloPersonId=${apolloResult.person?.id ?? "none"})`;
       console.log(
         `[journalists-service] Apollo: no email for ${firstName} ${lastName} @ ${outletDomain}`
       );
-      return null;
+      return {
+        resolved: null,
+        skip: { reason: "no-email", detail },
+      };
     }
 
     email = apolloResult.person.email;
@@ -484,10 +508,14 @@ async function resolveAndCheckEmail(
 
   // Check email quality — reject "bounced" or unknown statuses
   if (emailStatus && !VALID_EMAIL_STATUSES.has(emailStatus)) {
+    const detail = `${journalistLabel}: Apollo email=${email} has bad status "${emailStatus}" (valid: ${[...VALID_EMAIL_STATUSES].join(", ")})`;
     console.log(
       `[journalists-service] Apollo: bad emailStatus "${emailStatus}" for ${email}`
     );
-    return null;
+    return {
+      resolved: null,
+      skip: { reason: "bad-email-status", detail },
+    };
   }
 
   // Full dedup: email + apollo_person_id (journalist_id already checked above)
@@ -496,7 +524,10 @@ async function resolveAndCheckEmail(
   );
   if (fullCheck.contacted) {
     console.log(`[journalists-service] ${fullCheck.reason}`);
-    return null;
+    return {
+      resolved: null,
+      skip: { reason: "already-contacted", detail: `${journalistLabel}: ${fullCheck.reason} (email=${email}, apolloPersonId=${apolloPersonId ?? "none"})` },
+    };
   }
 
   // Email-gateway: check global bounced/unsubscribed + brand-scope contacted for ALL brands
@@ -510,29 +541,41 @@ async function resolveAndCheckEmail(
     if (gatewayResults.length > 0) {
       const result = gatewayResults[0];
       if (result.broadcast?.global?.email?.bounced) {
+        const detail = `${journalistLabel}: email=${email} globally bounced (checked via email-gateway)`;
         console.log(
           `[journalists-service] Email ${email} globally bounced`
         );
-        return null;
+        return {
+          resolved: null,
+          skip: { reason: "email-bounced", detail },
+        };
       }
       if (result.broadcast?.global?.email?.unsubscribed) {
+        const detail = `${journalistLabel}: email=${email} globally unsubscribed (checked via email-gateway)`;
         console.log(
           `[journalists-service] Email ${email} globally unsubscribed`
         );
-        return null;
+        return {
+          resolved: null,
+          skip: { reason: "email-unsubscribed", detail },
+        };
       }
       if (result.broadcast?.brand?.contacted) {
+        const detail = `${journalistLabel}: email=${email} already contacted for brandId=${brandId} (checked via email-gateway)`;
         console.log(
           `[journalists-service] Email ${email} already contacted at brand scope (brand ${brandId})`
         );
-        return null;
+        return {
+          resolved: null,
+          skip: { reason: "brand-already-contacted", detail },
+        };
       }
     }
   }
 
   return {
-    email,
-    apolloPersonId,
+    resolved: { email, apolloPersonId },
+    skip: null,
   };
 }
 
@@ -560,9 +603,12 @@ async function processOutlet(
   // ── Relevance gate ─────────────────────────────────────────
   const blocked = await checkOutletBlocked(outlet.outletId, campaignId, ctx.orgId, brandIds, ctx);
   if (blocked.blocked) {
+    const lowRelevanceDetail = `relevance_score below min=${MIN_RELEVANCE_SCORE}, outlet blocked: ${blocked.reason ?? "unknown"}`;
     await pgClient`
       UPDATE campaign_journalists
-      SET status = 'skipped'
+      SET status = 'skipped',
+          status_reason = 'low-relevance',
+          status_detail = 'relevance_score=' || relevance_score::text || ', ' || ${lowRelevanceDetail}
       WHERE campaign_id = ${campaignId}
         AND outlet_id = ${outlet.outletId}
         AND status = 'buffered'
@@ -593,7 +639,7 @@ async function processOutlet(
 
       if (claimed) {
         // Try to resolve email + dedup by email/apolloPersonId/journalistId at brand+org level
-        const resolved = await resolveAndCheckEmail(
+        const { resolved, skip } = await resolveAndCheckEmail(
           claimed,
           outlet.outletDomain,
           ctx.orgId,
@@ -635,14 +681,18 @@ async function processOutlet(
           };
         }
 
-        // No email — mark as skipped, try next journalist
+        // No email — mark as skipped with reason, try next journalist
         await db
           .update(campaignJournalists)
-          .set({ status: "skipped" })
+          .set({
+            status: "skipped",
+            statusReason: skip?.reason ?? null,
+            statusDetail: skip?.detail ?? null,
+          })
           .where(eq(campaignJournalists.id, claimed.campaignJournalistId));
 
         console.log(
-          `[journalists-service] Skipped journalist ${claimed.firstName} ${claimed.lastName} — no valid email`
+          `[journalists-service] Skipped journalist ${claimed.firstName} ${claimed.lastName} — ${skip?.reason ?? "no valid email"}`
         );
         continue;
       }

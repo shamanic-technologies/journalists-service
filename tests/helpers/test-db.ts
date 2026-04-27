@@ -62,6 +62,8 @@ export async function insertTestCampaignJournalist(data: {
   email?: string;
   apolloPersonId?: string;
   status?: "buffered" | "claimed" | "served" | "contacted" | "skipped";
+  statusReason?: string;
+  statusDetail?: string;
   createdAt?: Date;
 }) {
   const [row] = await db
@@ -82,6 +84,8 @@ export async function insertTestCampaignJournalist(data: {
       email: data.email ?? null,
       apolloPersonId: data.apolloPersonId ?? null,
       status: data.status ?? "buffered",
+      statusReason: data.statusReason ?? null,
+      statusDetail: data.statusDetail ?? null,
       createdAt: data.createdAt ?? new Date(),
     })
     .returning();
