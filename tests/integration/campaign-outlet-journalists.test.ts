@@ -309,32 +309,28 @@ describe("GET /campaign-outlet-journalists", () => {
     expect(res.body.campaignJournalists[0]).toHaveProperty("runId", RUN_ID);
   });
 
-  it("filters by feature_dynasty_slug — resolves dynasty to versioned slugs", async () => {
-    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dynasty Hit" });
-    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dynasty Miss" });
+  it("filters by feature_slug", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Feature Hit" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Feature Miss" });
 
     await insertTestCampaignJournalist({
       journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID],
-      campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, featureSlug: "pr-outreach-v2",
+      campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, featureSlug: "pr-cold-email-outreach",
     });
     await insertTestCampaignJournalist({
       journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID],
-      campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, featureSlug: "cold-email-v1",
+      campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, featureSlug: "sales-cold-email-outreach",
     });
 
-    // Mock features-service dynasty resolution
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ slugs: ["pr-outreach-v1", "pr-outreach-v2"] }),
-    });
+    mockEmailGatewayStatusEmpty();
 
     const res = await request(app)
-      .get(`/orgs/campaign-outlet-journalists?brand_id=${BRAND_ID}&feature_dynasty_slug=pr-outreach`)
+      .get(`/orgs/campaign-outlet-journalists?brand_id=${BRAND_ID}&feature_slug=pr-cold-email-outreach`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);
     expect(res.body.campaignJournalists).toHaveLength(1);
-    expect(res.body.campaignJournalists[0].journalistName).toBe("Dynasty Hit");
+    expect(res.body.campaignJournalists[0].journalistName).toBe("Feature Hit");
   });
 
   it("returns status with email-gateway enrichment", async () => {
@@ -405,20 +401,17 @@ describe("GET /campaign-outlet-journalists", () => {
     expect(cj.status.delivered).toBe(false);
   });
 
-  it("returns empty array when dynasty slug resolves to no slugs", async () => {
+  it("returns empty array when feature_slug matches nothing", async () => {
     const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "No Match" });
     await insertTestCampaignJournalist({
       journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID],
       campaignId: CAMPAIGN_ID, outletId: OUTLET_ID, featureSlug: "some-feature",
     });
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ slugs: [] }),
-    });
+    mockEmailGatewayStatusEmpty();
 
     const res = await request(app)
-      .get(`/orgs/campaign-outlet-journalists?brand_id=${BRAND_ID}&feature_dynasty_slug=nonexistent`)
+      .get(`/orgs/campaign-outlet-journalists?brand_id=${BRAND_ID}&feature_slug=nonexistent`)
       .set(AUTH_HEADERS);
 
     expect(res.status).toBe(200);

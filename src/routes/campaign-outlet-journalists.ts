@@ -3,7 +3,6 @@ import { eq, and, arrayContains, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import { campaignJournalists, journalists } from "../db/schema.js";
-import { resolveFeatureDynastySlugs } from "../lib/dynasty-client.js";
 import { checkEmailStatuses, buildStatusBooleans, type EmailGatewayStatusResult } from "../lib/email-gateway-client.js";
 import { type OrgContext } from "../lib/service-context.js";
 
@@ -14,12 +13,12 @@ const querySchema = z.object({
   brand_id: z.string().uuid().optional(),
   outlet_id: z.string().uuid().optional(),
   run_id: z.string().uuid().optional(),
-  feature_dynasty_slug: z.string().optional(),
+  feature_slug: z.string().optional(),
 });
 
 // GET /campaign-outlet-journalists?campaign_id=...&outlet_id=...&run_id=...
 // GET /campaign-outlet-journalists?brand_id=...&outlet_id=...
-// GET /campaign-outlet-journalists?brand_id=...&feature_dynasty_slug=pr-journalist-outreach
+// GET /campaign-outlet-journalists?brand_id=...&feature_slug=pr-cold-email-outreach
 router.get("/orgs/campaign-outlet-journalists", async (req, res) => {
   const parsed = querySchema.safeParse(req.query);
   if (!parsed.success) {
@@ -27,26 +26,11 @@ router.get("/orgs/campaign-outlet-journalists", async (req, res) => {
     return;
   }
 
-  const { campaign_id, brand_id, outlet_id, run_id, feature_dynasty_slug } = parsed.data;
+  const { campaign_id, brand_id, outlet_id, run_id, feature_slug } = parsed.data;
 
   if (!campaign_id && !brand_id) {
     res.status(400).json({ error: "campaign_id or brand_id (uuid) is required" });
     return;
-  }
-
-  // Resolve dynasty slug to versioned slugs (if provided)
-  let featureSlugs: string[] | null = null;
-  if (feature_dynasty_slug) {
-    const passthroughHeaders: Record<string, string> = {};
-    if (res.locals.orgId) passthroughHeaders["x-org-id"] = res.locals.orgId as string;
-    if (res.locals.userId) passthroughHeaders["x-user-id"] = res.locals.userId as string;
-    if (res.locals.runId) passthroughHeaders["x-run-id"] = res.locals.runId as string;
-
-    featureSlugs = await resolveFeatureDynastySlugs(feature_dynasty_slug, passthroughHeaders);
-    if (featureSlugs.length === 0) {
-      res.json({ campaignJournalists: [] });
-      return;
-    }
   }
 
   const conditions: ReturnType<typeof eq>[] = [];
@@ -62,8 +46,8 @@ router.get("/orgs/campaign-outlet-journalists", async (req, res) => {
   if (run_id) {
     conditions.push(eq(campaignJournalists.runId, run_id));
   }
-  if (featureSlugs && featureSlugs.length > 0) {
-    conditions.push(inArray(campaignJournalists.featureSlug, featureSlugs));
+  if (feature_slug) {
+    conditions.push(eq(campaignJournalists.featureSlug, feature_slug));
   }
 
   const rows = await db

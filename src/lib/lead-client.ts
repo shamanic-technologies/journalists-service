@@ -14,8 +14,6 @@ export interface LeadStatsParams {
   featureSlug?: string;
   featureSlugs?: string[];
   workflowSlug?: string;
-  featureDynastySlug?: string;
-  workflowDynastySlug?: string;
 }
 
 export interface LeadStatsResponse {
@@ -52,8 +50,6 @@ export async function fetchLeadStats(
     if (params.featureSlug) qs.set("featureSlug", params.featureSlug);
     if (params.featureSlugs && params.featureSlugs.length > 0) qs.set("featureSlugs", params.featureSlugs.join(","));
     if (params.workflowSlug) qs.set("workflowSlug", params.workflowSlug);
-    if (params.featureDynastySlug) qs.set("featureDynastySlug", params.featureDynastySlug);
-    if (params.workflowDynastySlug) qs.set("workflowDynastySlug", params.workflowDynastySlug);
 
     const res = await fetch(`${url}/stats?${qs.toString()}`, {
       headers: { "x-api-key": apiKey, ...passthroughHeaders },
@@ -134,8 +130,6 @@ export async function fetchLeadStatsGrouped(
     if (params.featureSlug) qs.set("featureSlug", params.featureSlug);
     if (params.featureSlugs && params.featureSlugs.length > 0) qs.set("featureSlugs", params.featureSlugs.join(","));
     if (params.workflowSlug) qs.set("workflowSlug", params.workflowSlug);
-    if (params.featureDynastySlug) qs.set("featureDynastySlug", params.featureDynastySlug);
-    if (params.workflowDynastySlug) qs.set("workflowDynastySlug", params.workflowDynastySlug);
     qs.set("groupBy", groupBy);
 
     const res = await fetch(`${url}/stats?${qs.toString()}`, {
