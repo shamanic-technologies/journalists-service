@@ -336,6 +336,8 @@ export async function storeJournalists(
         whyNotRelevant: j.whyNotRelevant,
         articleUrls: j.articleUrls || [],
         runId,
+        statusReason: "discovered",
+        statusDetail: `Discovered ${journalistName} at outletId=${outletId}, relevanceScore=${j.relevanceScore}, runId=${runId ?? "none"}`,
       })
       .onConflictDoNothing();
 
@@ -466,6 +468,8 @@ export async function copyScoresToCampaign(
         featureSlug,
         workflowSlug,
         runId,
+        statusReason: "discovered",
+        statusDetail: `Copied from scoring cache for outletId=${outletId}, journalistId=${row.journalistId}, relevanceScore=${row.relevanceScore}, runId=${runId ?? "none"}`,
       })
       .onConflictDoNothing();
     copied++;
