@@ -189,11 +189,12 @@ export const StatsGroupByEnum = z
   .enum([
     "featureSlug",
     "workflowSlug",
+    "workflowDynastySlug",
     "brandId",
     "campaignId",
   ])
   .openapi("StatsGroupBy", {
-    description: "Dimension to group results by. brandId groups by individual brand UUID (journalists with multiple brands appear in each group). campaignId groups by campaign UUID.",
+    description: "Dimension to group results by. workflowDynastySlug groups by workflow dynasty (resolves versioned slugs via workflow-service). brandId groups by individual brand UUID (journalists with multiple brands appear in each group). campaignId groups by campaign UUID.",
   });
 
 export const StatsQuerySchema = z
@@ -214,6 +215,7 @@ export const StatsQuerySchema = z
       .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean))
       .optional()
       .openapi({ description: "Comma-separated list of workflow slugs to filter by. Use with groupBy=workflowSlug for per-workflow stats.", example: "pr-pitch,cold-email,warm-intro" }),
+    workflowDynastySlug: z.string().optional().openapi({ description: "Filter by workflow dynasty slug. Resolves to all versioned workflow slugs via workflow-service, then filters WHERE workflow_slug IN (...)." }),
     groupBy: StatsGroupByEnum.optional().openapi({ description: "Dimension to group results by. When set, the response includes a groupedBy map keyed by slug." }),
   })
   .openapi("StatsQuery");

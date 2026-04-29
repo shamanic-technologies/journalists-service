@@ -110,6 +110,8 @@ function validateEnvVars(): void {
     "APOLLO_SERVICE_API_KEY",
     "EMAIL_GATEWAY_SERVICE_URL",
     "EMAIL_GATEWAY_SERVICE_API_KEY",
+    "WORKFLOW_SERVICE_URL",
+    "WORKFLOW_SERVICE_API_KEY",
   ];
   const missing = required.filter((k) => !process.env[k]);
   if (missing.length > 0) {
