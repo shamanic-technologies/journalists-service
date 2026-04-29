@@ -20,11 +20,6 @@ router.post("/orgs/outlets/status", async (req, res) => {
 
   const { outletIds, scopeFilters } = parsed.data;
 
-  if (!scopeFilters.brandId && !scopeFilters.campaignId) {
-    res.status(400).json({ error: "scopeFilters.brandId or scopeFilters.campaignId is required" });
-    return;
-  }
-
   const orgId = res.locals.orgId as string;
   const brandId = scopeFilters.brandId;
   const campaignId = scopeFilters.campaignId;
