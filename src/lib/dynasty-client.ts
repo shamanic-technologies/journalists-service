@@ -37,7 +37,7 @@ export async function resolveWorkflowDynastySlugs(
   try {
     const { url, apiKey } = getConfig();
     const res = await fetch(
-      `${url}/workflows/dynasty/slugs?dynastySlug=${encodeURIComponent(dynastySlug)}`,
+      `${url}/workflows/dynasty/slugs?workflowDynastySlug=${encodeURIComponent(dynastySlug)}`,
       { headers: buildHeaders(apiKey, context), signal: AbortSignal.timeout(300_000) },
     );
     if (!res.ok) {
