@@ -101,11 +101,15 @@ interface ClaimedRow {
 
 async function claimNextBuffered(
   campaignId: string,
-  outletId: string
+  outletId: string,
+  outletDomain: string,
+  runId: string
 ): Promise<ClaimedRow | null> {
   const rows = await pgClient`
     UPDATE campaign_journalists
-    SET status = 'claimed'
+    SET status = 'claimed',
+        status_reason = 'claimed-for-resolution',
+        status_detail = 'Claimed by runId=' || ${runId} || ' for email resolution (outletDomain=' || ${outletDomain} || ')'
     WHERE id = (
       SELECT cj.id
       FROM campaign_journalists cj
@@ -635,7 +639,7 @@ async function processOutlet(
     let hasAttemptedRefill = false;
 
     for (let i = 0; i < MAX_PULL_ITERATIONS; i++) {
-      const claimed = await claimNextBuffered(campaignId, outlet.outletId);
+      const claimed = await claimNextBuffered(campaignId, outlet.outletId, outlet.outletDomain, childRun.id);
 
       if (claimed) {
         // Try to resolve email + dedup by email/apolloPersonId/journalistId at brand+org level
@@ -653,6 +657,8 @@ async function processOutlet(
             .update(campaignJournalists)
             .set({
               status: "served",
+              statusReason: "email-resolved",
+              statusDetail: `Email resolved: email=${resolved.email}, apolloPersonId=${resolved.apolloPersonId ?? "none"}, journalistId=${claimed.journalistId}, outletId=${outlet.outletId}`,
               email: resolved.email,
               apolloPersonId: resolved.apolloPersonId,
             })
