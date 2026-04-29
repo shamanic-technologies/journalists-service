@@ -148,14 +148,27 @@ describe("POST /orgs/outlets/status", () => {
     await closeDb();
   });
 
-  it("returns 400 when scopeFilters is missing brandId and campaignId", async () => {
+  it("returns 200 with campaign-mode shape when scopeFilters has no brandId or campaignId", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_A, journalistName: "J1" });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_A, status: "served",
+    });
+
+    mockedCheckEmailStatuses.mockResolvedValue([]);
+
     const res = await request(app)
       .post("/orgs/outlets/status")
       .set(AUTH_HEADERS)
       .send({ outletIds: [OUTLET_A], scopeFilters: {} });
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toContain("scopeFilters");
+    expect(res.status).toBe(200);
+    const result = res.body.results[OUTLET_A];
+    expect(result.totalJournalists).toBe(1);
+    // No brand filter → campaign mode (isBrandMode = false)
+    expect(result.campaign.served).toBe(1);
+    expect(result.brand).toBeNull();
+    expect(result.byCampaign).toBeNull();
   });
 
   it("returns counts with served when no email-gateway enrichment (campaign scope)", async () => {
