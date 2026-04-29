@@ -647,6 +647,140 @@ describe("GET /stats", () => {
     expect(res.body.groupedBy[CAMPAIGN_ID].byOutreachStatus.contacted).toBe(1);
     expect(res.body.groupedBy[CAMPAIGN_ID].byOutreachStatus.delivered).toBe(1);
   });
+
+  it("filters by workflowDynastySlug (resolves dynasty to versioned slugs)", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dynasty Filter 1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dynasty Filter 2" });
+    const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dynasty Filter 3" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, workflowSlug: "cold-email-v1", status: "served",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, workflowSlug: "cold-email-v2", status: "buffered",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j3.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, workflowSlug: "warm-intro-v1", status: "served",
+    });
+
+    // Mock workflow-service dynasty resolution: cold-email → [cold-email-v1, cold-email-v2]
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ workflowSlugs: ["cold-email-v1", "cold-email-v2"] }),
+    });
+    mockEmailGatewayStats(0);
+
+    const res = await request(app)
+      .get("/orgs/stats?workflowDynastySlug=cold-email")
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.totalJournalists).toBe(2);
+    expect(res.body.byOutreachStatus.buffered).toBe(2);
+    expect(res.body.byOutreachStatus.served).toBe(1);
+  });
+
+  it("returns empty stats when workflowDynastySlug resolves to no slugs", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Empty Dynasty" });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, workflowSlug: "some-wf", status: "served",
+    });
+
+    // Dynasty resolves to empty array
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ workflowSlugs: [] }),
+    });
+
+    const res = await request(app)
+      .get("/orgs/stats?workflowDynastySlug=nonexistent-dynasty")
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.totalJournalists).toBe(0);
+  });
+
+  it("groupBy workflowDynastySlug — re-aggregates versioned slugs by dynasty", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dynasty Group 1" });
+    const j2 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dynasty Group 2" });
+    const j3 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dynasty Group 3" });
+
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, workflowSlug: "cold-email-v1", status: "served",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, workflowSlug: "cold-email-v2", status: "buffered",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j3.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, workflowSlug: "warm-intro-v1", status: "served",
+    });
+
+    mockEmailGatewayStats(0);
+    // Mock workflow-service /workflows/dynasties (for dynasty map)
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        dynasties: [
+          { workflowDynastySlug: "cold-email", workflowDynastyName: "Cold Email", workflowSlugs: ["cold-email-v1", "cold-email-v2"] },
+          { workflowDynastySlug: "warm-intro", workflowDynastyName: "Warm Intro", workflowSlugs: ["warm-intro-v1"] },
+        ],
+      }),
+    });
+    // Mock email-gateway grouped stats by workflowSlug
+    mockEmailGatewayStatsGrouped([]);
+
+    const res = await request(app)
+      .get("/orgs/stats?groupBy=workflowDynastySlug")
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    // cold-email dynasty: cold-email-v1 (served) + cold-email-v2 (buffered) = 2
+    expect(res.body.groupedBy["cold-email"].totalJournalists).toBe(2);
+    expect(res.body.groupedBy["cold-email"].byOutreachStatus.buffered).toBe(2);
+    expect(res.body.groupedBy["cold-email"].byOutreachStatus.served).toBe(1);
+    // warm-intro dynasty: warm-intro-v1 (served) = 1
+    expect(res.body.groupedBy["warm-intro"].totalJournalists).toBe(1);
+    expect(res.body.groupedBy["warm-intro"].byOutreachStatus.served).toBe(1);
+  });
+
+  it("groupBy workflowDynastySlug with email-gateway enrichment", async () => {
+    const j1 = await insertTestJournalist({ outletId: OUTLET_ID, journalistName: "Dynasty GW 1" });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, workflowSlug: "cold-email-v1", status: "served",
+    });
+
+    mockEmailGatewayStats(0);
+    // Mock dynasty map
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        dynasties: [
+          { workflowDynastySlug: "cold-email", workflowDynastyName: "Cold Email", workflowSlugs: ["cold-email-v1"] },
+        ],
+      }),
+    });
+    // Mock email-gateway grouped stats — keyed by workflowSlug, should be re-aggregated to dynasty
+    mockEmailGatewayStatsGrouped([
+      { key: "cold-email-v1", contacted: 1, delivered: 1 },
+    ]);
+
+    const res = await request(app)
+      .get("/orgs/stats?groupBy=workflowDynastySlug")
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.groupedBy["cold-email"].totalJournalists).toBe(1);
+    expect(res.body.groupedBy["cold-email"].byOutreachStatus.contacted).toBe(1);
+    expect(res.body.groupedBy["cold-email"].byOutreachStatus.delivered).toBe(1);
+  });
 });
 
 describe("GET /stats (base headers only — no workflow context)", () => {
