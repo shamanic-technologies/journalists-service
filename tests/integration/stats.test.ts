@@ -737,3 +737,152 @@ describe("GET /public/stats", () => {
     expect(res.body.totalJournalists).toBe(1);
   });
 });
+
+describe("GET /orgs/stats with outletId — per-email resolution", () => {
+  const OUTLET_ID_2 = "11111111-1111-1111-1111-222222222222";
+
+  beforeEach(async () => {
+    await cleanTestData();
+    mockFetch.mockReset();
+  });
+
+  function mockPerEmailStatus(results: Array<{ email: string; delivered: boolean; opened?: boolean }>) {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: results.map((r) => ({
+          email: r.email,
+          broadcast: {
+            campaign: {
+              contacted: r.delivered,
+              sent: r.delivered,
+              delivered: r.delivered,
+              opened: r.opened ?? false,
+              clicked: false,
+              replied: false,
+              replyClassification: null,
+              bounced: false,
+              unsubscribed: false,
+              lastDeliveredAt: r.delivered ? "2026-04-29T00:00:00Z" : null,
+            },
+            brand: null,
+            byCampaign: null,
+            global: { email: { bounced: false, unsubscribed: false } },
+          },
+          transactional: {
+            campaign: null,
+            brand: null,
+            byCampaign: null,
+            global: { email: { bounced: false, unsubscribed: false } },
+          },
+        })),
+      }),
+    });
+  }
+
+  it("uses per-email status when outletId is present (no campaign-wide leak)", async () => {
+    // Outlet 1: journalist with email, served but NOT delivered
+    const j1 = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Outlet1 Writer",
+      apolloEmail: "writer1@outlet1.com",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "skipped",
+    });
+
+    // Outlet 2: journalist with email, served AND delivered (this should NOT leak into outlet 1 stats)
+    const j2 = await insertTestJournalist({
+      outletId: OUTLET_ID_2,
+      journalistName: "Outlet2 Writer",
+      apolloEmail: "writer2@outlet2.com",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j2.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID_2, status: "served",
+    });
+
+    // Mock per-email status: writer1 was NOT delivered
+    mockPerEmailStatus([{ email: "writer1@outlet1.com", delivered: false }]);
+
+    const res = await request(app)
+      .get(`/orgs/stats?campaignId=${CAMPAIGN_ID}&outletId=${OUTLET_ID}`)
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.totalJournalists).toBe(1);
+    expect(res.body.byOutreachStatus.skipped).toBe(1);
+    // The key assertion: delivered must NOT be present for this outlet
+    expect(res.body.byOutreachStatus.delivered).toBeUndefined();
+  });
+
+  it("correctly counts delivered when outlet journalists were actually delivered", async () => {
+    const j1 = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Delivered Writer",
+      apolloEmail: "delivered@outlet.com",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "served",
+    });
+
+    mockPerEmailStatus([{ email: "delivered@outlet.com", delivered: true }]);
+
+    const res = await request(app)
+      .get(`/orgs/stats?campaignId=${CAMPAIGN_ID}&outletId=${OUTLET_ID}`)
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.byOutreachStatus.delivered).toBe(1);
+    expect(res.body.byOutreachStatus.contacted).toBe(1);
+  });
+
+  it("calls POST /orgs/status (not GET /stats) when outletId is present", async () => {
+    const j1 = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Check Call",
+      apolloEmail: "check@outlet.com",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "served",
+    });
+
+    mockPerEmailStatus([{ email: "check@outlet.com", delivered: false }]);
+
+    await request(app)
+      .get(`/orgs/stats?campaignId=${CAMPAIGN_ID}&outletId=${OUTLET_ID}`)
+      .set(AUTH_HEADERS);
+
+    // Verify POST /orgs/status was called (not GET /stats)
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [callUrl, callOpts] = mockFetch.mock.calls[0];
+    expect(callUrl).toContain("/orgs/status");
+    expect(callOpts.method).toBe("POST");
+  });
+
+  it("fails open when per-email check fails", async () => {
+    const j1 = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Fail Open",
+      apolloEmail: "fail@outlet.com",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: j1.id, orgId: ORG_ID, brandIds: [BRAND_ID], campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID, status: "served",
+    });
+
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 502, text: async () => "Bad Gateway" });
+
+    const res = await request(app)
+      .get(`/orgs/stats?campaignId=${CAMPAIGN_ID}&outletId=${OUTLET_ID}`)
+      .set(AUTH_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.totalJournalists).toBe(1);
+    expect(res.body.byOutreachStatus.served).toBe(1);
+    expect(res.body.byOutreachStatus.delivered).toBeUndefined();
+  });
+});
