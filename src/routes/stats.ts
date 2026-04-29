@@ -1,16 +1,19 @@
 import { Router } from "express";
 import { eq, and, inArray, arrayContains, count, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { campaignJournalists } from "../db/schema.js";
+import { campaignJournalists, journalists } from "../db/schema.js";
 import { StatsQuerySchema } from "../schemas.js";
 import {
   fetchEmailGatewayStats,
   fetchEmailGatewayStatsGrouped,
+  checkEmailStatuses,
   makeCumulativeDbCounts,
   type EmailGatewayStatsParams,
   type EmailGatewayBroadcastStats,
   type EmailGatewayRepliesDetail,
+  type EmailScopeStatus,
 } from "../lib/email-gateway-client.js";
+import { type OrgContext } from "../lib/service-context.js";
 
 export const publicStatsRouter = Router();
 export const orgStatsRouter = Router();
@@ -47,6 +50,70 @@ function enrichWithGatewayStats(target: Record<string, number>, gw: EmailGateway
   if (rs.repliesNegative > 0) target.repliesNegative = rs.repliesNegative;
   if (rs.repliesNeutral > 0) target.repliesNeutral = rs.repliesNeutral;
   if (rs.repliesAutoReply > 0) target.repliesAutoReply = rs.repliesAutoReply;
+}
+
+/**
+ * When outletId is present, the aggregate email-gateway stats endpoint can't filter by outlet.
+ * Instead, resolve per-email statuses and count the booleans.
+ */
+async function enrichWithPerEmailStats(
+  target: Record<string, number>,
+  where: ReturnType<typeof and>,
+  query: { campaignId?: string; brandId?: string },
+  passthroughHeaders: Record<string, string>,
+): Promise<void> {
+  try {
+    const emailRows = await db
+      .select({
+        apolloEmail: journalists.apolloEmail,
+        campaignEmail: campaignJournalists.email,
+      })
+      .from(campaignJournalists)
+      .innerJoin(journalists, eq(campaignJournalists.journalistId, journalists.id))
+      .where(where);
+
+    const uniqueEmails = [
+      ...new Set(
+        emailRows
+          .map((r) => r.apolloEmail ?? r.campaignEmail)
+          .filter((e): e is string => e !== null)
+      ),
+    ];
+    if (uniqueEmails.length === 0) return;
+
+    const ctx: OrgContext = {
+      orgId: passthroughHeaders["x-org-id"] ?? "",
+      userId: passthroughHeaders["x-user-id"],
+      runId: passthroughHeaders["x-run-id"],
+      brandIds: query.brandId ? [query.brandId] : [],
+    };
+
+    const results = await checkEmailStatuses(
+      uniqueEmails.map((email) => ({ email })),
+      { brandId: query.brandId, campaignId: query.campaignId },
+      ctx,
+    );
+
+    for (const r of results) {
+      const scope: EmailScopeStatus | null =
+        r.broadcast.campaign ?? r.broadcast.brand ?? null;
+      if (!scope) continue;
+      if (scope.contacted) target.contacted = (target.contacted ?? 0) + 1;
+      if (scope.sent) target.sent = (target.sent ?? 0) + 1;
+      if (scope.delivered) target.delivered = (target.delivered ?? 0) + 1;
+      if (scope.opened) target.opened = (target.opened ?? 0) + 1;
+      if (scope.clicked) target.clicked = (target.clicked ?? 0) + 1;
+      if (scope.bounced) target.bounced = (target.bounced ?? 0) + 1;
+      if (scope.unsubscribed) target.unsubscribed = (target.unsubscribed ?? 0) + 1;
+      if (scope.replied) {
+        if (scope.replyClassification === "positive") target.repliesPositive = (target.repliesPositive ?? 0) + 1;
+        if (scope.replyClassification === "negative") target.repliesNegative = (target.repliesNegative ?? 0) + 1;
+        if (scope.replyClassification === "neutral") target.repliesNeutral = (target.repliesNeutral ?? 0) + 1;
+      }
+    }
+  } catch (err) {
+    console.warn("[journalists-service] per-email stats enrichment failed (continuing without):", err);
+  }
 }
 
 function buildPassthroughHeaders(locals: Record<string, unknown>): Record<string, string> {
@@ -104,7 +171,7 @@ async function resolveFiltersAndQuery(
   }
   const byOutreachStatus: Record<string, number> = makeCumulativeDbCounts(exclusiveCounts);
 
-  // Enrich with all email-gateway stats (fail-open)
+  // Enrich with email-gateway stats (fail-open)
   const gwParams: EmailGatewayStatsParams = {
     campaignId: query.campaignId,
     brandId: query.brandId,
@@ -112,13 +179,20 @@ async function resolveFiltersAndQuery(
     featureSlugs: query.featureSlugs,
     workflowSlug: query.workflowSlug,
   };
-  const gwStats = await fetchEmailGatewayStats(gwParams, passthroughHeaders);
-  if (gwStats) {
-    enrichWithGatewayStats(byOutreachStatus, gwStats);
-  }
 
   const result: StatsResult = { totalJournalists: total, byOutreachStatus };
-  if (gwStats?.recipientStats.repliesDetail) result.repliesDetail = gwStats.recipientStats.repliesDetail;
+
+  if (query.outletId) {
+    // Outlet-scoped: aggregate stats endpoint doesn't support outletId filtering,
+    // so resolve per-email via POST /orgs/status and count booleans.
+    await enrichWithPerEmailStats(byOutreachStatus, where, query, passthroughHeaders);
+  } else {
+    const gwStats = await fetchEmailGatewayStats(gwParams, passthroughHeaders);
+    if (gwStats) {
+      enrichWithGatewayStats(byOutreachStatus, gwStats);
+      if (gwStats.recipientStats.repliesDetail) result.repliesDetail = gwStats.recipientStats.repliesDetail;
+    }
+  }
 
   const groupBy = query.groupBy;
   if (groupBy === "featureSlug" || groupBy === "workflowSlug") {

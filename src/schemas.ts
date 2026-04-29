@@ -166,6 +166,8 @@ export const CampaignOutletJournalistSchema = z
     whyNotRelevant: z.string(),
     articleUrls: z.array(z.string()).nullable(),
     status: StatusBooleansSchema,
+    statusReason: z.string().nullable().openapi({ description: "Machine-readable skip reason slug (e.g. 'no-email', 'already-contacted'). Null if not skipped." }),
+    statusDetail: z.string().nullable().openapi({ description: "Human-readable debug detail with IDs and names. Null if not skipped." }),
     runId: z.string().uuid().nullable(),
     createdAt: z.string(),
     journalistName: z.string(),
@@ -280,6 +282,8 @@ const JournalistCampaignEntrySchema = z.object({
   articleUrls: z.array(z.string()).nullable(),
   email: z.string().nullable().openapi({ description: "Per-campaign email (from campaign_journalists table)" }),
   apolloPersonId: z.string().nullable(),
+  statusReason: z.string().nullable().openapi({ description: "Machine-readable skip reason slug (e.g. 'no-email', 'already-contacted'). Null if not skipped." }),
+  statusDetail: z.string().nullable().openapi({ description: "Human-readable debug detail with IDs and names. Null if not skipped." }),
   runId: z.string().uuid().nullable(),
   createdAt: z.string(),
 }).openapi("JournalistCampaignEntry");
