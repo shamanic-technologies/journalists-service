@@ -488,6 +488,7 @@
         "enum": [
           "featureSlug",
           "workflowSlug",
+          "workflowDynastySlug",
           "brandId",
           "campaignId"
         ],
@@ -1461,6 +1462,15 @@
           },
           {
             "schema": {
+              "type": "string",
+              "description": "Filter by workflow dynasty slug. Resolves to all versioned workflow slugs via workflow-service, then filters WHERE workflow_slug IN (...)."
+            },
+            "required": false,
+            "name": "workflowDynastySlug",
+            "in": "query"
+          },
+          {
+            "schema": {
               "$ref": "#/components/schemas/StatsGroupBy"
             },
             "required": false,
@@ -1577,6 +1587,15 @@
             },
             "required": false,
             "name": "workflowSlugs",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by workflow dynasty slug. Resolves to all versioned workflow slugs via workflow-service, then filters WHERE workflow_slug IN (...)."
+            },
+            "required": false,
+            "name": "workflowDynastySlug",
             "in": "query"
           },
           {

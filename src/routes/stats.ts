@@ -14,6 +14,7 @@ import {
   type EmailScopeStatus,
 } from "../lib/email-gateway-client.js";
 import { type OrgContext } from "../lib/service-context.js";
+import { resolveWorkflowDynastySlugs, fetchWorkflowDynastyMap } from "../lib/dynasty-client.js";
 
 export const publicStatsRouter = Router();
 export const orgStatsRouter = Router();
@@ -130,6 +131,19 @@ async function resolveFiltersAndQuery(
 ): Promise<StatsResult> {
   const table = campaignJournalists;
 
+  // Resolve dynasty slug to versioned workflow slugs (if provided)
+  const dynastyContext = {
+    orgId: passthroughHeaders["x-org-id"],
+    userId: passthroughHeaders["x-user-id"],
+    runId: passthroughHeaders["x-run-id"],
+  };
+
+  let resolvedWorkflowSlugs: string[] | undefined;
+  if (query.workflowDynastySlug) {
+    resolvedWorkflowSlugs = await resolveWorkflowDynastySlugs(query.workflowDynastySlug, dynastyContext);
+    if (resolvedWorkflowSlugs.length === 0) return emptyStats();
+  }
+
   // Build WHERE conditions
   const conditions = [];
 
@@ -144,7 +158,9 @@ async function resolveFiltersAndQuery(
     conditions.push(eq(table.featureSlug, query.featureSlug));
   }
 
-  if (query.workflowSlugs && query.workflowSlugs.length > 0) {
+  if (resolvedWorkflowSlugs) {
+    conditions.push(inArray(table.workflowSlug, resolvedWorkflowSlugs));
+  } else if (query.workflowSlugs && query.workflowSlugs.length > 0) {
     conditions.push(inArray(table.workflowSlug, query.workflowSlugs));
   } else if (query.workflowSlug) {
     conditions.push(eq(table.workflowSlug, query.workflowSlug));
@@ -239,6 +255,54 @@ async function resolveFiltersAndQuery(
     }
 
     result.groupedBy = Object.fromEntries(slugMap);
+  } else if (groupBy === "workflowDynastySlug") {
+    // Query by workflow_slug, then re-aggregate by dynasty via reverse map
+    const [dynastyMap, groupedRows] = await Promise.all([
+      fetchWorkflowDynastyMap(dynastyContext),
+      db
+        .select({
+          slug: table.workflowSlug,
+          status: table.status,
+          count: count(),
+        })
+        .from(table)
+        .where(where)
+        .groupBy(table.workflowSlug, table.status),
+    ]);
+
+    const toDynasty = (slug: string | null): string =>
+      dynastyMap.get(slug ?? "") ?? slug ?? "(none)";
+
+    const dynastyGroupMap = new Map<string, GroupedEntry>();
+    for (const row of groupedRows) {
+      const dynastyKey = toDynasty(row.slug);
+      let entry = dynastyGroupMap.get(dynastyKey);
+      if (!entry) {
+        entry = { totalJournalists: 0, byOutreachStatus: {} };
+        dynastyGroupMap.set(dynastyKey, entry);
+      }
+      entry.byOutreachStatus[row.status] = (entry.byOutreachStatus[row.status] ?? 0) + row.count;
+      entry.totalJournalists += row.count;
+    }
+
+    for (const entry of dynastyGroupMap.values()) {
+      entry.byOutreachStatus = makeCumulativeDbCounts(entry.byOutreachStatus);
+    }
+
+    // Enrich with email-gateway stats grouped by workflowSlug, then re-aggregate by dynasty
+    const gwGrouped = await fetchEmailGatewayStatsGrouped(gwParams, "workflowSlug", passthroughHeaders);
+    if (gwGrouped) {
+      for (const group of gwGrouped.groups) {
+        const dynastyKey = toDynasty(group.key);
+        const entry = dynastyGroupMap.get(dynastyKey);
+        if (entry && group.broadcast) {
+          enrichWithGatewayStats(entry.byOutreachStatus, group.broadcast);
+          if (group.broadcast.recipientStats.repliesDetail) entry.repliesDetail = group.broadcast.recipientStats.repliesDetail;
+        }
+      }
+    }
+
+    result.groupedBy = Object.fromEntries(dynastyGroupMap);
   } else if (groupBy === "campaignId") {
     const groupedRows = await db
       .select({
