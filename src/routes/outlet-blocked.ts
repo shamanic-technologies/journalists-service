@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { checkOutletBlocked } from "../lib/outlet-blocked.js";
 import type { OrgContext } from "../lib/service-context.js";
+import { traceEvent } from "../lib/trace-event.js";
 
 const router = Router();
 
@@ -40,6 +41,15 @@ router.get("/orgs/outlets/blocked", async (req, res) => {
       console.log(
         `[journalists-service] GET /orgs/outlets/blocked: ${result.reason} (outletId=${outlet_id} campaignId=${campaignId} orgId=${orgId})`
       );
+      if (ctx.runId) {
+        traceEvent(ctx.runId, {
+          service: "journalists-service",
+          event: "outlet-blocked-check",
+          detail: `outletId=${outlet_id}, blocked=true, reason=${result.reason}`,
+          level: "info",
+          data: { outletId: outlet_id, blocked: true, reason: result.reason },
+        }, req.headers).catch(() => {});
+      }
       res.json({ blocked: true, reason: result.reason });
       return;
     }

@@ -14,6 +14,7 @@ import {
 } from "../lib/journalist-discovery.js";
 import { DiscoverRequestSchema } from "../schemas.js";
 import type { OrgContext } from "../lib/service-context.js";
+import { traceEvent } from "../lib/trace-event.js";
 
 const router = Router();
 
@@ -70,6 +71,14 @@ router.post("/orgs/discover", async (req, res) => {
   }
 
   const childCtx: OrgContext = { ...ctx, runId: childRun.id };
+
+  traceEvent(childRun.id, {
+    service: "journalists-service",
+    event: "discover-start",
+    detail: `outletId=${outletId}, campaignId=${campaignId}, brandIds=${brandIds.join(",")}`,
+    level: "info",
+    data: { outletId, campaignId, brandIds },
+  }, req.headers).catch(() => {});
 
   try {
     // Fetch brand info, campaign, and outlet in parallel
@@ -143,6 +152,14 @@ router.post("/orgs/discover", async (req, res) => {
       `[journalists-service] POST /discover completed — outletId=${outletId} found=${filled} runId=${childRun.id}`
     );
 
+    traceEvent(childRun.id, {
+      service: "journalists-service",
+      event: "discover-complete",
+      detail: `outletId=${outletId}, discovered=${filled}`,
+      level: "info",
+      data: { outletId, discovered: filled },
+    }, req.headers).catch(() => {});
+
     res.json({
       runId: childRun.id,
       discovered: filled,
@@ -150,6 +167,13 @@ router.post("/orgs/discover", async (req, res) => {
   } catch (err) {
     // Close run as failed
     await closeRun(childRun.id, "failed", childCtx);
+
+    traceEvent(childRun.id, {
+      service: "journalists-service",
+      event: "discover-error",
+      detail: err instanceof Error ? err.message : "Unknown error",
+      level: "error",
+    }, req.headers).catch(() => {});
 
     console.error("[journalists-service] Discover error:", err);
     const message =
