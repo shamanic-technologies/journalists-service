@@ -36,7 +36,7 @@ const MAX_PULL_ITERATIONS = 100;
 const CLEANUP_PROBABILITY = 0.01;
 
 // Email statuses that indicate a usable email
-const VALID_EMAIL_STATUSES = new Set(["verified", "guessed", "unavailable"]);
+const VALID_EMAIL_STATUSES = new Set(["verified", "extrapolated"]);
 
 function getCtx(locals: Record<string, unknown>): OrgContext {
   return {

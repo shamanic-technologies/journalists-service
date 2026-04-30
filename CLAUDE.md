@@ -66,7 +66,7 @@ Check global `journalists` table for cached Apollo results:
 If no email after this step → skip.
 
 ### Step 4 — Email quality check
-Reject if Apollo's `emailStatus` is not in `["verified", "guessed", "unavailable"]` (e.g. "bounced").
+Reject if Apollo's `emailStatus` is not in `["verified", "extrapolated"]` (e.g. "bounced", "unavailable").
 
 ### Step 5 — Full dedup (3 axes)
 Check all three dedup axes at `orgId × brandIds` scope:
