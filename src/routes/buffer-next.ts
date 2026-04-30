@@ -24,6 +24,7 @@ import { matchPerson } from "../lib/apollo-client.js";
 import { checkEmailStatuses } from "../lib/email-gateway-client.js";
 import { BufferNextSchema } from "../schemas.js";
 import type { OrgContext } from "../lib/service-context.js";
+import { traceEvent } from "../lib/trace-event.js";
 
 const router = Router();
 
@@ -621,6 +622,15 @@ async function processOutlet(
     console.log(
       `[journalists-service] Outlet blocked: ${blocked.reason} (outletId=${outlet.outletId} campaignId=${campaignId})`
     );
+    if (ctx.runId) {
+      traceEvent(ctx.runId, {
+        service: "journalists-service",
+        event: "outlet-blocked",
+        detail: `outletId=${outlet.outletId}, reason=${blocked.reason ?? "unknown"}`,
+        level: "warn",
+        data: { outletId: outlet.outletId, reason: blocked.reason },
+      }, {} as Record<string, string | string[] | undefined>).catch(() => {});
+    }
     return { found: false, reason: blocked.reason };
   }
 
@@ -664,6 +674,16 @@ async function processOutlet(
             })
             .where(eq(campaignJournalists.id, claimed.campaignJournalistId));
 
+          if (childCtx.runId) {
+            traceEvent(childCtx.runId, {
+              service: "journalists-service",
+              event: "journalist-served",
+              detail: `journalistId=${claimed.journalistId}, email=${resolved.email}, outletId=${outlet.outletId}`,
+              level: "info",
+              data: { journalistId: claimed.journalistId, email: resolved.email, outletId: outlet.outletId, apolloPersonId: resolved.apolloPersonId },
+            }, {} as Record<string, string | string[] | undefined>).catch(() => {});
+          }
+
           succeeded = true;
           return {
             found: true,
@@ -700,6 +720,15 @@ async function processOutlet(
         console.log(
           `[journalists-service] Skipped journalist ${claimed.firstName} ${claimed.lastName} — ${skip?.reason ?? "no valid email"}`
         );
+        if (childCtx.runId) {
+          traceEvent(childCtx.runId, {
+            service: "journalists-service",
+            event: "journalist-skipped",
+            detail: `journalistId=${claimed.journalistId}, reason=${skip?.reason ?? "no valid email"}`,
+            level: "info",
+            data: { journalistId: claimed.journalistId, reason: skip?.reason, detail: skip?.detail },
+          }, {} as Record<string, string | string[] | undefined>).catch(() => {});
+        }
         continue;
       }
 
@@ -853,6 +882,16 @@ router.post("/orgs/buffer/next", async (req, res) => {
     `[journalists-service] POST /buffer/next — outletId=${outletId ?? "(auto)"} campaignId=${campaignId} brandIds=${brandIds.join(",")} orgId=${ctx.orgId}`
   );
 
+  if (ctx.runId) {
+    traceEvent(ctx.runId, {
+      service: "journalists-service",
+      event: "buffer-next-start",
+      detail: `outletId=${outletId ?? "(auto)"}, campaignId=${campaignId}, brandIds=${brandIds.join(",")}`,
+      level: "info",
+      data: { outletId, campaignId, brandIds },
+    }, req.headers).catch(() => {});
+  }
+
   try {
     // Probabilistic cleanup
     maybeCleanupIdempotencyCache();
@@ -969,6 +1008,14 @@ router.post("/orgs/buffer/next", async (req, res) => {
     res.json(response);
   } catch (err) {
     console.error("[journalists-service] Buffer/next error:", err);
+    if (ctx.runId) {
+      traceEvent(ctx.runId, {
+        service: "journalists-service",
+        event: "buffer-next-error",
+        detail: err instanceof Error ? err.message : "Unknown error",
+        level: "error",
+      }, req.headers).catch(() => {});
+    }
     const message =
       err instanceof Error ? err.message : "Internal server error";
     res.status(502).json({ error: message });
