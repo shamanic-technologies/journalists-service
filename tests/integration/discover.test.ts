@@ -159,7 +159,6 @@ describe("POST /discover", () => {
 
   afterAll(async () => {
     await cleanTestData();
-    await closeDb();
   });
 
   // ── Validation ──────────────────────────────────────────────────────
@@ -611,6 +610,62 @@ describe("POST /discover", () => {
     expect(res.body.discovered).toBe(2);
   });
 
+  it("inserts journalists below relevance threshold as skipped with low-relevance reason", async () => {
+    setupDiscoverMocks();
+
+    // Override LLM to return one high-relevance and one low-relevance journalist
+    mockedChatComplete.mockResolvedValue({
+      content: "",
+      json: {
+        journalists: [
+          {
+            firstName: "Sarah",
+            lastName: "Johnson",
+            relevanceScore: 92,
+            whyRelevant: "Covers SaaS and developer tools.",
+            whyNotRelevant: "Some consumer tech coverage.",
+            articleUrls: ["https://techcrunch.com/2026/01/15/top-saas-tools"],
+          },
+          {
+            firstName: "Mike",
+            lastName: "Chen",
+            relevanceScore: 15,
+            whyRelevant: "Mentioned AI once.",
+            whyNotRelevant: "Focuses on unrelated topics.",
+            articleUrls: ["https://techcrunch.com/2026/02/10/ai-dev-tools-funding"],
+          },
+        ],
+      },
+      tokensInput: 1500,
+      tokensOutput: 500,
+      model: "claude-sonnet-4-6",
+    });
+
+    const res = await request(app)
+      .post("/orgs/discover")
+      .set(DISCOVER_HEADERS)
+      .send({ outletId: OUTLET_ID });
+
+    expect(res.status).toBe(200);
+    expect(res.body.discovered).toBe(2);
+
+    const cjs = await db
+      .select()
+      .from(campaignJournalists)
+      .where(eq(campaignJournalists.campaignId, CAMPAIGN_ID));
+
+    // Sarah (92) should be buffered
+    const sarah = cjs.find((r) => r.relevanceScore === "92.00" || r.relevanceScore === "92");
+    expect(sarah).toBeDefined();
+    expect(sarah!.status).toBe("buffered");
+
+    // Mike (15) should be skipped with low-relevance
+    const mike = cjs.find((r) => r.relevanceScore === "15.00" || r.relevanceScore === "15");
+    expect(mike).toBeDefined();
+    expect(mike!.status).toBe("skipped");
+    expect(mike!.statusReason).toBe("low-relevance");
+  });
+
   it("does not crash when name enrichment would collide with another journalist", async () => {
     setupDiscoverMocks();
 
@@ -677,4 +732,82 @@ describe("POST /discover", () => {
     expect(abbrev.journalistName).toBe("S. Johnson");
   });
 
+});
+
+// ── copyScoresToCampaign ──────────────────────────────────────────────
+
+import { copyScoresToCampaign } from "../../src/lib/journalist-discovery.js";
+
+const CAMPAIGN_ID_2 = "66666666-6666-6666-6666-666666666666";
+
+describe("copyScoresToCampaign", () => {
+  beforeEach(async () => {
+    await cleanTestData();
+  });
+
+  it("copies all journalists, >= 30 as buffered, < 30 as skipped with low-relevance", async () => {
+    // Insert two journalists: one high, one low relevance
+    const high = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "High Score Writer",
+      firstName: "High",
+      lastName: "Score",
+    });
+    const low = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Low Score Writer",
+      firstName: "Low",
+      lastName: "Score",
+    });
+
+    // Insert them in source campaign
+    await insertTestCampaignJournalist({
+      journalistId: high.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "75.00",
+    });
+    await insertTestCampaignJournalist({
+      journalistId: low.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_ID],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "15.00",
+    });
+
+    const copied = await copyScoresToCampaign(
+      ORG_ID,
+      OUTLET_ID,
+      [BRAND_ID],
+      CAMPAIGN_ID_2,
+      null,
+      null,
+      null,
+    );
+
+    expect(copied).toBe(2);
+
+    const cjs = await db
+      .select()
+      .from(campaignJournalists)
+      .where(eq(campaignJournalists.campaignId, CAMPAIGN_ID_2));
+
+    expect(cjs).toHaveLength(2);
+
+    const highCopy = cjs.find((r) => r.journalistId === high.id);
+    expect(highCopy).toBeDefined();
+    expect(highCopy!.status).toBe("buffered");
+
+    const lowCopy = cjs.find((r) => r.journalistId === low.id);
+    expect(lowCopy).toBeDefined();
+    expect(lowCopy!.status).toBe("skipped");
+    expect(lowCopy!.statusReason).toBe("low-relevance");
+  });
+});
+
+afterAll(async () => {
+  await closeDb();
 });
