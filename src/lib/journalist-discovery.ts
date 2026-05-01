@@ -1,6 +1,7 @@
 import { db, sql as pgClient } from "../db/index.js";
 import { journalists, campaignJournalists, outletScrapeCache } from "../db/schema.js";
 import { eq, and, sql, arrayContains } from "drizzle-orm";
+import { MIN_RELEVANCE_SCORE } from "./outlet-blocked.js";
 import {
   discoverOutletArticles,
   type DiscoveredArticle,
@@ -320,7 +321,8 @@ export async function storeJournalists(
       }
     }
 
-    // Campaign scoring — status defaults to 'buffered'
+    // Campaign scoring — buffered if relevant, skipped if below threshold
+    const belowThreshold = j.relevanceScore < MIN_RELEVANCE_SCORE;
     await db
       .insert(campaignJournalists)
       .values({
@@ -336,7 +338,8 @@ export async function storeJournalists(
         whyNotRelevant: j.whyNotRelevant,
         articleUrls: j.articleUrls || [],
         runId,
-        statusReason: "discovered",
+        status: belowThreshold ? "skipped" : "buffered",
+        statusReason: belowThreshold ? "low-relevance" : "discovered",
         statusDetail: `Discovered ${journalistName} at outletId=${outletId}, relevanceScore=${j.relevanceScore}, runId=${runId ?? "none"}`,
       })
       .onConflictDoNothing();
@@ -423,7 +426,7 @@ async function reconstructAuthorsFromDb(outletId: string): Promise<AuthorWithArt
 /**
  * Copy campaign_journalists rows from previous campaigns to a new campaign.
  * Used when the scoring cache is fresh — avoids re-scraping and re-scoring.
- * Only copies journalists above the MIN_RELEVANCE_SCORE threshold.
+ * Copies ALL journalists: >= MIN_RELEVANCE_SCORE as buffered, < as skipped.
  */
 export async function copyScoresToCampaign(
   orgId: string,
@@ -447,12 +450,13 @@ export async function copyScoresToCampaign(
       AND outlet_id = ${outletId}
       AND brand_ids @> ${brandIds}::uuid[]
       AND campaign_id != ${targetCampaignId}
-      AND relevance_score::numeric >= 30
     ORDER BY journalist_id, created_at DESC
   `;
 
   let copied = 0;
   for (const row of existing) {
+    const score = parseFloat(row.relevanceScore as string);
+    const belowThreshold = score < MIN_RELEVANCE_SCORE;
     await db
       .insert(campaignJournalists)
       .values({
@@ -468,7 +472,8 @@ export async function copyScoresToCampaign(
         featureSlug,
         workflowSlug,
         runId,
-        statusReason: "discovered",
+        status: belowThreshold ? "skipped" : "buffered",
+        statusReason: belowThreshold ? "low-relevance" : "discovered",
         statusDetail: `Copied from scoring cache for outletId=${outletId}, journalistId=${row.journalistId}, relevanceScore=${row.relevanceScore}, runId=${runId ?? "none"}`,
       })
       .onConflictDoNothing();
