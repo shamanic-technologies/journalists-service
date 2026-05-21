@@ -9,6 +9,44 @@ function getConfig() {
   return { url: OUTLETS_SERVICE_URL, apiKey: OUTLETS_SERVICE_API_KEY };
 }
 
+const RETRYABLE_CAUSE_CODES = new Set([
+  "UND_ERR_SOCKET",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "ECONNRESET",
+]);
+
+const RETRY_DELAYS_MS = [100, 300];
+
+function isRetryableFetchError(err: unknown): boolean {
+  if (!(err instanceof TypeError)) return false;
+  const cause = (err as { cause?: { code?: string } }).cause;
+  return !!cause?.code && RETRYABLE_CAUSE_CODES.has(cause.code);
+}
+
+async function fetchWithSocketRetry(
+  input: string,
+  init: RequestInit,
+  label: string
+): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetch(input, init);
+    } catch (err) {
+      if (!isRetryableFetchError(err) || attempt >= RETRY_DELAYS_MS.length) {
+        if (attempt > 0) {
+          console.warn(
+            `[journalists-service] outlets-client ${label} failed after ${attempt + 1} attempts:`,
+            err
+          );
+        }
+        throw err;
+      }
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
+    }
+  }
+}
+
 export interface OutletInfo {
   id: string;
   outletName: string;
@@ -24,7 +62,11 @@ export async function fetchOutlet(
 
   const headers = buildServiceHeaders(apiKey, ctx);
 
-  const response = await fetch(`${url}/orgs/outlets/${outletId}`, { headers });
+  const response = await fetchWithSocketRetry(
+    `${url}/orgs/outlets/${outletId}`,
+    { headers },
+    `GET /orgs/outlets/${outletId}`
+  );
 
   if (!response.ok) {
     const body = await response.text();
@@ -46,11 +88,15 @@ export async function fetchOutletsBatch(
 ): Promise<Map<string, OutletBasic>> {
   const { url, apiKey } = getConfig();
 
-  const response = await fetch(`${url}/internal/outlets`, {
-    method: "POST",
-    headers: { "x-api-key": apiKey, "content-type": "application/json" },
-    body: JSON.stringify({ ids: outletIds }),
-  });
+  const response = await fetchWithSocketRetry(
+    `${url}/internal/outlets`,
+    {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "content-type": "application/json" },
+      body: JSON.stringify({ ids: outletIds }),
+    },
+    "POST /internal/outlets"
+  );
 
   if (!response.ok) {
     const body = await response.text();
@@ -96,11 +142,15 @@ export async function pullNextOutlet(
   const body: Record<string, unknown> = { count: 1 };
   if (idempotencyKey) body.idempotencyKey = idempotencyKey;
 
-  const response = await fetch(`${url}/orgs/buffer/next`, {
-    method: "POST",
-    headers: { ...headers, "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const response = await fetchWithSocketRetry(
+    `${url}/orgs/buffer/next`,
+    {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    "POST /orgs/buffer/next"
+  );
 
   if (!response.ok) {
     const text = await response.text();
