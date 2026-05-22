@@ -68,6 +68,8 @@ Check global `journalists` table for cached Apollo results:
 - If `apollo_checked_at < 30 days` AND `apollo_email IS NOT NULL` → use cached email
 - Otherwise → call Apollo API, then store results on `journalists` table (even if no email, to cache the "no email" result)
 
+> **Billing note:** Apollo only consumes a credit when it returns an email. A no-email lookup is free, so the cost driver of an unproductive campaign is NOT Apollo credits — it is LLM outlet/journalist discovery (chat-service flash + scraping) running on outlets that will never yield an emailable journalist.
+
 If no email after this step → skip.
 
 ### Step 4 — Email quality check
