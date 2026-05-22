@@ -142,7 +142,7 @@ describe("GET /orgs/outlets/blocked", () => {
       brandIds: [BRAND_A],
       campaignId: CAMPAIGN_ID,
       outletId: OUTLET_ID,
-      relevanceScore: "20.00",
+      relevanceScore: "19.00",
       status: "buffered",
     });
 
@@ -153,6 +153,32 @@ describe("GET /orgs/outlets/blocked", () => {
     expect(res.status).toBe(200);
     expect(res.body.blocked).toBe(true);
     expect(res.body.reason).toContain("below relevance threshold");
+  });
+
+  it("returns blocked=false when at least one journalist meets the acceptance gate (>= 20)", async () => {
+    const borderline = await insertTestJournalist({
+      outletId: OUTLET_ID,
+      journalistName: "Borderline Writer",
+      firstName: "Border",
+      lastName: "Line",
+    });
+
+    await insertTestCampaignJournalist({
+      journalistId: borderline.id,
+      orgId: ORG_ID,
+      brandIds: [BRAND_A],
+      campaignId: CAMPAIGN_ID,
+      outletId: OUTLET_ID,
+      relevanceScore: "25.00",
+      status: "buffered",
+    });
+
+    const res = await request(app)
+      .get(`/orgs/outlets/blocked?outlet_id=${OUTLET_ID}`)
+      .set(BLOCKED_HEADERS);
+
+    expect(res.status).toBe(200);
+    expect(res.body.blocked).toBe(false);
   });
 
   it("returns blocked=false when at least one journalist is above relevance threshold", async () => {
@@ -229,7 +255,7 @@ describe("GET /orgs/outlets/blocked", () => {
       status: "buffered",
     });
 
-    // email-gateway confirms contact at brand scope (within 30 days)
+    // email-gateway confirms contact at brand scope (within 14 days)
     mockedCheckEmailStatuses.mockResolvedValue([
       makeGatewayResult("sarah@techcrunch.com", {
         contacted: true,
@@ -375,9 +401,9 @@ describe("GET /orgs/outlets/blocked", () => {
     expect(res.body.blocked).toBe(false);
   });
 
-  // ── Condition A: Email-gateway contacted within 30 days ───────────
+  // ── Condition A: Email-gateway contacted within 14 days ───────────
 
-  it("returns blocked=true when email-gateway confirms contact within 30 days", async () => {
+  it("returns blocked=true when email-gateway confirms contact within 14 days", async () => {
     const sarah = await insertTestJournalist({
       outletId: OUTLET_ID,
       journalistName: "Sarah Johnson",
@@ -414,7 +440,7 @@ describe("GET /orgs/outlets/blocked", () => {
       status: "buffered",
     });
 
-    // email-gateway confirms Sarah was contacted for this brand within 30 days
+    // email-gateway confirms Sarah was contacted for this brand within 14 days
     mockedCheckEmailStatuses.mockResolvedValue([
       makeGatewayResult("sarah@techcrunch.com", {
         contacted: true,
@@ -432,7 +458,7 @@ describe("GET /orgs/outlets/blocked", () => {
     expect(res.body.reason).toContain("already contacted at this outlet");
   });
 
-  it("returns blocked=false when email-gateway contact is older than 30 days", async () => {
+  it("returns blocked=false when email-gateway contact is older than 14 days", async () => {
     const sarah = await insertTestJournalist({
       outletId: OUTLET_ID,
       journalistName: "Sarah Johnson",
@@ -661,7 +687,7 @@ describe("GET /orgs/outlets/blocked", () => {
     });
 
     // email-gateway: first call (brand A) returns not contacted,
-    // second call (brand B) returns contacted within 30 days
+    // second call (brand B) returns contacted within 14 days
     mockedCheckEmailStatuses
       .mockResolvedValueOnce([
         makeGatewayResult("sarah@techcrunch.com", { contacted: false }),

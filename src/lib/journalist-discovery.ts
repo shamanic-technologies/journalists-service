@@ -1,7 +1,7 @@
 import { db, sql as pgClient } from "../db/index.js";
 import { journalists, campaignJournalists, outletScrapeCache } from "../db/schema.js";
 import { eq, and, sql, arrayContains } from "drizzle-orm";
-import { MIN_RELEVANCE_SCORE } from "./outlet-blocked.js";
+import { MIN_ACCEPTANCE_SCORE } from "./outlet-blocked.js";
 import {
   discoverOutletArticles,
   type DiscoveredArticle,
@@ -321,8 +321,8 @@ export async function storeJournalists(
       }
     }
 
-    // Campaign scoring — buffered if relevant, skipped if below threshold
-    const belowThreshold = j.relevanceScore < MIN_RELEVANCE_SCORE;
+    // Campaign scoring — buffered if relevant, skipped if below acceptance gate
+    const belowThreshold = j.relevanceScore < MIN_ACCEPTANCE_SCORE;
     await db
       .insert(campaignJournalists)
       .values({
@@ -426,7 +426,7 @@ async function reconstructAuthorsFromDb(outletId: string): Promise<AuthorWithArt
 /**
  * Copy campaign_journalists rows from previous campaigns to a new campaign.
  * Used when the scoring cache is fresh — avoids re-scraping and re-scoring.
- * Copies ALL journalists: >= MIN_RELEVANCE_SCORE as buffered, < as skipped.
+ * Copies ALL journalists: >= MIN_ACCEPTANCE_SCORE as buffered, < as skipped.
  */
 export async function copyScoresToCampaign(
   orgId: string,
@@ -456,7 +456,7 @@ export async function copyScoresToCampaign(
   let copied = 0;
   for (const row of existing) {
     const score = parseFloat(row.relevanceScore as string);
-    const belowThreshold = score < MIN_RELEVANCE_SCORE;
+    const belowThreshold = score < MIN_ACCEPTANCE_SCORE;
     await db
       .insert(campaignJournalists)
       .values({

@@ -18,7 +18,7 @@ import { extractDomain, refillBuffer, copyScoresToCampaign } from "../lib/journa
 import {
   checkOutletBlocked,
   SERVED_COOLDOWN_MS,
-  MIN_RELEVANCE_SCORE,
+  MIN_ACCEPTANCE_SCORE,
 } from "../lib/outlet-blocked.js";
 import { matchPerson } from "../lib/apollo-client.js";
 import { checkEmailStatuses } from "../lib/email-gateway-client.js";
@@ -117,7 +117,7 @@ async function claimNextBuffered(
       WHERE cj.campaign_id = ${campaignId}
         AND cj.outlet_id = ${outletId}
         AND cj.status = 'buffered'
-        AND cj.relevance_score >= ${MIN_RELEVANCE_SCORE}
+        AND cj.relevance_score >= ${MIN_ACCEPTANCE_SCORE}
       ORDER BY cj.relevance_score DESC
       LIMIT 1
       FOR UPDATE SKIP LOCKED
@@ -608,7 +608,7 @@ async function processOutlet(
   // ── Relevance gate ─────────────────────────────────────────
   const blocked = await checkOutletBlocked(outlet.outletId, campaignId, ctx.orgId, brandIds, ctx);
   if (blocked.blocked) {
-    const lowRelevanceDetail = `relevance_score below min=${MIN_RELEVANCE_SCORE}, outlet blocked: ${blocked.reason ?? "unknown"}`;
+    const lowRelevanceDetail = `relevance_score below min=${MIN_ACCEPTANCE_SCORE}, outlet blocked: ${blocked.reason ?? "unknown"}`;
     await pgClient`
       UPDATE campaign_journalists
       SET status = 'skipped',
@@ -617,7 +617,7 @@ async function processOutlet(
       WHERE campaign_id = ${campaignId}
         AND outlet_id = ${outlet.outletId}
         AND status = 'buffered'
-        AND relevance_score < ${MIN_RELEVANCE_SCORE}
+        AND relevance_score < ${MIN_ACCEPTANCE_SCORE}
     `;
     console.log(
       `[journalists-service] Outlet blocked: ${blocked.reason} (outletId=${outlet.outletId} campaignId=${campaignId})`
