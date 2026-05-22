@@ -4,9 +4,25 @@ import type { OrgContext } from "./service-context.js";
 
 // ── Shared constants ─────────────────────────────────────────────────
 export const SERVED_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour — treat recently-served as "contacted" to close the race window
-export const MIN_RELEVANCE_SCORE = 30; // Don't serve "distant" journalists (0-30 tier)
+
+// Two distinct relevance grandeurs — do not confuse:
+//
+// 1. MIN_RELEVANCE_SCORE (LLM qualification cutoff) — documents the LLM-side
+//    tier boundary used by the scoring prompt in journalist-discovery.ts:
+//    "70-100 Direct fit, 30-70 Adjacent, 0-30 Distant". Anything below 30 is
+//    a "Distant" journalist according to the LLM. This is a documentation /
+//    reporting constant, NOT an acceptance gate.
+//
+// 2. MIN_ACCEPTANCE_SCORE (acceptance gate) — the runtime threshold used to
+//    decide whether a buffered journalist can be claimed and emailed. We
+//    intentionally accept some "Distant"-tier journalists (score >= 20)
+//    because the LLM under-scores niche brands; the gate sits BELOW the LLM
+//    tier boundary on purpose.
+export const MIN_RELEVANCE_SCORE = 30; // LLM tier cutoff (Adjacent vs Distant) — documents the prompt buckets
+export const MIN_ACCEPTANCE_SCORE = 20; // Runtime acceptance gate — buffered journalists below this are skipped
+
 export const APOLLO_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — journalist with no email within this window is non-viable
-export const CONTACTED_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — outlet blocked if someone contacted within this window
+export const CONTACTED_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000; // 14 days — outlet blocked if someone contacted within this window
 export const REPLY_COOLDOWN_MS = 6 * 30 * 24 * 60 * 60 * 1000; // ~6 months — outlet blocked if someone replied within this window
 
 // ── Result type ──────────────────────────────────────────────────────
@@ -21,11 +37,11 @@ export type OutletBlockedResult =
  *
  * Condition A — Someone already reached at this outlet for this brand:
  *   - status 'claimed'/'served' AND created_at < 1h ago (race window)
- *   - OR contacted via email-gateway (broadcast.brand.contacted) within 30 days
+ *   - OR contacted via email-gateway (broadcast.brand.contacted) within 14 days
  *   - OR replied (positive or negative) via email-gateway within 6 months
  *
  * Condition B — Discovery done but no viable journalists:
- *   - All buffered journalists are below relevance threshold
+ *   - All buffered journalists are below the acceptance gate (MIN_ACCEPTANCE_SCORE)
  *   - OR all have no email (Apollo checked within 30 days)
  *   - OR all already contacted for this brand+org
  */
@@ -55,7 +71,7 @@ export async function checkOutletBlocked(
     return { blocked: true, reason: "journalist recently served at this outlet (race window)" };
   }
 
-  // A.2 Email-gateway: contacted < 30d or replied < 6mo
+  // A.2 Email-gateway: contacted < 14d or replied < 6mo
   const servedOrContacted = await pgClient`
     SELECT DISTINCT ON (COALESCE(j.apollo_email, cj.email))
       cj.journalist_id,
@@ -84,13 +100,13 @@ export async function checkOutletBlocked(
         const brandScope = result.broadcast?.brand;
         if (!brandScope) continue;
 
-        // Contacted within 30 days?
+        // Contacted within 14 days?
         if (brandScope.contacted && brandScope.lastDeliveredAt) {
           const deliveredAt = new Date(brandScope.lastDeliveredAt);
           if (deliveredAt >= contactedCutoff) {
             return {
               blocked: true,
-              reason: `journalist already contacted at this outlet for brand ${brandId} within 30 days`,
+              reason: `journalist already contacted at this outlet for brand ${brandId} within 14 days`,
             };
           }
         }
@@ -120,7 +136,7 @@ export async function checkOutletBlocked(
     WHERE cj.campaign_id = ${campaignId}
       AND cj.outlet_id = ${outletId}
       AND cj.status = 'buffered'
-      AND cj.relevance_score >= ${MIN_RELEVANCE_SCORE}
+      AND cj.relevance_score >= ${MIN_ACCEPTANCE_SCORE}
       AND (
         j.apollo_checked_at IS NULL
         OR j.apollo_checked_at < ${apolloCutoff}::timestamptz
@@ -149,9 +165,9 @@ export async function checkOutletBlocked(
   const bufferCheck = await pgClient`
     SELECT
       COUNT(*)::int AS total,
-      COUNT(*) FILTER (WHERE cj.relevance_score < ${MIN_RELEVANCE_SCORE})::int AS below_relevance,
+      COUNT(*) FILTER (WHERE cj.relevance_score < ${MIN_ACCEPTANCE_SCORE})::int AS below_relevance,
       COUNT(*) FILTER (
-        WHERE cj.relevance_score >= ${MIN_RELEVANCE_SCORE}
+        WHERE cj.relevance_score >= ${MIN_ACCEPTANCE_SCORE}
           AND j.apollo_checked_at IS NOT NULL
           AND j.apollo_checked_at >= ${apolloCutoff}::timestamptz
           AND j.apollo_email IS NULL
@@ -173,7 +189,7 @@ export async function checkOutletBlocked(
   if (total === below_relevance) {
     return {
       blocked: true,
-      reason: `all journalists below relevance threshold (${MIN_RELEVANCE_SCORE})`,
+      reason: `all journalists below relevance threshold (${MIN_ACCEPTANCE_SCORE})`,
     };
   }
 

@@ -11,7 +11,7 @@ Called by outlets-service via `GET /internal/outlets/blocked` and internally by 
 ### Condition A — Someone already reached at this outlet for this brand
 
 At least one journalist exists for this `orgId × brandId × outletId` with:
-- status `contacted` AND `contacted < 30 days ago`
+- status `contacted` AND `contacted < 14 days ago` (CONTACTED_COOLDOWN_MS)
 - OR status `served` / `claimed` AND `created_at < 1 hour ago` (race window — not yet confirmed as contacted)
 - OR replied negative (via email-gateway: `broadcast.brand.lead.replied = true` AND `replyClassification = "negative"`) AND reply `< 6 months ago`
 - OR replied positive (via email-gateway: `broadcast.brand.lead.replied = true` AND `replyClassification = "positive"`) AND reply `< 6 months ago`
@@ -23,7 +23,12 @@ ALL of the following:
 - AND at least one of:
   - There are 0 journalists for this outlet
   - OR none of them have a valid email (Apollo checked < 30 days, no email found)
-  - OR none of them have relevance > 30%
+  - OR none of them have relevance >= MIN_ACCEPTANCE_SCORE (20%)
+
+### Two relevance thresholds — do not confuse
+
+- **MIN_RELEVANCE_SCORE = 30** — LLM tier boundary documented in the scoring prompt ("Direct fit 70-100, Adjacent 30-70, Distant 0-30"). Documentation constant; no runtime gate.
+- **MIN_ACCEPTANCE_SCORE = 20** — runtime acceptance gate. Buffered journalists below this are skipped (`status='skipped'`, `status_reason='low-relevance'`). Intentionally sits below the LLM "Adjacent" floor because the LLM under-scores niche brands.
 
 ### Reply data source
 
