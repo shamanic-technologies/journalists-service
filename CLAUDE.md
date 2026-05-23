@@ -81,7 +81,9 @@ Check all three dedup axes at `orgId × brandIds` scope:
 2. **By email** — same email contacted for same brand+org in another campaign_journalists row
 3. **By apollo_person_id** — same Apollo person contacted for same brand+org (covers case where same person has different emails)
 
-Each axis uses the same "contacted" definition (status = contacted OR recent claimed/served).
+Each axis uses the same "contacted" definition:
+- `status = 'contacted'` AND `created_at >= now - JOURNALIST_RECONTACT_COOLDOWN_MS` (~3 months) — same journalist can be re-contacted for same brand after 3 months
+- OR `status IN ('claimed', 'served')` AND `created_at >= now - SERVED_COOLDOWN_MS` (1 hour race window)
 
 If any axis matches → skip.
 
@@ -89,7 +91,9 @@ If any axis matches → skip.
 Call email-gateway `POST /status` and check:
 - `broadcast.global.email.bounced` → skip
 - `broadcast.global.email.unsubscribed` → skip
-- `broadcast.brand.contacted` → skip (already contacted for this brand via any pipeline)
+- `broadcast.brand.contacted` AND `broadcast.brand.lastDeliveredAt >= now - JOURNALIST_RECONTACT_COOLDOWN_MS` (~3 months) → skip (already contacted for this brand within the recontact window)
+
+Note: if `broadcast.brand.contacted = true` but `lastDeliveredAt` is older than 3 months, the journalist is recontactable for this brand.
 
 ### Step 7 — Success
 Return `{ email, apolloPersonId }`. The journalist will be marked as `served`.
