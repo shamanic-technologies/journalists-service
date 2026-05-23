@@ -19,6 +19,7 @@ import {
   checkOutletBlocked,
   SERVED_COOLDOWN_MS,
   MIN_ACCEPTANCE_SCORE,
+  JOURNALIST_RECONTACT_COOLDOWN_MS,
 } from "../lib/outlet-blocked.js";
 import { matchPerson } from "../lib/apollo-client.js";
 import { checkEmailStatuses } from "../lib/email-gateway-client.js";
@@ -326,6 +327,11 @@ async function isAlreadyContacted(
   excludeId: string // campaign_journalist row to exclude (the one we just claimed)
 ): Promise<{ contacted: boolean; reason: string }> {
   const servedCutoff = new Date(Date.now() - SERVED_COOLDOWN_MS).toISOString();
+  // The campaign_journalists table has only created_at, so we use it as the
+  // "contacted at" proxy. created_at is set when the row is first inserted
+  // (typically minutes-to-hours before the email actually ships), so the
+  // proxy is accurate within hours for a 3-month window.
+  const recontactCutoff = new Date(Date.now() - JOURNALIST_RECONTACT_COOLDOWN_MS).toISOString();
 
   // 1. By journalist_id
   const byJournalist = await pgClient`
@@ -335,13 +341,13 @@ async function isAlreadyContacted(
       AND org_id = ${orgId}
       AND brand_ids && ${brandIds}::uuid[]
       AND (
-        status = 'contacted'
+        (status = 'contacted' AND created_at >= ${recontactCutoff}::timestamptz)
         OR (status IN ('claimed', 'served') AND created_at >= ${servedCutoff}::timestamptz)
       )
     LIMIT 1
   `;
   if (byJournalist.length > 0) {
-    return { contacted: true, reason: `journalist ${journalistId} already contacted for this brand+org` };
+    return { contacted: true, reason: `journalist ${journalistId} already contacted for this brand+org within ${JOURNALIST_RECONTACT_COOLDOWN_MS / (24 * 60 * 60 * 1000)}d` };
   }
 
   // 2. By email
@@ -353,13 +359,13 @@ async function isAlreadyContacted(
         AND org_id = ${orgId}
         AND brand_ids && ${brandIds}::uuid[]
         AND (
-          status = 'contacted'
+          (status = 'contacted' AND created_at >= ${recontactCutoff}::timestamptz)
           OR (status IN ('claimed', 'served') AND created_at >= ${servedCutoff}::timestamptz)
         )
       LIMIT 1
     `;
     if (byEmail.length > 0) {
-      return { contacted: true, reason: `email ${email} already contacted for this brand+org` };
+      return { contacted: true, reason: `email ${email} already contacted for this brand+org within ${JOURNALIST_RECONTACT_COOLDOWN_MS / (24 * 60 * 60 * 1000)}d` };
     }
   }
 
@@ -372,13 +378,13 @@ async function isAlreadyContacted(
         AND org_id = ${orgId}
         AND brand_ids && ${brandIds}::uuid[]
         AND (
-          status = 'contacted'
+          (status = 'contacted' AND created_at >= ${recontactCutoff}::timestamptz)
           OR (status IN ('claimed', 'served') AND created_at >= ${servedCutoff}::timestamptz)
         )
       LIMIT 1
     `;
     if (byApollo.length > 0) {
-      return { contacted: true, reason: `apollo person ${apolloPersonId} already contacted for this brand+org` };
+      return { contacted: true, reason: `apollo person ${apolloPersonId} already contacted for this brand+org within ${JOURNALIST_RECONTACT_COOLDOWN_MS / (24 * 60 * 60 * 1000)}d` };
     }
   }
 
@@ -566,14 +572,29 @@ async function resolveAndCheckEmail(
         };
       }
       if (result.broadcast?.brand?.contacted) {
-        const detail = `${journalistLabel}: email=${email} already contacted for brandId=${brandId} (checked via email-gateway)`;
+        // Apply the 3-month journalist-recontact window: if email-gateway has
+        // lastDeliveredAt and it is older than JOURNALIST_RECONTACT_COOLDOWN_MS,
+        // the journalist is recontactable for this brand. If lastDeliveredAt
+        // is missing, treat as recent (block) — safer than allowing.
+        const lastDeliveredAt = result.broadcast.brand.lastDeliveredAt;
+        const recontactCutoff = new Date(Date.now() - JOURNALIST_RECONTACT_COOLDOWN_MS);
+        const withinWindow =
+          !lastDeliveredAt || new Date(lastDeliveredAt) >= recontactCutoff;
+
+        if (withinWindow) {
+          const detail = `${journalistLabel}: email=${email} already contacted for brandId=${brandId} (checked via email-gateway, lastDeliveredAt=${lastDeliveredAt ?? "unknown"})`;
+          console.log(
+            `[journalists-service] Email ${email} already contacted at brand scope within recontact window (brand ${brandId}, lastDeliveredAt=${lastDeliveredAt ?? "unknown"})`
+          );
+          return {
+            resolved: null,
+            skip: { reason: "brand-already-contacted", detail },
+          };
+        }
+
         console.log(
-          `[journalists-service] Email ${email} already contacted at brand scope (brand ${brandId})`
+          `[journalists-service] Email ${email} previously contacted for brand ${brandId} but outside recontact window (lastDeliveredAt=${lastDeliveredAt}) — allowing recontact`
         );
-        return {
-          resolved: null,
-          skip: { reason: "brand-already-contacted", detail },
-        };
       }
     }
   }

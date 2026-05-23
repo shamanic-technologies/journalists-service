@@ -23,6 +23,7 @@ export const MIN_ACCEPTANCE_SCORE = 20; // Runtime acceptance gate — buffered 
 
 export const APOLLO_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — journalist with no email within this window is non-viable
 export const CONTACTED_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000; // 14 days — outlet blocked if someone contacted within this window
+export const JOURNALIST_RECONTACT_COOLDOWN_MS = 3 * 30 * 24 * 60 * 60 * 1000; // ~3 months — same journalist can be contacted again for same brand after this window
 export const REPLY_COOLDOWN_MS = 6 * 30 * 24 * 60 * 60 * 1000; // ~6 months — outlet blocked if someone replied within this window
 
 // ── Result type ──────────────────────────────────────────────────────

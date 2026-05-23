@@ -769,6 +769,119 @@ describe("POST /buffer/next", () => {
       expect(res.body.found).toBe(true);
       expect(res.body.journalist.firstName).toBe("Sarah");
     });
+
+    it("allows journalist contacted > 3 months ago for same brand+org (recontact window)", async () => {
+      const sarah = await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: "Sarah Johnson",
+        firstName: "Sarah",
+        lastName: "Johnson",
+      });
+
+      // Contacted ~100 days ago — outside JOURNALIST_RECONTACT_COOLDOWN_MS (90 days)
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: OTHER_CAMPAIGN,
+        outletId: OUTLET_ID,
+        relevanceScore: "90.00",
+        status: "contacted",
+        email: "sarah@techcrunch.com",
+        createdAt: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000),
+      });
+
+      // Buffered in current campaign
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: CAMPAIGN_ID,
+        outletId: OUTLET_ID,
+        relevanceScore: "92.00",
+        status: "buffered",
+      });
+
+      setupBaseMocks();
+      setupApolloMock("sarah@techcrunch.com");
+      // email-gateway also reports the old contact, but lastDeliveredAt is outside the 3-month window
+      mockedCheckEmailStatuses.mockResolvedValue([
+        {
+          leadId: "any",
+          email: "sarah@techcrunch.com",
+          broadcast: {
+            campaign: null,
+            brand: {
+              contacted: true, sent: true, delivered: true, opened: false, clicked: false, replied: false, replyClassification: null, bounced: false, unsubscribed: false,
+              lastDeliveredAt: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString(),
+            },
+            global: { email: { bounced: false, unsubscribed: false } },
+          },
+          transactional: {
+            campaign: null,
+            brand: {
+              contacted: false, sent: false, delivered: false, opened: false, clicked: false, replied: false, replyClassification: null, bounced: false, unsubscribed: false, lastDeliveredAt: null,
+            },
+            global: { email: { bounced: false, unsubscribed: false } },
+          },
+        },
+      ]);
+
+      const res = await request(app)
+        .post("/orgs/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(true);
+      expect(res.body.journalist.firstName).toBe("Sarah");
+    });
+
+    it("blocks journalist contacted < 3 months ago for same brand+org (within window)", async () => {
+      const sarah = await insertTestJournalist({
+        outletId: OUTLET_ID,
+        journalistName: "Sarah Johnson",
+        firstName: "Sarah",
+        lastName: "Johnson",
+      });
+
+      // Contacted 30 days ago — inside the 90-day recontact window
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: OTHER_CAMPAIGN,
+        outletId: OUTLET_ID,
+        relevanceScore: "90.00",
+        status: "contacted",
+        email: "sarah@techcrunch.com",
+        createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      });
+
+      // Buffered in current campaign
+      await insertTestCampaignJournalist({
+        journalistId: sarah.id,
+        orgId: ORG_ID,
+        brandIds: [BRAND_ID],
+        campaignId: CAMPAIGN_ID,
+        outletId: OUTLET_ID,
+        relevanceScore: "92.00",
+        status: "buffered",
+      });
+
+      await seedDiscoveryCache();
+      setupBaseMocks();
+
+      const res = await request(app)
+        .post("/orgs/buffer/next")
+        .set(BUFFER_HEADERS)
+        .send({ outletId: OUTLET_ID });
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(false);
+      // Apollo should NOT have been called (pre-check fires within window)
+      expect(mockedMatchPerson).not.toHaveBeenCalled();
+    });
   });
 
   // ── Dedup by email (brand+org level) ─────────────────────────────────
