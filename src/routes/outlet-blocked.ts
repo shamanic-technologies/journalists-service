@@ -33,6 +33,7 @@ router.get("/orgs/outlets/blocked", async (req, res) => {
     brandIds,
     featureSlug: res.locals.featureSlug as string | undefined,
     workflowSlug: res.locals.workflowSlug as string | undefined,
+    audienceId: res.locals.audienceId as string | undefined,
   };
 
   try {

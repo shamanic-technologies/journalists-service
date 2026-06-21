@@ -24,7 +24,7 @@ import {
 import { matchPerson } from "../lib/apollo-client.js";
 import { checkEmailStatuses } from "../lib/email-gateway-client.js";
 import { BufferNextSchema } from "../schemas.js";
-import type { OrgContext } from "../lib/service-context.js";
+import { type OrgContext, orgContextFromLocals } from "../lib/service-context.js";
 import { traceEvent } from "../lib/trace-event.js";
 
 const router = Router();
@@ -40,15 +40,7 @@ const CLEANUP_PROBABILITY = 0.01;
 const VALID_EMAIL_STATUSES = new Set(["verified", "extrapolated"]);
 
 function getCtx(locals: Record<string, unknown>): OrgContext {
-  return {
-    orgId: locals.orgId as string,
-    userId: locals.userId as string | undefined,
-    runId: locals.runId as string | undefined,
-    featureSlug: locals.featureSlug as string | undefined,
-    campaignId: locals.campaignId as string | undefined,
-    brandIds: (locals.brandIds as string[]) || [],
-    workflowSlug: locals.workflowSlug as string | undefined,
-  };
+  return orgContextFromLocals(locals);
 }
 
 interface BufferNextResponse {

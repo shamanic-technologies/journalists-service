@@ -104,6 +104,7 @@ router.get("/orgs/campaign-outlet-journalists", async (req, res) => {
         campaignId: res.locals.campaignId as string | undefined,
         brandIds: brand_id ? [brand_id] : [],
         workflowSlug: res.locals.workflowSlug as string | undefined,
+        audienceId: res.locals.audienceId as string | undefined,
       };
       const results = await checkEmailStatuses(
         itemsWithEmail,
