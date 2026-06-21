@@ -61,5 +61,6 @@ export function requireOrgId(
   res.locals.brandIds = parseBrandIds(req.headers["x-brand-id"] as string | undefined);
   res.locals.featureSlug = (req.headers["x-feature-slug"] as string) || undefined;
   res.locals.workflowSlug = (req.headers["x-workflow-slug"] as string) || undefined;
+  res.locals.audienceId = (req.headers["x-audience-id"] as string) || undefined;
   next();
 }

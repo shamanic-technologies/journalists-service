@@ -13,21 +13,13 @@ import {
   refillBuffer,
 } from "../lib/journalist-discovery.js";
 import { DiscoverRequestSchema } from "../schemas.js";
-import type { OrgContext } from "../lib/service-context.js";
+import { type OrgContext, orgContextFromLocals } from "../lib/service-context.js";
 import { traceEvent } from "../lib/trace-event.js";
 
 const router = Router();
 
 function getCtx(locals: Record<string, unknown>): OrgContext {
-  return {
-    orgId: locals.orgId as string,
-    userId: locals.userId as string | undefined,
-    runId: locals.runId as string | undefined,
-    featureSlug: locals.featureSlug as string | undefined,
-    campaignId: locals.campaignId as string | undefined,
-    brandIds: (locals.brandIds as string[]) || [],
-    workflowSlug: locals.workflowSlug as string | undefined,
-  };
+  return orgContextFromLocals(locals);
 }
 
 router.post("/orgs/discover", async (req, res) => {
