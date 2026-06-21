@@ -27,9 +27,10 @@ const FULL_CTX: OrgContext = {
   campaignId: "camp-1234",
   brandIds: ["brand-1"],
   workflowSlug: "discover-journalists-wf",
+  audienceId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
 };
 
-const ALL_7_HEADERS = [
+const ALL_IDENTITY_HEADERS = [
   "x-org-id",
   "x-user-id",
   "x-run-id",
@@ -37,6 +38,7 @@ const ALL_7_HEADERS = [
   "x-campaign-id",
   "x-brand-id",
   "x-workflow-slug",
+  "x-audience-id",
 ] as const;
 
 function mockOkResponse(body: unknown = {}) {
@@ -54,7 +56,7 @@ function getHeaders(): Record<string, string> {
   return opts?.headers ?? (call[1] as Record<string, string>);
 }
 
-function expectAll7Headers(headers: Record<string, string>) {
+function expectAllIdentityHeaders(headers: Record<string, string>) {
   expect(headers["x-org-id"]).toBe(FULL_CTX.orgId);
   expect(headers["x-user-id"]).toBe(FULL_CTX.userId);
   expect(headers["x-run-id"]).toBe(FULL_CTX.runId);
@@ -62,9 +64,10 @@ function expectAll7Headers(headers: Record<string, string>) {
   expect(headers["x-campaign-id"]).toBe(FULL_CTX.campaignId);
   expect(headers["x-brand-id"]).toBe(FULL_CTX.brandIds.join(","));
   expect(headers["x-workflow-slug"]).toBe(FULL_CTX.workflowSlug);
+  expect(headers["x-audience-id"]).toBe(FULL_CTX.audienceId);
 }
 
-describe("all 7 headers forwarded by every client", () => {
+describe("all identity headers forwarded by every client", () => {
   beforeEach(() => {
     fetchSpy.mockReset();
   });
@@ -81,7 +84,7 @@ describe("all 7 headers forwarded by every client", () => {
     );
 
     const headers = getHeaders();
-    expectAll7Headers(headers);
+    expectAllIdentityHeaders(headers);
   });
 
   it("brand-client forwards all 7 headers", async () => {
@@ -91,7 +94,7 @@ describe("all 7 headers forwarded by every client", () => {
     await extractBrandFields([], FULL_CTX);
 
     const headers = getHeaders();
-    expectAll7Headers(headers);
+    expectAllIdentityHeaders(headers);
   });
 
   it("campaign-client forwards all 7 headers", async () => {
@@ -105,7 +108,7 @@ describe("all 7 headers forwarded by every client", () => {
     await fetchCampaign("camp-1234", FULL_CTX);
 
     const headers = getHeaders();
-    expectAll7Headers(headers);
+    expectAllIdentityHeaders(headers);
   });
 
   it("chat-client forwards all 7 headers", async () => {
@@ -117,7 +120,7 @@ describe("all 7 headers forwarded by every client", () => {
     await chatComplete({ provider: "google", model: "flash", message: "hi", systemPrompt: "test" }, FULL_CTX);
 
     const headers = getHeaders();
-    expectAll7Headers(headers);
+    expectAllIdentityHeaders(headers);
   });
 
   it("articles-client forwards all 7 headers", async () => {
@@ -127,7 +130,7 @@ describe("all 7 headers forwarded by every client", () => {
     await discoverOutletArticles("example.com", 10, FULL_CTX);
 
     const headers = getHeaders();
-    expectAll7Headers(headers);
+    expectAllIdentityHeaders(headers);
   });
 
   it("outlets-client forwards all 7 headers", async () => {
@@ -139,7 +142,7 @@ describe("all 7 headers forwarded by every client", () => {
     await fetchOutlet("outlet-1", FULL_CTX);
 
     const headers = getHeaders();
-    expectAll7Headers(headers);
+    expectAllIdentityHeaders(headers);
   });
 
   it("outlets-client parses flat response (no wrapper)", async () => {
@@ -211,6 +214,7 @@ describe("all 7 headers forwarded by every client", () => {
     expect(headers).not.toHaveProperty("x-brand-id");
     expect(headers).not.toHaveProperty("x-feature-slug");
     expect(headers).not.toHaveProperty("x-workflow-slug");
+    expect(headers).not.toHaveProperty("x-audience-id");
   });
 
   it("sends CSV x-brand-id for multiple brand IDs", async () => {
@@ -233,5 +237,47 @@ describe("all 7 headers forwarded by every client", () => {
 
     const headers = getHeaders();
     expect(headers["x-brand-id"]).toBe("brand-1,brand-2,brand-3");
+  });
+});
+
+// Regression: inbound tracking header (incl. x-audience-id, for per-audience cost
+// attribution) must survive the locals -> OrgContext -> egress-header chain.
+// Guards against a future field being read into res.locals but dropped before forwarding.
+describe("inbound tracking headers survive to egress (orgContextFromLocals -> buildServiceHeaders)", () => {
+  it("maps every res.locals identity field onto an outbound header", async () => {
+    const { orgContextFromLocals, buildServiceHeaders } = await import(
+      "../../src/lib/service-context.js"
+    );
+
+    // Shape of res.locals as populated by requireOrgId from inbound headers.
+    const locals = {
+      orgId: "org-1",
+      userId: "user-1",
+      runId: "run-1",
+      campaignId: "camp-1234",
+      brandIds: ["brand-1"],
+      featureSlug: "test-feature",
+      workflowSlug: "discover-journalists-wf",
+      audienceId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    };
+
+    const headers = buildServiceHeaders("api-key", orgContextFromLocals(locals));
+
+    for (const key of ALL_IDENTITY_HEADERS) {
+      expect(headers, `missing egress header ${key}`).toHaveProperty(key);
+    }
+    expect(headers["x-audience-id"]).toBe(locals.audienceId);
+  });
+
+  it("omits x-audience-id when absent (non-campaign flow), never throws", async () => {
+    const { orgContextFromLocals, buildServiceHeaders } = await import(
+      "../../src/lib/service-context.js"
+    );
+
+    const locals = { orgId: "org-1", brandIds: [] };
+    const headers = buildServiceHeaders("api-key", orgContextFromLocals(locals));
+
+    expect(headers["x-org-id"]).toBe("org-1");
+    expect(headers).not.toHaveProperty("x-audience-id");
   });
 });

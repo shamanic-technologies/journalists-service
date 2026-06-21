@@ -8,6 +8,28 @@ export interface OrgContext {
   brandIds: string[];
   featureSlug?: string;
   workflowSlug?: string;
+  /** Priority audience attribution (human-service org-scoped saved filter-set, audience.id).
+   *  Set by campaign-service at run start, forwarded by workflow-service via x-audience-id.
+   *  Optional — absent outside the campaign flow; omit, never throw. */
+  audienceId?: string;
+}
+
+/** Build an OrgContext from res.locals populated by requireOrgId middleware.
+ *  Single source so adding a tracking field (e.g. audienceId) is a one-line change here,
+ *  not a per-route sweep. */
+export function orgContextFromLocals(
+  locals: Record<string, unknown>
+): OrgContext {
+  return {
+    orgId: locals.orgId as string,
+    userId: locals.userId as string | undefined,
+    runId: locals.runId as string | undefined,
+    campaignId: locals.campaignId as string | undefined,
+    brandIds: (locals.brandIds as string[]) || [],
+    featureSlug: locals.featureSlug as string | undefined,
+    workflowSlug: locals.workflowSlug as string | undefined,
+    audienceId: locals.audienceId as string | undefined,
+  };
 }
 
 /** Build standard headers from an OrgContext — always forwards x-api-key and x-org-id,
@@ -27,5 +49,6 @@ export function buildServiceHeaders(
   if (brandId) headers["x-brand-id"] = brandId;
   if (ctx.featureSlug) headers["x-feature-slug"] = ctx.featureSlug;
   if (ctx.workflowSlug) headers["x-workflow-slug"] = ctx.workflowSlug;
+  if (ctx.audienceId) headers["x-audience-id"] = ctx.audienceId;
   return headers;
 }

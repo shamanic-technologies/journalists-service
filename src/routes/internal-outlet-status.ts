@@ -86,6 +86,7 @@ router.post("/orgs/outlets/status", async (req, res) => {
         brandIds: (res.locals.brandIds as string[]) || [],
         featureSlug: res.locals.featureSlug as string | undefined,
         workflowSlug: res.locals.workflowSlug as string | undefined,
+        audienceId: res.locals.audienceId as string | undefined,
       };
 
       const gatewayResults = await checkEmailStatuses(
