@@ -9,6 +9,28 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    # A throwaway Postgres owned by the runner, so the DB-backed integration
+    # suite runs on every PR instead of rotting unseen. No external secret.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: journalists_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      JOURNALISTS_SERVICE_DATABASE_URL: postgresql://test:test@localhost:5432/journalists_test
+
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -19,6 +41,10 @@ jobs:
           node-version: 22.23.4
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm vitest run tests/unit/
-        env:
-          NODE_ENV: test
+      - name: Typecheck and build
+        run: pnpm build
+      # Replay the migrations exactly as the service does at boot.
+      - name: Apply migrations
+        run: pnpm db:migrate
+      - name: Test (unit + integration)
+        run: pnpm test
