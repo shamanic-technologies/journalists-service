@@ -9,6 +9,20 @@ import {
 import { chatComplete } from "./chat-client.js";
 import type { OrgContext } from "./service-context.js";
 
+/**
+ * drizzle-orm >= 0.44 wraps driver errors in DrizzleQueryError, so the
+ * Postgres SQLSTATE sits on `err.cause.code`, not on `err.code`. Reading only
+ * the top level let a unique violation escape as a 502.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  let e: unknown = err;
+  while (e && typeof e === "object") {
+    if ((e as { code?: unknown }).code === "23505") return true;
+    e = (e as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 // ── Types ────────────────────────────────────────────────────────────
 
 export interface LlmJournalist {
@@ -243,7 +257,7 @@ export async function storeJournalists(
               .where(eq(journalists.id, journalistId));
           } catch (err: unknown) {
             // Unique constraint violation — enriched name collides with another journalist at same outlet
-            if (err instanceof Error && "code" in err && (err as { code: string }).code === "23505") {
+            if (isUniqueViolation(err)) {
               console.log(
                 `[journalists-service] Name enrichment skipped — "${newJournalistName}" already exists at outlet ${outletId}`
               );
@@ -287,7 +301,7 @@ export async function storeJournalists(
               })
               .where(eq(journalists.id, journalistId));
           } catch (err: unknown) {
-            if (err instanceof Error && "code" in err && (err as { code: string }).code === "23505") {
+            if (isUniqueViolation(err)) {
               console.log(
                 `[journalists-service] Name enrichment skipped — "${newJournalistName}" already exists at outlet ${outletId}`
               );
