@@ -24,6 +24,16 @@ export const MIN_ACCEPTANCE_SCORE = 20; // Runtime acceptance gate — buffered 
 export const APOLLO_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — journalist with no email within this window is non-viable
 export const CONTACTED_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000; // 14 days — outlet blocked if someone contacted within this window
 export const JOURNALIST_RECONTACT_COOLDOWN_MS = 3 * 30 * 24 * 60 * 60 * 1000; // ~3 months — same journalist can be contacted again for same brand after this window
+
+/**
+ * The one definition of the journalist re-contact window (owner rule, #179,
+ * 2026-05-23): a journalist contacted for a brand+org BEFORE this instant may
+ * be contacted again for it. Every "already contacted?" check reads this,
+ * never its own copy of the rule.
+ */
+export function recontactCutoff(now: number = Date.now()): Date {
+  return new Date(now - JOURNALIST_RECONTACT_COOLDOWN_MS);
+}
 export const REPLY_COOLDOWN_MS = 6 * 30 * 24 * 60 * 60 * 1000; // ~6 months — outlet blocked if someone replied within this window
 
 // ── Result type ──────────────────────────────────────────────────────
@@ -44,7 +54,7 @@ export type OutletBlockedResult =
  * Condition B — Discovery done but no viable journalists:
  *   - All buffered journalists are below the acceptance gate (MIN_ACCEPTANCE_SCORE)
  *   - OR all have no email (Apollo checked within 30 days)
- *   - OR all already contacted for this brand+org
+ *   - OR all already contacted for this brand+org within the re-contact window
  */
 export async function checkOutletBlocked(
   outletId: string,
@@ -55,6 +65,7 @@ export async function checkOutletBlocked(
 ): Promise<OutletBlockedResult> {
   const servedCutoff = new Date(Date.now() - SERVED_COOLDOWN_MS).toISOString();
   const apolloCutoff = new Date(Date.now() - APOLLO_CACHE_MAX_AGE_MS).toISOString();
+  const recontactCutoffIso = recontactCutoff().toISOString();
 
   // ── Condition A: Has someone already been reached at this outlet for this brand? ──
 
@@ -150,7 +161,7 @@ export async function checkOutletBlocked(
           AND other.org_id = ${orgId}
           AND other.brand_ids && ${brandIds}::uuid[]
           AND (
-            other.status = 'contacted'
+            (other.status = 'contacted' AND other.created_at >= ${recontactCutoffIso}::timestamptz)
             OR (other.status IN ('claimed', 'served')
                 AND other.created_at >= ${servedCutoff}::timestamptz)
           )
