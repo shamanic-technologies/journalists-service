@@ -770,15 +770,7 @@ describe("POST /buffer/next", () => {
       expect(res.body.journalist.firstName).toBe("Sarah");
     });
 
-    // KNOWN GAP (found 2026-10-23, never green since #179 on 2026-05-23):
-    // buffer-next's own dedup honours the 3-month recontact window, but
-    // checkOutletBlocked (src/lib/outlet-blocked.ts, condition B) still treats
-    // ANY past 'contacted' row as "already contacted for this brand+org",
-    // forever. So the outlet is reported blocked and the journalist is never
-    // re-served. Fixing it changes who gets contacted, which is an owner
-    // decision, so this test is pinned as a known failure: `it.fails` turns
-    // red the day the code honours the window. Then make it a plain `it`.
-    it.fails("allows journalist contacted > 3 months ago for same brand+org (recontact window)", async () => {
+    it("allows journalist contacted > 3 months ago for same brand+org (recontact window)", async () => {
       const sarah = await insertTestJournalist({
         outletId: OUTLET_ID,
         journalistName: "Sarah Johnson",

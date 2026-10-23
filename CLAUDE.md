@@ -24,6 +24,7 @@ ALL of the following:
   - There are 0 journalists for this outlet
   - OR none of them have a valid email (Apollo checked < 30 days, no email found)
   - OR none of them have relevance >= MIN_ACCEPTANCE_SCORE (20%)
+  - OR every viable one was already contacted for this brand+org within the re-contact window (`recontactCutoff()`, ~3 months, the SAME definition step 5 uses: never a second copy of the rule)
 
 ### Two relevance thresholds — do not confuse
 
@@ -82,7 +83,7 @@ Check all three dedup axes at `orgId × brandIds` scope:
 3. **By apollo_person_id** — same Apollo person contacted for same brand+org (covers case where same person has different emails)
 
 Each axis uses the same "contacted" definition:
-- `status = 'contacted'` AND `created_at >= now - JOURNALIST_RECONTACT_COOLDOWN_MS` (~3 months) — same journalist can be re-contacted for same brand after 3 months
+- `status = 'contacted'` AND `created_at >= recontactCutoff()` (~3 months, `src/lib/outlet-blocked.ts`) — same journalist can be re-contacted for same brand after 3 months
 - OR `status IN ('claimed', 'served')` AND `created_at >= now - SERVED_COOLDOWN_MS` (1 hour race window)
 
 If any axis matches → skip.
