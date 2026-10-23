@@ -20,6 +20,7 @@ import {
   SERVED_COOLDOWN_MS,
   MIN_ACCEPTANCE_SCORE,
   JOURNALIST_RECONTACT_COOLDOWN_MS,
+  recontactCutoff,
 } from "../lib/outlet-blocked.js";
 import { matchPerson } from "../lib/apollo-client.js";
 import { checkEmailStatuses } from "../lib/email-gateway-client.js";
@@ -323,7 +324,7 @@ async function isAlreadyContacted(
   // "contacted at" proxy. created_at is set when the row is first inserted
   // (typically minutes-to-hours before the email actually ships), so the
   // proxy is accurate within hours for a 3-month window.
-  const recontactCutoff = new Date(Date.now() - JOURNALIST_RECONTACT_COOLDOWN_MS).toISOString();
+  const contactedCutoff = recontactCutoff().toISOString();
 
   // 1. By journalist_id
   const byJournalist = await pgClient`
@@ -333,7 +334,7 @@ async function isAlreadyContacted(
       AND org_id = ${orgId}
       AND brand_ids && ${brandIds}::uuid[]
       AND (
-        (status = 'contacted' AND created_at >= ${recontactCutoff}::timestamptz)
+        (status = 'contacted' AND created_at >= ${contactedCutoff}::timestamptz)
         OR (status IN ('claimed', 'served') AND created_at >= ${servedCutoff}::timestamptz)
       )
     LIMIT 1
@@ -351,7 +352,7 @@ async function isAlreadyContacted(
         AND org_id = ${orgId}
         AND brand_ids && ${brandIds}::uuid[]
         AND (
-          (status = 'contacted' AND created_at >= ${recontactCutoff}::timestamptz)
+          (status = 'contacted' AND created_at >= ${contactedCutoff}::timestamptz)
           OR (status IN ('claimed', 'served') AND created_at >= ${servedCutoff}::timestamptz)
         )
       LIMIT 1
@@ -370,7 +371,7 @@ async function isAlreadyContacted(
         AND org_id = ${orgId}
         AND brand_ids && ${brandIds}::uuid[]
         AND (
-          (status = 'contacted' AND created_at >= ${recontactCutoff}::timestamptz)
+          (status = 'contacted' AND created_at >= ${contactedCutoff}::timestamptz)
           OR (status IN ('claimed', 'served') AND created_at >= ${servedCutoff}::timestamptz)
         )
       LIMIT 1
@@ -569,9 +570,9 @@ async function resolveAndCheckEmail(
         // the journalist is recontactable for this brand. If lastDeliveredAt
         // is missing, treat as recent (block) — safer than allowing.
         const lastDeliveredAt = result.broadcast.brand.lastDeliveredAt;
-        const recontactCutoff = new Date(Date.now() - JOURNALIST_RECONTACT_COOLDOWN_MS);
+        const cutoff = recontactCutoff();
         const withinWindow =
-          !lastDeliveredAt || new Date(lastDeliveredAt) >= recontactCutoff;
+          !lastDeliveredAt || new Date(lastDeliveredAt) >= cutoff;
 
         if (withinWindow) {
           const detail = `${journalistLabel}: email=${email} already contacted for brandId=${brandId} (checked via email-gateway, lastDeliveredAt=${lastDeliveredAt ?? "unknown"})`;
